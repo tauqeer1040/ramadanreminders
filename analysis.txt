@@ -1,0 +1,8 @@
+Analyzing ramadan_app...                                        
+
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\components\dailyreminders.dart:44:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\components\dailyreminders.dart:46:59 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\components\dailyreminders.dart:64:29 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\components\dailyreminders.dart:66:48 - deprecated_member_use
+warning - Unused import: 'package:ramadan_app/components/dailyreminders.dart' - lib\components\journal.dart:2:8 - unused_import
+

@@ -1,0 +1,49 @@
+name: ramadan_reflections
+description: "A ramadan journal app."
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  http: ^1.6.0
+  audioplayers: ^6.5.1
+  hijri: ^3.0.0
+  shared_preferences: ^2.5.4
+  intl: ^0.20.2
+  dynamic_color: ^1.8.1
+  translator: ^1.0.4+1
+  confetti: ^0.8.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: Amiri
+      fonts:
+        - asset: assets/fonts/Amiri-Regular.ttf
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/photos/logo.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/photos/logo.png"
+  web:
+    generate: true
+    image_path: "assets/photos/logo.png"
+    background_color: "#000000"
+    theme_color: "#000000"

@@ -1,0 +1,88 @@
+Resolving dependencies...
+Downloading packages...
+  characters 1.4.0 (1.4.1 available)
+  ffi 2.1.5 (2.2.0 available)
+  flutter_lints 5.0.0 (6.0.0 available)
+  lints 5.1.1 (6.1.0 available)
+  matcher 0.12.17 (0.12.18 available)
+  material_color_utilities 0.11.1 (0.13.0 available)
+  meta 1.16.0 (1.18.1 available)
+  path_provider_foundation 2.5.1 (2.6.0 available)
+  source_span 1.10.1 (1.10.2 available)
+  test_api 0.7.6 (0.7.9 available)
+Got dependencies!
+10 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Analyzing ramadan_app...                                        
+
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\components\homepage.dart:5:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/components/dailyreminders.dart' - lib\components\homepage.dart:5:8 - uri_does_not_exist
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\components\homepage.dart:6:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/components/heading.dart' - lib\components\homepage.dart:6:8 - uri_does_not_exist
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\components\homepage.dart:7:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/components/journal.dart' - lib\components\homepage.dart:7:8 - uri_does_not_exist
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\components\homepage.dart:8:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/services/settings_service.dart' - lib\components\homepage.dart:8:8 - uri_does_not_exist
+  error - Undefined class 'SettingsService' - lib\components\homepage.dart:19:9 - undefined_class
+  error - The method 'SettingsService' isn't defined for the type '_HomepageState' - lib\components\homepage.dart:19:44 - undefined_method
+  error - The method 'RamadanHeader' isn't defined for the type '_HomepageState' - lib\components\homepage.dart:104:22 - undefined_method
+  error - The method 'JournalEntry' isn't defined for the type '_HomepageState' - lib\components\homepage.dart:110:13 - undefined_method
+  error - The method 'DailyReminder' isn't defined for the type '_HomepageState' - lib\components\homepage.dart:112:13 - undefined_method
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\components\journal.dart:2:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/models/bullet_item.dart' - lib\components\journal.dart:2:8 - uri_does_not_exist
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\components\journal.dart:3:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/services/journal_service.dart' - lib\components\journal.dart:3:8 - uri_does_not_exist
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\components\journal.dart:4:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/components/journal_history_screen.dart' - lib\components\journal.dart:4:8 - uri_does_not_exist
+  error - The name 'BulletItem' isn't a type, so it can't be used as a type argument - lib\components\journal.dart:14:8 - non_type_as_type_argument
+  error - Undefined class 'JournalService' - lib\components\journal.dart:17:9 - undefined_class
+  error - The method 'JournalService' isn't defined for the type '_JournalEntryState' - lib\components\journal.dart:17:42 - undefined_method
+  error - The method 'BulletItem' isn't defined for the type '_JournalEntryState' - lib\components\journal.dart:58:9 - undefined_method
+  error - The property 'id' can't be unconditionally accessed because the receiver can be 'null' - lib\components\journal.dart:70:47 - unchecked_use_of_nullable_value
+  error - The property 'id' can't be unconditionally accessed because the receiver can be 'null' - lib\components\journal.dart:77:48 - unchecked_use_of_nullable_value
+  error - The name 'JournalHistoryScreen' isn't a class - lib\components\journal.dart:131:55 - creation_with_non_type
+  error - Undefined class 'BulletItem' - lib\components\journal.dart:214:27 - undefined_class
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\components\journal_history_screen.dart:3:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/models/bullet_item.dart' - lib\components\journal_history_screen.dart:3:8 - uri_does_not_exist
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\components\journal_history_screen.dart:4:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/services/journal_service.dart' - lib\components\journal_history_screen.dart:4:8 - uri_does_not_exist
+  error - Undefined class 'JournalService' - lib\components\journal_history_screen.dart:14:9 - undefined_class
+  error - The method 'JournalService' isn't defined for the type '_JournalHistoryScreenState' - lib\components\journal_history_screen.dart:14:42 - undefined_method
+  error - The name 'BulletItem' isn't a type, so it can't be used as a type argument - lib\components\journal_history_screen.dart:111:61 - non_type_as_type_argument
+  error - The property 'completed' can't be unconditionally accessed because the receiver can be 'null' - lib\components\journal_history_screen.dart:154:38 - unchecked_use_of_nullable_value
+  error - The property 'completed' can't be unconditionally accessed because the receiver can be 'null' - lib\components\journal_history_screen.dart:158:45 - unchecked_use_of_nullable_value
+  error - The property 'content' can't be unconditionally accessed because the receiver can be 'null' - lib\components\journal_history_screen.dart:165:40 - unchecked_use_of_nullable_value
+  error - The property 'completed' can't be unconditionally accessed because the receiver can be 'null' - lib\components\journal_history_screen.dart:167:49 - unchecked_use_of_nullable_value
+  error - The property 'completed' can't be unconditionally accessed because the receiver can be 'null' - lib\components\journal_history_screen.dart:170:54 - unchecked_use_of_nullable_value
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\main.dart:3:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/components/homepage.dart' - lib\main.dart:3:8 - uri_does_not_exist
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\main.dart:4:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/components/profilepage.dart' - lib\main.dart:4:8 - uri_does_not_exist
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\main.dart:5:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/components/quranpage.dart' - lib\main.dart:5:8 - uri_does_not_exist
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\main.dart:6:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/components/tesbihpage.dart' - lib\main.dart:6:8 - uri_does_not_exist
+  error - Const variables must be initialized with a constant value - lib\main.dart:138:3 - const_initialized_with_non_constant_value
+  error - The function 'Homepage' isn't defined - lib\main.dart:138:3 - undefined_function
+  error - The values in a const list literal must be constants - lib\main.dart:138:3 - non_constant_list_element
+  error - The function 'TasbihScreen' isn't defined - lib\main.dart:139:3 - undefined_function
+  error - The values in a const list literal must be constants - lib\main.dart:139:3 - non_constant_list_element
+  error - The function 'QuranPage' isn't defined - lib\main.dart:140:3 - undefined_function
+  error - The values in a const list literal must be constants - lib\main.dart:140:3 - non_constant_list_element
+  error - The function 'ProfilePage1' isn't defined - lib\main.dart:141:3 - undefined_function
+  error - The values in a const list literal must be constants - lib\main.dart:141:3 - non_constant_list_element
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - lib\services\journal_service.dart:3:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/models/bullet_item.dart' - lib\services\journal_service.dart:3:8 - uri_does_not_exist
+  error - The name 'BulletItem' isn't a type, so it can't be used as a type argument - lib\services\journal_service.dart:22:51 - non_type_as_type_argument
+  error - The method 'toJson' can't be unconditionally invoked because the receiver can be 'null' - lib\services\journal_service.dart:24:61 - unchecked_use_of_nullable_value
+  error - The name 'BulletItem' isn't a type, so it can't be used as a type argument - lib\services\journal_service.dart:29:15 - non_type_as_type_argument
+  error - Undefined name 'BulletItem' - lib\services\journal_service.dart:35:32 - undefined_identifier
+  error - The name 'BulletItem' isn't a type, so it can't be used as a type argument - lib\services\journal_service.dart:39:41 - non_type_as_type_argument
+  error - The method 'toJson' can't be unconditionally invoked because the receiver can be 'null' - lib\services\journal_service.dart:41:61 - unchecked_use_of_nullable_value
+  error - The name 'BulletItem' isn't a type, so it can't be used as a type argument - lib\services\journal_service.dart:46:15 - non_type_as_type_argument
+  error - Undefined name 'BulletItem' - lib\services\journal_service.dart:52:32 - undefined_identifier
+   info - The package name 'RamadanReflections' isn't a lower_case_with_underscores identifier - pubspec.yaml:1:7 - package_names
+   info - The imported package 'ramadan_reflections' isn't a dependency of the importing package - test\widget_test.dart:11:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:ramadan_reflections/main.dart' - test\widget_test.dart:11:8 - uri_does_not_exist
+  error - The name 'MyApp' isn't a class - test\widget_test.dart:16:35 - creation_with_non_type
+
