@@ -1,0 +1,2 @@
+[warning] The value of the local variable 'border' isn't used (C:\Users\tau\code\ramadan_app\lib\components\task_card.dart:27:11)
+[info] 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss (C:\Users\tau\code\ramadan_app\lib\features\tasbih\widgets\tasbih_watermark.dart:90:48)

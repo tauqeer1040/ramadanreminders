@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'shared/bouncing_widget.dart';
 
 class ProfilePage1 extends StatelessWidget {
   const ProfilePage1({super.key});
@@ -7,12 +8,14 @@ class ProfilePage1 extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Column(
-        children: [
-          const Expanded(flex: 2, child: _TopPortion()),
-          Expanded(
-            flex: 3,
-            child: Padding(
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            SizedBox(
+              height: MediaQuery.sizeOf(context).height * 0.38,
+              child: const _TopPortion(),
+            ),
+            Padding(
               padding: const EdgeInsets.all(8.0),
               child: Column(
                 children: [
@@ -26,20 +29,26 @@ class ProfilePage1 extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      FloatingActionButton.extended(
+                      BouncingWidget(
                         onPressed: () {},
-                        heroTag: 'follow',
-                        elevation: 0,
-                        label: const Text("Follow"),
-                        icon: const Icon(Icons.person_add_alt_1),
+                        child: FloatingActionButton.extended(
+                          onPressed: () {},
+                          heroTag: 'follow',
+                          elevation: 0,
+                          label: const Text("Follow"),
+                          icon: const Icon(Icons.person_add_alt_1),
+                        ),
                       ),
                       const SizedBox(width: 16.0),
-                      FloatingActionButton.extended(
+                      BouncingWidget(
                         onPressed: () {},
-                        heroTag: 'mesage',
-                        elevation: 0,
-                        label: const Text("Message"),
-                        icon: const Icon(Icons.message_rounded),
+                        child: FloatingActionButton.extended(
+                          onPressed: () {},
+                          heroTag: 'mesage',
+                          elevation: 0,
+                          label: const Text("Message"),
+                          icon: const Icon(Icons.message_rounded),
+                        ),
                       ),
                     ],
                   ),
@@ -48,8 +57,8 @@ class ProfilePage1 extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

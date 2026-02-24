@@ -62,12 +62,16 @@ class RamadanHeader extends StatelessWidget {
           const SizedBox(height: 16),
 
           // Subtitle
-          Text(
-            'A sacred space for reflection & growth',
-            style: TextStyle(
-              fontSize: 18,
-              fontFamily: 'Space Grotesk',
-              color: colorScheme.onSurfaceVariant,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              'A sacred space for reflection & growth',
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: 18,
+                fontFamily: 'Space Grotesk',
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
 

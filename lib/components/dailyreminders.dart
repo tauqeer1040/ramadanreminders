@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../main.dart';
+import 'shared/bouncing_widget.dart';
 
 class Reminder {
   final String id;
@@ -99,8 +100,8 @@ class DailyReminder extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return GestureDetector(
-      onTap: () {
+    return BouncingWidget(
+      onPressed: () {
         HapticFeedback.lightImpact();
         if (reminder.type == 'tesbiyat' || reminder.type == 'dhikr') {
           Material3BottomNav.switchTab(context, 1); // Index 1 is Tasbih
@@ -146,6 +147,7 @@ class DailyReminder extends StatelessWidget {
                   reminder.arabic!,
                   style: textTheme.titleLarge?.copyWith(
                     color: colorScheme.primary,
+                    fontFamily: 'Amiri',
                   ),
                   textDirection: TextDirection.rtl,
                 ),

@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../components/tesbihpage.dart' show DhikrItem;
+import '../features/tasbih/model/dhikr_item.dart';
 
 class DhikrService {
   static const String _dhikrKey = 'custom_dhikr_list';
+  static const String _totalCountKey = 'total_dhikr_count';
 
   Future<void> saveDhikrs(List<DhikrItem> dhikrs) async {
     final prefs = await SharedPreferences.getInstance();
@@ -24,5 +25,15 @@ class DhikrService {
     } catch (e) {
       return null;
     }
+  }
+
+  Future<void> saveTotalDhikrCount(int count) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_totalCountKey, count);
+  }
+
+  Future<int> loadTotalDhikrCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_totalCountKey) ?? 0;
   }
 }

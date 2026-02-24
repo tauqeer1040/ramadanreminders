@@ -1,11 +1,8 @@
-// import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:hijri/hijri_calendar.dart';
-import './dailyreminders.dart';
-import './heading.dart';
-import './journal.dart';
-import '../services/settings_service.dart';
+import 'package:intl/intl.dart';
+import 'package:confetti/confetti.dart';
+import './task_carousel.dart';
+import './action_prompt_card.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -15,104 +12,286 @@ class Homepage extends StatefulWidget {
 }
 
 class _HomepageState extends State<Homepage> {
-  int _hijriAdjustment = 0;
-  final SettingsService _settingsService = SettingsService();
+  final int _streakCount = 82; // Example streak count
+  late ConfettiController _confettiController;
 
   @override
   void initState() {
     super.initState();
-    _loadAdjustment();
+    _confettiController = ConfettiController(
+      duration: const Duration(milliseconds: 1500),
+    );
   }
 
-  Future<void> _loadAdjustment() async {
-    final adj = await _settingsService.loadHijriAdjustment();
-    if (mounted) {
-      setState(() {
-        _hijriAdjustment = adj;
-      });
-    }
-  }
-
-  Future<void> _updateAdjustment(int change) async {
-    final newAdj = _hijriAdjustment + change;
-    await _settingsService.saveHijriAdjustment(newAdj);
-    if (mounted) {
-      setState(() {
-        _hijriAdjustment = newAdj;
-      });
-    }
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Determine locale safely
-    final String locale = Localizations.localeOf(context).languageCode;
-    HijriCalendar.setLocal(locale);
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
-    // Apply adjustment to current date
-    // var today = HijriCalendar.now();
-    // HijriCalendar doesn't seem to have a direct addDays method that returns a new object easily in all versions,
-    // so we can just adjust the day number for display, or better, use the internal adjustment feature if available.
-    // Ideally, we'd use: today.hDay += _hijriAdjustment; but that might overflow month.
-    // Let's use the built-in property if possible, but simplest is to just re-calculate or manipulate the object.
-
-    // A safer way to handle day adjustment with month overflow:
-    // Create a new HijriCalendar from the adjusted day.
-    // However, for simplicity given the visual requirement:
-    // We will just display the adjusted day.
-    // Wait, if day becomes 31 or 0, that's bad.
-
-    // Let's try to find a proper add days method.
-    // Assuming we can just manipulate internal fields or use standard dart date manipulation on the gregorian side before converting?
-    // Start with DateTime.now().add(Duration(days: _hijriAdjustment)) then convert to Hijri.
-    var adjustedGregorian = DateTime.now().add(
-      Duration(days: _hijriAdjustment),
+    // Generate last 7 days ending today
+    final today = DateTime.now();
+    final List<DateTime> last7Days = List.generate(
+      7,
+      (index) => today.subtract(Duration(days: 6 - index)),
     );
-    var adjustedHijri = HijriCalendar.fromDate(adjustedGregorian);
 
-    return SingleChildScrollView(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            GestureDetector(
-              onLongPress: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Adjust Hijri Date'),
-                    content: Text('Current Adjustment: $_hijriAdjustment days'),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          _updateAdjustment(-1);
-                          Navigator.pop(context);
-                        },
-                        child: const Text('-1 Day'),
+    return Stack(
+      children: [
+        SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── Top Bar: Streak and Profile Avatar ────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 16,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Streak badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHigh.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: Row(
+                          children: [
+                            const Text('🔥', style: TextStyle(fontSize: 18)),
+                            const SizedBox(width: 8),
+                            Text(
+                              '$_streakCount',
+                              style: tt.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: cs.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      TextButton(
-                        onPressed: () {
-                          _updateAdjustment(1);
-                          Navigator.pop(context);
-                        },
-                        child: const Text('+1 Day'),
+                      // Profile avatar
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: cs.secondaryContainer,
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: cs.onSecondaryContainer,
+                        ),
                       ),
                     ],
                   ),
-                );
-              },
-              child: RamadanHeader(
-                ramadanDay: adjustedHijri.hDay,
-                monthName: adjustedHijri.longMonthName,
-              ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Title ─────────────────────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                  child: Text(
+                    'Day 4. New day,\nnew reps.',
+                    textAlign: TextAlign.center,
+                    style: tt.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: cs.onSurface,
+                      height: 1.2,
+                      fontSize: 34,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // ── Streak Dots (Last 7 Days) ─────────────────────────────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(7, (index) {
+                    final d = last7Days[index];
+                    final isToday = index == 6; // Always the rightmost one
+                    final isPast = index < 6;
+                    final initial = DateFormat(
+                      'E',
+                    ).format(d).substring(0, 1).toLowerCase();
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isPast
+                                  ? cs
+                                        .primary // Filled for previous days
+                                  : Colors
+                                        .transparent, // Empty or partially filled for today
+                              border: Border.all(
+                                color: isPast ? cs.primary : cs.outlineVariant,
+                                width:
+                                    2, // Thicker border for unfilled to match image style
+                              ),
+                            ),
+                            child: isToday
+                                ? Center(
+                                    child: Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        color: cs.primary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            initial,
+                            style: tt.labelSmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ),
+
+                const SizedBox(height: 32),
+
+                // ── Share Button ──────────────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 48.0),
+                  child: FilledButton(
+                    onPressed: () {
+                      // Trigger instagram share action here
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(
+                        0xFFFF453A,
+                      ), // Vibrant coral/red
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(32),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Text(
+                          'SHARE',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.ios_share_rounded, size: 22),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                // ── Bounded Task Carousel ─────────────────────────────────────────────
+                SizedBox(
+                  height: 380,
+                  child: TaskCarousel(onTaskCompleted: _playConfetti),
+                ),
+
+                const SizedBox(height: 32),
+
+                // ── Action Prompts (Notifications & Widgets) ────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: ActionPromptCard(
+                    title: 'Set the reminder',
+                    subtitle:
+                        'Never miss your morning routine!\nSet a reminder to stay on track',
+                    buttonText: 'Set Now',
+                    onPressed: () {},
+                    backgroundColor: const Color(
+                      0xFFFFE0B2,
+                    ), // Light peach/orange
+                    foregroundColor: const Color(0xFF4E342E), // Dark brown
+                    icon: const Icon(
+                      Icons.notifications_active_rounded,
+                      size: 64,
+                      color: Color(0xFFFF7043),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: ActionPromptCard(
+                    title: 'Quick Access',
+                    subtitle:
+                        'Add a widget to your home screen\nfor instant access to your tasks.',
+                    buttonText: 'Add Widget',
+                    onPressed: () {},
+                    backgroundColor: const Color(0xFFE1BEE7), // Light purple
+                    foregroundColor: const Color(0xFF311B92), // Dark purple
+                    icon: const Icon(
+                      Icons.widgets_rounded,
+                      size: 64,
+                      color: Color(0xFFAB47BC),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                // ── Footer Mascot ──────────────────────
+                Image.asset(
+                  'assets/photos/mascot/trio.png',
+                  width: double.infinity,
+                  fit: BoxFit.fitWidth,
+                  
+                ),
+                // const SizedBox(height: 32),
+              ],
             ),
-            const SizedBox(height: 24),
-            const JournalEntry(),
-            const SizedBox(height: 24),
-            DailyReminder(),
-          ],
+          ),
         ),
-      ),
+        IgnorePointer(
+          child: Align(
+            alignment: Alignment.center,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              emissionFrequency: 0.05,
+              numberOfParticles: 20,
+              colors: [cs.primary, cs.secondary, cs.tertiary],
+            ),
+          ),
+        ),
+      ],
     );
+  }
+
+  void _playConfetti() {
+    _confettiController.play();
   }
 }
