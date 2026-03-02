@@ -217,6 +217,11 @@ class _HomepageState extends State<Homepage> {
                   child: TaskCarousel(onTaskCompleted: _playConfetti),
                 ),
 
+                // SizedBox(
+                //   height: 380,
+                //   child: TaskScreen() 
+                // ),
+
                 const SizedBox(height: 32),
 
                 // ── Action Prompts (Notifications & Widgets) ────────────────────────

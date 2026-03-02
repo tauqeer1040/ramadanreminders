@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+// import 'dart:nativewrappers/_internal/vm/lib/internal_patch.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/bullet_item.dart';
@@ -104,18 +105,21 @@ class _TaskCarouselState extends State<TaskCarousel> {
   List<BulletItem> _defaultTasks() => [
     BulletItem(
       id: 'default_1',
-      content: 'Compliment a Stranger',
+      content: 'Compliment a friend',
       bgImage: 'assets/photos/images/ethreialbloom1.jpeg',
+      difficulty: 'easy',
     ),
     BulletItem(
       id: 'default_2',
-      content: 'Read Quran for 15 mins',
+      content: 'Read an Aayah of the Quran ',
       bgImage: 'assets/photos/images/EtherealFlower.jpeg',
+      difficulty: 'mid',
     ),
     BulletItem(
       id: 'default_3',
       content: 'Give Charity',
       bgImage: 'assets/photos/images/DelicateOrangeFlowerinBloom.jpeg',
+      difficulty: 'hard',
     ),
   ];
 
@@ -276,10 +280,6 @@ class _TaskCarouselState extends State<TaskCarousel> {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Build
-  // ---------------------------------------------------------------------------
-
   @override
   Widget build(BuildContext context) {
     if (_loading) return const SizedBox.shrink();
@@ -288,6 +288,31 @@ class _TaskCarouselState extends State<TaskCarousel> {
       controller: _carouselController,
       flexWeights: const <int>[5, 1, 1],
       itemSnapping: true,
+      onTap: (tappedIndex) {
+        if (tappedIndex < _tasks.length) {
+          if (_focusedIndex != tappedIndex) {
+            setState(() => _focusedIndex = tappedIndex);
+            _carouselController.animateToItem(
+              tappedIndex,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+          } else {
+            _toggle(tappedIndex);
+          }
+        } else if (tappedIndex == _tasks.length) {
+          if (_focusedIndex != _tasks.length) {
+            setState(() => _focusedIndex = _tasks.length);
+            _carouselController.animateToItem(
+              _tasks.length,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+          } else {
+            _showAddTaskDialog();
+          }
+        }
+      },
       children: [
         for (int i = 0; i < _tasks.length; i++)
           TaskCard(
@@ -296,30 +321,14 @@ class _TaskCarouselState extends State<TaskCarousel> {
             completed: _tasks[i].completed,
             isFocused: i == _focusedIndex,
             bgImage: _tasks[i].bgImage ?? _getRandomImage(),
-            onTap: () => _toggle(i),
-            onFocus: () {
-              setState(() => _focusedIndex = i);
-              _carouselController.animateToItem(
-                i,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-              );
-            },
+            difficulty: _tasks[i].difficulty,
             onDelete: () => _delete(i),
             index: i,
           ),
         _AddTaskCard(
           onTap: () async {
-            HapticFeedback.lightImpact();
-            await _showAddTaskDialog();
-          },
-          onFocus: () {
-            setState(() => _focusedIndex = _tasks.length);
-            _carouselController.animateToItem(
-              _tasks.length,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-            );
+            // Unused directly inside AddTaskCard now,
+            // since CarouselView intercepts the tap natively.
           },
         ),
         const _DecorCard(icon: Icons.star_border_rounded),
@@ -331,69 +340,67 @@ class _TaskCarouselState extends State<TaskCarousel> {
 
 class _AddTaskCard extends StatelessWidget {
   final VoidCallback onTap;
-  final VoidCallback onFocus;
-  const _AddTaskCard({required this.onTap, required this.onFocus});
+
+  const _AddTaskCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final bool isCentered = constraints.maxWidth > 160;
         final double textOpacity = isCentered ? 1.0 : 0.0;
 
-        return GestureDetector(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            if (isCentered) {
-              onTap();
-            } else {
-              onFocus();
-            }
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(32),
-              border: Border.all(color: cs.outlineVariant, width: 2.5),
-            ),
-            child: Center(
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 250),
-                opacity: textOpacity,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: cs.primaryContainer,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: cs.primary, width: 2),
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            // onTap: onTap,
+            borderRadius: BorderRadius.circular(32),
+            child: Container(
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(32),
+                border: Border.all(color: cs.outlineVariant, width: 2.5),
+              ),
+              child: Center(
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 250),
+                  opacity: textOpacity,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: cs.primary, width: 2),
+                        ),
+                        child: Icon(
+                          Icons.add_rounded,
+                          size: 32,
+                          color: cs.primary,
+                        ),
                       ),
-                      child: Icon(
-                        Icons.add_rounded,
-                        size: 32,
-                        color: cs.primary,
+                      const SizedBox(height: 16),
+                      Text(
+                        'Add Task',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: cs.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Add Task',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.bold,
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap to create a new task',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Tap to create a new task',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -406,11 +413,13 @@ class _AddTaskCard extends StatelessWidget {
 
 class _DecorCard extends StatelessWidget {
   final IconData icon;
+
   const _DecorCard({required this.icon});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,

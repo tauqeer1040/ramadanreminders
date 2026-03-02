@@ -4,6 +4,7 @@ class BulletItem {
   final String type;
   bool completed;
   String? bgImage;
+  String difficulty;
 
   BulletItem({
     required this.id,
@@ -11,6 +12,7 @@ class BulletItem {
     this.type = 'task',
     this.completed = false,
     this.bgImage,
+    this.difficulty = 'easy',
   });
 
   Map<String, dynamic> toJson() {
@@ -20,6 +22,7 @@ class BulletItem {
       'type': type,
       'completed': completed,
       'bgImage': bgImage,
+      'difficulty': difficulty,
     };
   }
 
@@ -30,6 +33,7 @@ class BulletItem {
       type: json['type'] ?? 'task',
       completed: json['completed'] ?? false,
       bgImage: json['bgImage'],
+      difficulty: json['difficulty'] ?? 'easy',
     );
   }
 }
