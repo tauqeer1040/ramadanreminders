@@ -232,10 +232,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
         icon: const Icon(Icons.workspace_premium_rounded),
         label: const Text(
           'Premium',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,

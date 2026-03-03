@@ -1,5 +1,0 @@
-Analyzing ramadan_app...                                        
-
-warning - The value of the field '_refreshing' isn't used - lib\components\quranpage.dart:20:8 - unused_field
-   info - The import of 'package:flutter/services.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' - lib\components\task_card.dart:2:8 - unnecessary_import
-

@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:confetti/confetti.dart';
+import 'package:material_new_shapes/material_new_shapes.dart';
+import '../services/prayer_time_service.dart';
+import 'package:adhan/adhan.dart';
 import './task_carousel.dart';
 import './action_prompt_card.dart';
+import './sawab_countdown_card.dart';
+import 'package:expressive_loading_indicator/expressive_loading_indicator.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -99,15 +104,20 @@ class _HomepageState extends State<Homepage> {
                 // ── Title ─────────────────────────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                  child: Text(
-                    'Day 4. New day,\nnew reps.',
-                    textAlign: TextAlign.center,
-                    style: tt.headlineLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: cs.onSurface,
-                      height: 1.2,
-                      fontSize: 34,
-                    ),
+                  child: Builder(
+                    builder: (context) {
+                      final hijriDate = PrayerTimeService.getDynamicHijriDate();
+                      return Text(
+                        'Day ${hijriDate.hDay} of ${hijriDate.longMonthName}',
+                        textAlign: TextAlign.center,
+                        style: tt.headlineLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: cs.onSurface,
+                          height: 1.2,
+                          fontSize: 28,
+                        ),
+                      );
+                    },
                   ),
                 ),
 
@@ -173,6 +183,80 @@ class _HomepageState extends State<Homepage> {
 
                 const SizedBox(height: 32),
 
+                // ── Prayer / Sehri / Iftar Timings ────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: FutureBuilder<PrayerTimes?>(
+                    future: PrayerTimeService.getPrayerTimes(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return Center(child: ExpressiveLoadingIndicator(
+                        polygons: [
+                          MaterialShapes.softBurst,
+                          MaterialShapes.heart,
+                          MaterialShapes.pill,
+                          MaterialShapes.pentagon,
+                        ],
+                      ),);
+                      }
+                      if (snapshot.hasError ||
+                          !snapshot.hasData ||
+                          snapshot.data == null) {
+                        return const Text(
+                          'Enable location to view Sehri & Iftar timings.',
+                          textAlign: TextAlign.center,
+                        );
+                      }
+
+                      // final timings = snapshot.data!;
+                      // final timeFormat = DateFormat.jm();
+                      // final sehri = timeFormat.format(timings.fajr);
+                      // final namaz = timeFormat.format(timings.dhuhr);
+                      // final iftar = timeFormat.format(timings.maghrib);
+
+                      return Column(
+                        children: [
+                          if (mounted)
+                            SawabCountdownCard(timings: snapshot.data!),
+                          // const SizedBox(height: 16),
+                          // Container(
+                          //   padding: const EdgeInsets.all(20),
+                          //   decoration: BoxDecoration(
+                          //     color: cs.secondaryContainer,
+                          //     borderRadius: BorderRadius.circular(24),
+                          //   ),
+                            // child: Row(
+                            //   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            //   children: [
+                            //     _TimingWidget(
+                            //       title: 'Sehri',
+                            //       time: sehri,
+                            //       icon: Icons.wb_twilight,
+                            //       color: Colors.blueAccent,
+                            //     ),
+                            //     _TimingWidget(
+                            //       title: 'Namaz (Dhuhr)',
+                            //       time: namaz,
+                            //       icon: Icons.access_time_filled,
+                            //       color: Colors.green,
+                            //     ),
+                            //     _TimingWidget(
+                            //       title: 'Iftar',
+                            //       time: iftar,
+                            //       icon: Icons.nights_stay,
+                            //       color: Colors.orange,
+                            //     ),
+                            //   ],
+                            // ),
+                          // ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
                 // ── Share Button ──────────────────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 48.0),
@@ -219,9 +303,8 @@ class _HomepageState extends State<Homepage> {
 
                 // SizedBox(
                 //   height: 380,
-                //   child: TaskScreen() 
+                //   child: TaskScreen()
                 // ),
-
                 const SizedBox(height: 32),
 
                 // ── Action Prompts (Notifications & Widgets) ────────────────────────
@@ -298,5 +381,46 @@ class _HomepageState extends State<Homepage> {
 
   void _playConfetti() {
     _confettiController.play();
+  }
+}
+
+class _TimingWidget extends StatelessWidget {
+  final String title;
+  final String time;
+  final IconData icon;
+  final Color color;
+
+  const _TimingWidget({
+    required this.title,
+    required this.time,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 28),
+        const SizedBox(height: 8),
+        Text(
+          title,
+          style: tt.labelMedium?.copyWith(
+            color: cs.onSecondaryContainer.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          time,
+          style: tt.titleMedium?.copyWith(
+            color: cs.onSecondaryContainer,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
   }
 }

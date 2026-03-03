@@ -24,6 +24,10 @@ dependencies:
   google_fonts: ^8.0.2
   expressive_loading_indicator: ^0.0.1
   material_new_shapes: ^1.0.0
+  adhan: ^2.0.0+1
+  geolocator: ^14.0.2
+  marquee: ^2.3.0
+  text_scroll: ^0.2.1
 
 dev_dependencies:
   flutter_test:
