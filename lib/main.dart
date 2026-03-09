@@ -7,9 +7,36 @@ import 'components/profilepage.dart';
 import 'components/quranpage.dart';
 import 'features/tasbih/tasbih_screen.dart';
 
-void main() {
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+import 'services/notification_service.dart';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'services/auth_service.dart';
+import 'package:firebase_ui_auth/firebase_ui_auth.dart';
+import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
+
+void main() async {
   runApp(const MyApp());
+
+  WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    FirebaseUIAuth.configureProviders([
+      EmailAuthProvider(),
+      GoogleProvider(clientId: AuthService.serverClientId),
+    ]);
+  } catch (e) {
+    debugPrint("Failed to initialize Firebase: $e");
+  }
+
+  NotificationService.init();
+  NotificationService.requestPermissions();
+  NotificationService.scheduleDailyNotifications();
+
+  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 }
 
 class MyApp extends StatelessWidget {

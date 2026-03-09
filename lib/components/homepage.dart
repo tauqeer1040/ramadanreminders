@@ -7,6 +7,7 @@ import 'package:adhan/adhan.dart';
 import './task_carousel.dart';
 import './action_prompt_card.dart';
 import './sawab_countdown_card.dart';
+import '../services/notification_service.dart';
 import 'package:expressive_loading_indicator/expressive_loading_indicator.dart';
 
 class Homepage extends StatefulWidget {
@@ -19,6 +20,7 @@ class Homepage extends StatefulWidget {
 class _HomepageState extends State<Homepage> {
   final int _streakCount = 82; // Example streak count
   late ConfettiController _confettiController;
+  bool _notificationsEnabled = true;
 
   @override
   void initState() {
@@ -26,6 +28,25 @@ class _HomepageState extends State<Homepage> {
     _confettiController = ConfettiController(
       duration: const Duration(milliseconds: 1500),
     );
+    _checkPermissions();
+  }
+
+  Future<void> _checkPermissions() async {
+    final enabled = await NotificationService.checkPermissions();
+    if (mounted) {
+      setState(() {
+        _notificationsEnabled = enabled;
+      });
+    }
+  }
+
+  Future<void> _handleNotificationRequest() async {
+    await NotificationService.requestPermissions();
+    await _checkPermissions();
+    if (_notificationsEnabled) {
+      _playConfetti();
+      await NotificationService.scheduleDailyNotifications();
+    }
   }
 
   @override
@@ -190,21 +211,44 @@ class _HomepageState extends State<Homepage> {
                     future: PrayerTimeService.getPrayerTimes(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(child: ExpressiveLoadingIndicator(
-                        polygons: [
-                          MaterialShapes.softBurst,
-                          MaterialShapes.heart,
-                          MaterialShapes.pill,
-                          MaterialShapes.pentagon,
-                        ],
-                      ),);
+                        return Center(
+                          child: ExpressiveLoadingIndicator(
+                            polygons: [
+                              MaterialShapes.softBurst,
+                              MaterialShapes.heart,
+                              MaterialShapes.pill,
+                              MaterialShapes.pentagon,
+                            ],
+                          ),
+                        );
                       }
                       if (snapshot.hasError ||
                           !snapshot.hasData ||
                           snapshot.data == null) {
-                        return const Text(
-                          'Enable location to view Sehri & Iftar timings.',
-                          textAlign: TextAlign.center,
+                        return ActionPromptCard(
+                          title: 'Enable Location',
+                          subtitle:
+                              'Please enable location access to view accurate prayer times for your region.',
+                          buttonText: 'Enable',
+                          onPressed: () async {
+                            final granted =
+                                await PrayerTimeService.requestLocationPermission();
+                            if (granted && mounted) {
+                              _playConfetti();
+                              setState(() {}); // Rebuild to fetch timings
+                            }
+                          },
+                          backgroundColor: const Color(
+                            0xFFE8F5E9,
+                          ), // Light green
+                          foregroundColor: const Color(
+                            0xFF1B5E20,
+                          ), // Dark green
+                          icon: const Icon(
+                            Icons.location_on_rounded,
+                            size: 64,
+                            color: Color(0xFF4CAF50),
+                          ),
                         );
                       }
 
@@ -225,29 +269,29 @@ class _HomepageState extends State<Homepage> {
                           //     color: cs.secondaryContainer,
                           //     borderRadius: BorderRadius.circular(24),
                           //   ),
-                            // child: Row(
-                            //   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            //   children: [
-                            //     _TimingWidget(
-                            //       title: 'Sehri',
-                            //       time: sehri,
-                            //       icon: Icons.wb_twilight,
-                            //       color: Colors.blueAccent,
-                            //     ),
-                            //     _TimingWidget(
-                            //       title: 'Namaz (Dhuhr)',
-                            //       time: namaz,
-                            //       icon: Icons.access_time_filled,
-                            //       color: Colors.green,
-                            //     ),
-                            //     _TimingWidget(
-                            //       title: 'Iftar',
-                            //       time: iftar,
-                            //       icon: Icons.nights_stay,
-                            //       color: Colors.orange,
-                            //     ),
-                            //   ],
-                            // ),
+                          // child: Row(
+                          //   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          //   children: [
+                          //     _TimingWidget(
+                          //       title: 'Sehri',
+                          //       time: sehri,
+                          //       icon: Icons.wb_twilight,
+                          //       color: Colors.blueAccent,
+                          //     ),
+                          //     _TimingWidget(
+                          //       title: 'Namaz (Dhuhr)',
+                          //       time: namaz,
+                          //       icon: Icons.access_time_filled,
+                          //       color: Colors.green,
+                          //     ),
+                          //     _TimingWidget(
+                          //       title: 'Iftar',
+                          //       time: iftar,
+                          //       icon: Icons.nights_stay,
+                          //       color: Colors.orange,
+                          //     ),
+                          //   ],
+                          // ),
                           // ),
                         ],
                       );
@@ -308,27 +352,28 @@ class _HomepageState extends State<Homepage> {
                 const SizedBox(height: 32),
 
                 // ── Action Prompts (Notifications & Widgets) ────────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: ActionPromptCard(
-                    title: 'Set the reminder',
-                    subtitle:
-                        'Never miss your morning routine!\nSet a reminder to stay on track',
-                    buttonText: 'Set Now',
-                    onPressed: () {},
-                    backgroundColor: const Color(
-                      0xFFFFE0B2,
-                    ), // Light peach/orange
-                    foregroundColor: const Color(0xFF4E342E), // Dark brown
-                    icon: const Icon(
-                      Icons.notifications_active_rounded,
-                      size: 64,
-                      color: Color(0xFFFF7043),
+                if (!_notificationsEnabled) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    child: ActionPromptCard(
+                      title: 'Set the reminder',
+                      subtitle:
+                          'Never miss your morning routine!\nSet a reminder to stay on track',
+                      buttonText: 'Set Now',
+                      onPressed: _handleNotificationRequest,
+                      backgroundColor: const Color(
+                        0xFFFFE0B2,
+                      ), // Light peach/orange
+                      foregroundColor: const Color(0xFF4E342E), // Dark brown
+                      icon: const Icon(
+                        Icons.notifications_active_rounded,
+                        size: 64,
+                        color: Color(0xFFFF7043),
+                      ),
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                ],
 
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -355,7 +400,6 @@ class _HomepageState extends State<Homepage> {
                   'assets/photos/mascot/trio.png',
                   width: double.infinity,
                   fit: BoxFit.fitWidth,
-                  
                 ),
                 // const SizedBox(height: 32),
               ],

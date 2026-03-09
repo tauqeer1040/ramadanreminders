@@ -2,6 +2,8 @@ import 'package:adhan/adhan.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hijri/hijri_calendar.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 class PrayerTimeService {
   /// Fetches the user's current coordinates.
   /// Requests permission if not granted.
@@ -16,10 +18,11 @@ class PrayerTimeService {
 
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return null;
-      }
+      // We don't request it automatically here anymore,
+      // let the user explicitly tap the action prompt.
+      // But for backward compatibility we leave this or comment it out?
+      // Actually let's return null if denied to prevent random popups without user intent.
+      return null;
     }
 
     if (permission == LocationPermission.deniedForever) {
@@ -29,16 +32,38 @@ class PrayerTimeService {
     return await Geolocator.getCurrentPosition();
   }
 
+  static Future<bool> requestLocationPermission() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    return permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
+  }
+
   /// Calculates prayer times for today at the user's location.
   static Future<PrayerTimes?> getPrayerTimes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lat = prefs.getDouble('cached_latitude');
+    final lon = prefs.getDouble('cached_longitude');
+
+    if (lat != null && lon != null) {
+      final coordinates = Coordinates(lat, lon);
+      final params = CalculationMethod.muslim_world_league.getParameters();
+      params.madhab = Madhab.hanafi;
+      final date = DateComponents.from(DateTime.now());
+      return PrayerTimes(coordinates, date, params);
+    }
+
     final position = await _determinePosition();
     if (position == null) return null;
 
+    await prefs.setDouble('cached_latitude', position.latitude);
+    await prefs.setDouble('cached_longitude', position.longitude);
+
     final coordinates = Coordinates(position.latitude, position.longitude);
     final params = CalculationMethod.muslim_world_league.getParameters();
-    // Defaulting to MWL, can be customized later based on region
     params.madhab = Madhab.hanafi;
-
     final date = DateComponents.from(DateTime.now());
     return PrayerTimes(coordinates, date, params);
   }

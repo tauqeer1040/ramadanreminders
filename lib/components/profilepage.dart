@@ -1,11 +1,87 @@
 import 'package:flutter/material.dart';
-import 'shared/bouncing_widget.dart';
+import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_ui_auth/firebase_ui_auth.dart';
+import '../services/auth_service.dart';
+import '../services/user_service.dart';
 
-class ProfilePage1 extends StatelessWidget {
+class ProfilePage1 extends StatefulWidget {
   const ProfilePage1({super.key});
 
   @override
+  State<ProfilePage1> createState() => _ProfilePage1State();
+}
+
+class _ProfilePage1State extends State<ProfilePage1> {
+  User? _currentUser;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUser = AuthService.currentUser;
+    AuthService.authStateChanges.listen((user) {
+      if (mounted) {
+        setState(() {
+          _currentUser = user;
+        });
+      }
+    });
+  }
+
+  void _showDeleteAccountDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Account'),
+          content: const Text(
+            'Are you sure you want to delete your account? Your data will be kept for 30 days before permanent deletion.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: () async {
+                Navigator.pop(context);
+                if (_currentUser != null) {
+                  setState(() => _isLoading = true);
+                  try {
+                    await UserService.deleteUserAccount(_currentUser!);
+                    await AuthService.signOut();
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Failed to delete account. Please log out and log in again to verify your identity.',
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                  if (mounted) {
+                    setState(() => _isLoading = false);
+                  }
+                }
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
@@ -13,45 +89,199 @@ class ProfilePage1 extends StatelessWidget {
           children: [
             SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.38,
-              child: const _TopPortion(),
+              child: _TopPortion(user: _currentUser),
             ),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Column(
                 children: [
                   Text(
-                    "Richie Lorie",
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                    _currentUser != null
+                        ? (_currentUser!.displayName ??
+                              _currentUser!.email?.split('@')[0] ??
+                              "User")
+                        : "Guest User",
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurface,
+                      letterSpacing: -0.5,
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      BouncingWidget(
-                        onPressed: () {},
-                        child: FloatingActionButton.extended(
-                          onPressed: () {},
-                          heroTag: 'follow',
-                          elevation: 0,
-                          label: const Text("Follow"),
-                          icon: const Icon(Icons.person_add_alt_1),
+
+                  // Authentication Section
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
+                    child: Card(
+                      elevation: 0,
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              "Account & Sync",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: cs.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            if (_currentUser == null) ...[
+                              Text(
+                                "Sign up to sync your badges, dhikrs, ayahs read, custom tasks, and easter eggs! Your data is never sold.",
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  height: 1.4,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              if (_isLoading)
+                                const Center(child: CircularProgressIndicator())
+                              else ...[
+                                FilledButton.icon(
+                                  onPressed: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) => SignInScreen(
+                                          actions: [
+                                            AuthStateChangeAction<SignedIn>((
+                                              context,
+                                              state,
+                                            ) {
+                                              if (state.user != null) {
+                                                UserService.syncUser(
+                                                  state.user!,
+                                                );
+                                              }
+                                              Navigator.of(context).pop();
+                                            }),
+                                            AuthStateChangeAction<UserCreated>((
+                                              context,
+                                              state,
+                                            ) {
+                                              if (state.credential.user !=
+                                                  null) {
+                                                UserService.syncUser(
+                                                  state.credential.user!,
+                                                );
+                                              }
+                                              Navigator.of(context).pop();
+                                            }),
+                                            AuthStateChangeAction<AuthFailed>((
+                                              context,
+                                              state,
+                                            ) {
+                                              print(
+                                                "========= FIREBASE UI AUTH FAILED =========",
+                                              );
+                                              print(
+                                                "Exception: ${state.exception}",
+                                              );
+                                              print("Is exception");
+                                              if (state.exception
+                                                  is PlatformException) {
+                                                final pe =
+                                                    state.exception
+                                                        as PlatformException;
+                                                print(
+                                                  "PlatformCode: ${pe.code}",
+                                                );
+                                                print(
+                                                  "PlatformMessage: ${pe.message}",
+                                                );
+                                                print(
+                                                  "PlatformDetails: ${pe.details}",
+                                                );
+                                              } else if (state.exception
+                                                  is FirebaseAuthException) {
+                                                final fae =
+                                                    state.exception
+                                                        as FirebaseAuthException;
+                                                print("AuthCode: ${fae.code}");
+                                                print(
+                                                  "AuthMessage: ${fae.message}",
+                                                );
+                                              }
+                                              print(
+                                                "===========================================",
+                                              );
+                                            }),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.login, size: 24),
+                                  label: const Text("Login / Register"),
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ] else ...[
+                              Text(
+                                "Signed in as ${_currentUser!.email}",
+                                style: TextStyle(color: cs.onSurfaceVariant),
+                              ),
+                              const SizedBox(height: 20),
+                              OutlinedButton.icon(
+                                onPressed: () async {
+                                  setState(() => _isLoading = true);
+                                  await AuthService.signOut();
+                                  if (mounted)
+                                    setState(() => _isLoading = false);
+                                },
+                                icon: const Icon(Icons.logout),
+                                label: const Text("Sign Out"),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: cs.error,
+                                  side: BorderSide(
+                                    color: cs.error.withValues(alpha: 0.5),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextButton.icon(
+                                onPressed: _showDeleteAccountDialog,
+                                icon: const Icon(Icons.delete_forever),
+                                label: const Text("Delete Account"),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: cs.error.withValues(alpha: 1),
+                                  side: BorderSide(
+                                    color: cs.error.withValues(alpha: 0.5),
+                                  ),
+                                  backgroundColor: Colors.transparent,
+                                  // surfaceTintColor: cs.error
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 16.0),
-                      BouncingWidget(
-                        onPressed: () {},
-                        child: FloatingActionButton.extended(
-                          onPressed: () {},
-                          heroTag: 'mesage',
-                          elevation: 0,
-                          label: const Text("Message"),
-                          icon: const Icon(Icons.message_rounded),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
+
                   const SizedBox(height: 16),
                   const _ProfileInfoRow(),
                 ],
@@ -118,7 +348,8 @@ class ProfileInfoItem {
 }
 
 class _TopPortion extends StatelessWidget {
-  const _TopPortion();
+  final User? user;
+  const _TopPortion({super.key, this.user});
 
   @override
   Widget build(BuildContext context) {
@@ -154,13 +385,17 @@ class _TopPortion extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surface,
                     shape: BoxShape.circle,
-                    image: const DecorationImage(
-                      fit: BoxFit.cover,
-                      image: NetworkImage(
-                        'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1470&q=80',
-                      ),
-                    ),
                   ),
+                  clipBehavior: Clip.antiAlias,
+                  child: user?.photoURL != null && user!.photoURL!.isNotEmpty
+                      ? Image.network(user!.photoURL!, fit: BoxFit.cover)
+                      : Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Image.asset(
+                            'assets/photos/mascot/trophy.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
                 ),
                 Positioned(
                   bottom: 0,

@@ -8,6 +8,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'wavy_play_button.dart';
 import 'package:material_new_shapes/material_new_shapes.dart';
+import '../services/journal_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import './journal_section.dart';
 
 class QuranPage extends StatefulWidget {
   const QuranPage({super.key});
@@ -42,12 +45,15 @@ class _QuranPageState extends State<QuranPage> {
   bool _thresholdReached = false;
   bool _isReleasingPull = false;
 
+  Map<String, dynamic>? _journalInsight;
+
   @override
   void initState() {
     super.initState();
     _player.stop();
     _player.setPlayerMode(PlayerMode.mediaPlayer);
     _fetchAyah();
+    _loadInsight();
 
     _scrollController.addListener(_handlePullRefresh);
 
@@ -75,6 +81,19 @@ class _QuranPageState extends State<QuranPage> {
         });
       }
     });
+  }
+
+  Future<void> _loadInsight() async {
+    if (FirebaseAuth.instance.currentUser == null) {
+      return;
+    }
+
+    final insight = await JournalService.getYesterdayJournalInsight();
+    if (mounted) {
+      setState(() {
+        _journalInsight = insight;
+      });
+    }
   }
 
   void _handlePullRefresh() {
@@ -261,7 +280,7 @@ class _QuranPageState extends State<QuranPage> {
         elevation: 0,
         // centerTitle: true,
         title: Text(
-          'Ayaah of the Day',
+          'Daily Reflection',
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
@@ -359,7 +378,6 @@ class _QuranPageState extends State<QuranPage> {
     super.dispose();
   }
 
-  // Build the page content as a separate method within the state class
   Widget _buildContent() {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -367,7 +385,96 @@ class _QuranPageState extends State<QuranPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 34),
+        const JournalSection(),
+        const SizedBox(height: 24),
+
+        if (_journalInsight != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 30),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.auto_awesome,
+                        color: colorScheme.primary,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Insight from Yesterday's Journal",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _journalInsight!['greeting'] ?? '',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _journalInsight!['insight'] ?? '',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSecondaryContainer,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _journalInsight!['quote'] ?? '',
+                          style: textTheme.bodyMedium?.copyWith(
+                            fontStyle: FontStyle.italic,
+                            color: colorScheme.onSurface,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            "— ${_journalInsight!['reference'] ?? ''}",
+                            style: textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+        const SizedBox(height: 14),
         if (_error != null) ...[
           Padding(
             padding: const EdgeInsets.only(bottom: 16),

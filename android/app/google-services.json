@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "1059339297432",
+    "project_id": "aliapp-909a0",
+    "storage_bucket": "aliapp-909a0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1059339297432:android:608dc44c27bb755c3a66ed",
+        "android_client_info": {
+          "package_name": "com.example.ramadan_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1059339297432-ms94q606vo3v8pa9rupob039l8ko4saf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAjcFTIEKfX3FjaFBXnzi4_PHSJl-gsECI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1059339297432-ms94q606vo3v8pa9rupob039l8ko4saf.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1059339297432-ebut10jtshmkgg4vf6a3frgioc5p60ob.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.ramadanApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

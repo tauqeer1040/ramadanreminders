@@ -9,6 +9,7 @@ import 'widgets/dhikr_card.dart';
 import 'widgets/add_dhikr_card.dart';
 import 'widgets/tasbih_watermark.dart';
 import 'widgets/dhikr_dialog.dart';
+import 'widgets/tasbih_stats_sheet.dart';
 
 /// The main Tasbih / Dhikr counter screen.
 ///
@@ -147,6 +148,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
+        HapticFeedback.lightImpact();
         return Container(
           margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           decoration: BoxDecoration(
@@ -310,12 +312,26 @@ class _TasbihScreenState extends State<TasbihScreen> {
                             duration: const Duration(milliseconds: 1000),
                             curve: Curves.easeOutQuart,
                             builder: (context, val, child) {
-                              return Text(
-                                val.toString(),
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                  color: colorScheme.secondary,
+                              return GestureDetector(
+                                onTap: () =>
+                                    showTasbihStatsSheet(context, _controller),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 18.0,
+                                    vertical: 6.0,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(24),
+                                  ),
+                                  child: Text(
+                                    val.toString(),
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
                                 ),
                               );
                             },

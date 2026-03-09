@@ -148,6 +148,7 @@ class TasbihController extends ChangeNotifier {
     _totalCount += item.count;
     _service.saveTotalDhikrCount(_totalCount);
 
+    item.historicalCount += item.count;
     item.count = 0;
     _service.saveDhikrs(_dhikrList);
     notifyListeners();
