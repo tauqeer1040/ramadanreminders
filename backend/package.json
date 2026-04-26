@@ -4,14 +4,19 @@
   "description": "Backend service for Ramadan App Journal Analysis",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js"
+    "start": "node db2.js",
+    "dev": "node --watch db2.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.3.1",
+    "@libsql/client": "^0.17.2",
+    "bullmq": "^5.71.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.6.1",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.3.1",
+    "firebase-admin": "^13.7.0",
+    "ioredis": "^5.10.1",
     "xss": "^1.0.15"
   }
 }

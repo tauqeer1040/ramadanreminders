@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:adhan/adhan.dart';
 import 'package:intl/intl.dart';
-import 'package:marquee/marquee.dart';
+// import 'package:marquee/marquee.dart';
 import 'package:text_scroll/text_scroll.dart';
 
 class SawabCountdownCard extends StatefulWidget {

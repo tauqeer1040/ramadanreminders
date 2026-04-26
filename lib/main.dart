@@ -3,21 +3,21 @@ import 'package:flutter/services.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'components/homepage.dart';
-import 'components/profilepage.dart';
 import 'components/quranpage.dart';
 import 'features/tasbih/tasbih_screen.dart';
 
 import 'services/notification_service.dart';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
+import 'services/journal_service.dart';
+import 'services/user_service.dart';
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
 
 void main() async {
-  runApp(const MyApp());
-
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
@@ -28,6 +28,14 @@ void main() async {
       EmailAuthProvider(),
       GoogleProvider(clientId: AuthService.serverClientId),
     ]);
+    
+    // Natively initialize Guest Account immediately if completely logged out!
+    if (FirebaseAuth.instance.currentUser == null) {
+      final guest = await FirebaseAuth.instance.signInAnonymously();
+      if (guest.user != null) {
+        UserService.syncUser(guest.user!);
+      }
+    }
   } catch (e) {
     debugPrint("Failed to initialize Firebase: $e");
   }
@@ -36,7 +44,11 @@ void main() async {
   NotificationService.requestPermissions();
   NotificationService.scheduleDailyNotifications();
 
+  JournalService.initAutoSync();
+
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -284,9 +296,8 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
 
 const List<Widget> _pages = [
   Homepage(),
-  TasbihScreen(),
   QuranPage(),
-  ProfilePage1(),
+  TasbihScreen(),
 ];
 
 const _navBarItems = [
@@ -296,19 +307,14 @@ const _navBarItems = [
     label: "home",
   ),
   NavigationDestination(
-    icon: Icon(Icons.loop_rounded),
-    selectedIcon: Icon(Icons.loop_rounded),
-    label: 'Tesbih',
-  ),
-  NavigationDestination(
     icon: Icon(Icons.menu_book_rounded),
     selectedIcon: Icon(Icons.menu_book_rounded),
     label: 'Quran',
   ),
   NavigationDestination(
-    icon: Icon(Icons.person_outline_rounded),
-    selectedIcon: Icon(Icons.person_rounded),
-    label: 'Profile',
+    icon: Icon(Icons.loop_rounded),
+    selectedIcon: Icon(Icons.loop_rounded),
+    label: 'Tesbih',
   ),
 ];
 

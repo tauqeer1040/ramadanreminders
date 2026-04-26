@@ -17,7 +17,7 @@ migrate_working_dir/
 *.ipr
 *.iws
 .idea/
-
+backend/node_modules/
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
@@ -43,3 +43,18 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+node_modules 
+.env
+
+node_modules/
+backend/node_modules/
+
+.env
+*.env
+
+# Firebase / secrets
+*.json
+!package.json
+!package-lock.json
+!pubspec.json
+backend/*firebase-adminsdk*.json

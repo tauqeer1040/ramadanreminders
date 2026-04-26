@@ -1,66 +1,39 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'journal_list_screen.dart';
+import 'journal_editor_screen.dart';
 import '../services/journal_service.dart';
 
-class JournalSection extends StatefulWidget {
+class JournalSection extends StatelessWidget {
   const JournalSection({super.key});
 
-  @override
-  State<JournalSection> createState() => _JournalSectionState();
-}
+  void _openEditor(BuildContext context) async {
+    // 1. Check Guest Limits securely before pushing
+    final limitReached = await JournalService.isGuestLimitReached();
+    
+    if (limitReached && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Free Trial limit reached! Tap your Profile to sign up securely and unlock unlimited journals."),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
 
-class _JournalSectionState extends State<JournalSection> {
-  final TextEditingController _controller = TextEditingController();
-  bool _isSaving = false;
-  bool _isSyncing = false;
+    if (!context.mounted) return;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadTodayJournal();
-  }
-
-  Future<void> _loadTodayJournal() async {
-    final text = await JournalService.getTodayLocalJournal();
-    if (text != null && text.isNotEmpty) {
-      if (mounted) {
-        setState(() {
-          _controller.text = text;
-        });
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const JournalListScreen()),
+    );
+    Future.microtask(() {
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const JournalEditorScreen()),
+        );
       }
-    }
-  }
-
-  Future<void> _onTextChanged(String text) async {
-    if (mounted) {
-      setState(() => _isSaving = true);
-    }
-
-    // Aggressive offline save on every keystroke
-    await JournalService.saveLocalJournal(text);
-
-    if (mounted) {
-      setState(() => _isSaving = false);
-    }
-  }
-
-  Future<void> _syncToCloud() async {
-    if (mounted) setState(() => _isSyncing = true);
-
-    await JournalService.syncJournalToCloud();
-
-    if (mounted) {
-      setState(() => _isSyncing = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Journal synced to cloud!')));
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+    });
   }
 
   @override
@@ -68,94 +41,57 @@ class _JournalSectionState extends State<JournalSection> {
     final cs = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+      child: GestureDetector(
+        onTap: () => _openEditor(context),
+        child: Container(
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(
+              2,
+            ), // Very slight rounding like mockup
+            border: Border.all(
+              color: Colors.black.withValues(alpha: 0.1),
+              width: 1,
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Write today's Journal",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      "the AI will suggest an aayah tomorrow based on it for you to reflect on.",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (_isSaving)
-                    Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: cs.primary,
-                      ),
+                  Text(
+                    "New",
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "Create new journal",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurface,
                     ),
-                  IconButton(
-                    onPressed: _isSyncing ? null : _syncToCloud,
-                    icon: _isSyncing
-                        ? SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: cs.onPrimary,
-                            ),
-                          )
-                        : Icon(Icons.cloud_upload_rounded, color: cs.primary),
-                    tooltip: 'Sync to Cloud',
                   ),
                 ],
               ),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(
+                    0xFFE8D5D5,
+                  ), // Slightly rosy tint from mockup
+                  border: Border.all(color: Colors.black87, width: 2.5),
+                ),
+                child: const Icon(Icons.add, color: Colors.black87, size: 28),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: cs.outlineVariant.withValues(alpha: 0.5),
-              ),
-            ),
-            child: TextField(
-              controller: _controller,
-              onChanged: _onTextChanged,
-              maxLines: null,
-              minLines: 5,
-              textCapitalization: TextCapitalization.sentences,
-              style: TextStyle(fontSize: 16, color: cs.onSurface, height: 1.5),
-              decoration: InputDecoration(
-                hintText:
-                    "Write your thoughts, struggles, or gratitude here...",
-                hintStyle: TextStyle(
-                  color: cs.onSurfaceVariant.withValues(alpha: 0.7),
-                ),
-                contentPadding: const EdgeInsets.all(20),
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

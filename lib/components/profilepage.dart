@@ -96,7 +96,7 @@ class _ProfilePage1State extends State<ProfilePage1> {
               child: Column(
                 children: [
                   Text(
-                    _currentUser != null
+                    _currentUser != null && !_currentUser!.isAnonymous
                         ? (_currentUser!.displayName ??
                               _currentUser!.email?.split('@')[0] ??
                               "User")
@@ -136,9 +136,9 @@ class _ProfilePage1State extends State<ProfilePage1> {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            if (_currentUser == null) ...[
+                            if (_currentUser == null || _currentUser!.isAnonymous) ...[
                               Text(
-                                "Sign up to sync your badges, dhikrs, ayahs read, custom tasks, and easter eggs! Your data is never sold.",
+                                "Sign up to securely sync your data, unlock unlimited journals, and save your progress! Your data is never sold.",
                                 style: TextStyle(
                                   color: cs.onSurfaceVariant,
                                   height: 1.4,

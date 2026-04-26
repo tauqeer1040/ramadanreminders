@@ -16,7 +16,6 @@ class TaskCard extends StatefulWidget {
     required this.onDelete,
     required this.index,
     required this.bgImage,
-    required this.difficulty,
   });
 
   final String text;
@@ -25,7 +24,6 @@ class TaskCard extends StatefulWidget {
   final VoidCallback onDelete;
   final int index;
   final String bgImage;
-  final String difficulty;
 
   @override
   State<TaskCard> createState() => _TaskCardState();
@@ -96,14 +94,28 @@ class _TaskCardState extends State<TaskCard> {
                     : 220,
                 minHeight: constraints.maxHeight,
                 maxHeight: constraints.maxHeight,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 250),
-                  opacity: textOpacity,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // The large centered typography
-                      Padding(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    IgnorePointer(
+                      child: ConfettiWidget(
+                        confettiController: _confettiController,
+                        blastDirectionality: BlastDirectionality.explosive,
+                        shouldLoop: false,
+                        emissionFrequency: 0.05,
+                        numberOfParticles: 20,
+                        colors: const [
+                          Colors.white,
+                          Colors.white70,
+                          Colors.pinkAccent,
+                          Colors.amberAccent,
+                        ],
+                      ),
+                    ),
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 250),
+                      opacity: textOpacity,
+                      child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24.0),
                         child: Text(
                           widget.text.toLowerCase(),
@@ -135,48 +147,8 @@ class _TaskCardState extends State<TaskCard> {
                           ),
                         ),
                       ),
-
-                      // Difficulty Badge
-                      Positioned(
-                        top: 24,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _getDifficultyColor(widget.difficulty),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            widget.difficulty.toUpperCase(),
-                            style: GoogleFonts.outfit(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Confetti explosion behind/over the text
-                      IgnorePointer(
-                        child: ConfettiWidget(
-                          confettiController: _confettiController,
-                          blastDirectionality: BlastDirectionality.explosive,
-                          shouldLoop: false,
-                          emissionFrequency: 0.05,
-                          numberOfParticles: 20,
-                          colors: const [
-                            Colors.white,
-                            Colors.white70,
-                            Colors.pinkAccent,
-                            Colors.amberAccent,
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -186,16 +158,4 @@ class _TaskCardState extends State<TaskCard> {
     );
   }
 
-  Color _getDifficultyColor(String difficulty) {
-    switch (difficulty.toLowerCase()) {
-      case 'easy':
-        return Colors.green.withValues(alpha: 0.8);
-      case 'mid':
-        return Colors.orange.withValues(alpha: 0.8);
-      case 'hard':
-        return Colors.red.withValues(alpha: 0.8);
-      default:
-        return Colors.grey.withValues(alpha: 0.8);
-    }
-  }
 }

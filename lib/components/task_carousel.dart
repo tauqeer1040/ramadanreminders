@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:math';
-// import 'dart:nativewrappers/_internal/vm/lib/internal_patch.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 import '../models/bullet_item.dart';
 import '../services/journal_service.dart';
 import 'task_card.dart';
@@ -12,9 +13,7 @@ import 'task_card.dart';
 /// Loads/saves tasks via [JournalService] (date-keyed SharedPreferences).
 /// Seeds 3 defaults if no tasks exist for today.
 class TaskCarousel extends StatefulWidget {
-  final VoidCallback? onTaskCompleted;
-
-  const TaskCarousel({super.key, this.onTaskCompleted});
+  const TaskCarousel({super.key});
 
   @override
   State<TaskCarousel> createState() => _TaskCarouselState();
@@ -33,6 +32,8 @@ class _TaskCarouselState extends State<TaskCarousel> {
   int _focusedIndex = 0;
   List<String> _availableImages = [];
   final Random _random = Random();
+  List<String> _imageRotation = [];
+  int _imageRotationIndex = 0;
 
   @override
   void initState() {
@@ -48,6 +49,7 @@ class _TaskCarouselState extends State<TaskCarousel> {
   }
 
   Future<void> _load() async {
+    // 1. Pre-load available images for immediate rendering
     try {
       final manifestJson = await rootBundle.loadString('AssetManifest.json');
       final Map<String, dynamic> manifestMap = json.decode(manifestJson);
@@ -55,51 +57,96 @@ class _TaskCarouselState extends State<TaskCarousel> {
           .where(
             (key) =>
                 key.startsWith('assets/photos/images/') &&
-                key.toLowerCase().endsWith('.jpeg'),
+                (key.toLowerCase().endsWith('.jpeg') ||
+                    key.toLowerCase().endsWith('.jpg') ||
+                    key.toLowerCase().endsWith('.png')),
           )
-          .toList();
+          .toList()
+        ..sort();
     } catch (_) {
       _availableImages = [
+        'assets/photos/images/Delicate Translucent Flower.png',
         'assets/photos/images/ethreialbloom1.jpeg',
         'assets/photos/images/EtherealFlower.jpeg',
         'assets/photos/images/DelicateOrangeFlowerinBloom.jpeg',
         'assets/photos/images/EtherealFlower-1-.jpeg',
+        'assets/photos/images/Ethereal Flower in Motion.png',
+        'assets/photos/images/Ethereal Flower(1).png',
+        'assets/photos/images/Ethereal Flower.png',
+        'assets/photos/images/Ethereal Glowing Flower.png',
+        'assets/photos/images/Ethereal Translucent Flower.png',
+        'assets/photos/images/Radiant Flower Glow.png',
+        'assets/photos/images/Z5u14ZbqstJ9-Dkw_EtherealFlower-1-.jpeg',
       ];
     }
 
-    var tasks = await _service.loadJournalTasks(_todayKey);
-    if (tasks.isEmpty) {
-      tasks = _defaultTasks();
-      await _service.saveJournalTasks(_todayKey, tasks);
+    // 2. Instant Load from Cache
+    var cachedTasks = await _service.loadJournalTasks(_todayKey);
+    if (cachedTasks.isNotEmpty) {
+      _assignImages(cachedTasks);
+      if (mounted) {
+        setState(() {
+          _tasks = cachedTasks;
+          _loading = false;
+        });
+      }
     }
-    if (mounted) {
-      setState(() {
-        _tasks = tasks;
-        _loading = false;
-      });
+
+    // 3. Silent/Background Fetch from Server
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final aiTasks = await _service.fetchLatestAIDrivenTasks(user.uid);
+      
+      if (aiTasks.isNotEmpty) {
+        _assignImages(aiTasks);
+        if (mounted) {
+          setState(() {
+            _tasks = aiTasks;
+            _loading = false;
+          });
+        }
+      }
+    }
+
+    // 4. Final Fallback if still empty (first time install)
+    if (_tasks.isEmpty) {
+      final defaults = _defaultTasks();
+      _assignImages(defaults);
+      await _service.saveJournalTasks(_todayKey, defaults);
+      if (mounted) {
+        setState(() {
+          _tasks = defaults;
+          _loading = false;
+        });
+      }
     }
   }
 
-  String _getRandomImage([String? previousImage]) {
+  void _resetImageRotation() {
     if (_availableImages.isEmpty) {
-      return 'assets/photos/images/ethreialbloom1.jpeg';
+      _imageRotation = ['assets/photos/images/ethreialbloom1.jpeg'];
+      _imageRotationIndex = 0;
+      return;
     }
 
-    String? lastImage = previousImage;
-    if (lastImage == null && _tasks.isNotEmpty) {
-      lastImage = _tasks.last.bgImage;
+    _imageRotation = List<String>.from(_availableImages)..shuffle(_random);
+    _imageRotationIndex = 0;
+  }
+
+  String _nextImage() {
+    if (_imageRotation.isEmpty || _imageRotationIndex >= _imageRotation.length) {
+      _resetImageRotation();
     }
+    final image = _imageRotation[_imageRotationIndex];
+    _imageRotationIndex += 1;
+    return image;
+  }
 
-    if (lastImage == null || _availableImages.length <= 1) {
-      return _availableImages[_random.nextInt(_availableImages.length)];
+  void _assignImages(List<BulletItem> tasks) {
+    _resetImageRotation();
+    for (final task in tasks) {
+      task.bgImage = _nextImage();
     }
-
-    String nextImage;
-    do {
-      nextImage = _availableImages[_random.nextInt(_availableImages.length)];
-    } while (nextImage == lastImage);
-
-    return nextImage;
   }
 
   List<BulletItem> _defaultTasks() => [
@@ -130,7 +177,6 @@ class _TaskCarouselState extends State<TaskCarousel> {
 
     if (newState) {
       HapticFeedback.heavyImpact();
-      widget.onTaskCompleted?.call();
     } else {
       HapticFeedback.lightImpact();
     }
@@ -263,7 +309,7 @@ class _TaskCarouselState extends State<TaskCarousel> {
           BulletItem(
             id: DateTime.now().millisecondsSinceEpoch.toString(),
             content: newTask,
-            bgImage: _getRandomImage(),
+            bgImage: _nextImage(),
           ),
         );
         _focusedIndex = _tasks.length - 1;
@@ -282,11 +328,31 @@ class _TaskCarouselState extends State<TaskCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const SizedBox.shrink();
+    if (_loading) {
+       return Skeletonizer(
+         enabled: true,
+         child: CarouselView.weighted(
+           controller: _carouselController,
+           flexWeights: const <int>[5, 1],
+           itemSnapping: true,
+           children: [
+             for (int i = 0; i < 3; i++)
+               TaskCard(
+                 text: 'Loading AI suggested task content...',
+                 completed: false,
+                 isFocused: i == 0,
+                 bgImage: 'assets/photos/images/ethreialbloom1.jpeg',
+                 onDelete: () {},
+                 index: i,
+               ),
+           ],
+         ),
+       );
+    }
 
     return CarouselView.weighted(
       controller: _carouselController,
-      flexWeights: const <int>[5, 1, 1],
+      flexWeights: const <int>[5, 1],
       itemSnapping: true,
       onTap: (tappedIndex) {
         if (tappedIndex < _tasks.length) {
@@ -294,12 +360,11 @@ class _TaskCarouselState extends State<TaskCarousel> {
             setState(() => _focusedIndex = tappedIndex);
             _carouselController.animateToItem(
               tappedIndex,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
             );
-          } else {
-            _toggle(tappedIndex);
           }
+          _toggle(tappedIndex);
         } else if (tappedIndex == _tasks.length) {
           if (_focusedIndex != _tasks.length) {
             setState(() => _focusedIndex = _tasks.length);
@@ -320,8 +385,7 @@ class _TaskCarouselState extends State<TaskCarousel> {
             text: _tasks[i].content,
             completed: _tasks[i].completed,
             isFocused: i == _focusedIndex,
-            bgImage: _tasks[i].bgImage ?? _getRandomImage(),
-            difficulty: _tasks[i].difficulty,
+            bgImage: _tasks[i].bgImage ?? _nextImage(),
             onDelete: () => _delete(i),
             index: i,
           ),
@@ -331,8 +395,6 @@ class _TaskCarouselState extends State<TaskCarousel> {
             // since CarouselView intercepts the tap natively.
           },
         ),
-        const _DecorCard(icon: Icons.star_border_rounded),
-        const _DecorCard(icon: Icons.bedtime_outlined),
       ],
     );
   }
@@ -407,31 +469,6 @@ class _AddTaskCard extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class _DecorCard extends StatelessWidget {
-  final IconData icon;
-
-  const _DecorCard({required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.5),
-          width: 1.5,
-        ),
-      ),
-      child: Center(
-        child: Icon(icon, color: cs.primary.withValues(alpha: 0.3), size: 48),
-      ),
     );
   }
 }

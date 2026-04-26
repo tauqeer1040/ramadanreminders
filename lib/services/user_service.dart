@@ -15,22 +15,49 @@ class UserService {
     final docSnapshot = await docRef.get();
 
     if (!docSnapshot.exists) {
-      // Create new user document
+      // Create new user document natively
       await docRef.set({
         'uid': user.uid,
-        'email': user.email,
-        'displayName': user.displayName ?? user.email?.split('@')[0] ?? 'User',
+        'email': user.email ?? 'Anonymous Guest',
+        'displayName': user.displayName ?? (user.email != null ? user.email!.split('@')[0] : 'Guest User'),
         'photoUrl': user.photoURL ?? '',
         'subscriptionTier': 'free',
         'stats': {'ayahsRead': 0, 'tasksCompleted': 0, 'dhikrsCount': {}},
         'easterEggsUnlocked': [],
+        
+        // --- New User Metrics (Onboarding) ---
+        'onboardingCompleted': false,
+        'demographics': {
+          'age': null,
+          'gender': null,
+          'region': null,
+        },
+        
+        // --- Activity & Task Engine ---
+        'completedTasks': [],     // List of specific Task IDs 
+        'relevantTaskTags': [],   // Tags backend uses to suggest algorithmically
+        
+        // --- Gamification & Rewards ---
+        'badgesUnlocked': [],     // List of Badge IDs unlocked
+        'rewardPoints': 0,        // Currency
+        
+        // --- Ecommerce & Physical Shop ---
+        'shopping': {
+          'defaultAddress': null,
+          'orderHistory': [],     // List of Order Reference IDs
+        },
+        
+        'journals': [],           // Initialized for user schema (Warning: Large texts risk 1MB doc limits)
+        'appLaunchHistory': [DateTime.now().toIso8601String()],
+        
         'createdAt': FieldValue.serverTimestamp(),
         'lastLogin': FieldValue.serverTimestamp(),
       });
     } else {
-      // Update existing user document
+      // Update existing user document natively when app boots
       await docRef.update({
         'lastLogin': FieldValue.serverTimestamp(),
+        'appLaunchHistory': FieldValue.arrayUnion([DateTime.now().toIso8601String()]),
         // Only override photoUrl/displayName if they exist on the Auth object and are different
         if (user.photoURL != null && user.photoURL!.isNotEmpty)
           'photoUrl': user.photoURL,

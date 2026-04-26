@@ -1,16 +1,19 @@
 import 'dart:convert';
-import 'package:expressive_loading_indicator/expressive_loading_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'wavy_play_button.dart';
-import 'package:material_new_shapes/material_new_shapes.dart';
-import '../services/journal_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_card_swiper/flutter_card_swiper.dart';
+
+
+
+import '../services/insight_service.dart';
+import '../core/constants.dart';
 import './journal_section.dart';
+import './reflect_card.dart';
+import './insight_card_shimmer.dart';
 
 class QuranPage extends StatefulWidget {
   const QuranPage({super.key});
@@ -20,59 +23,58 @@ class QuranPage extends StatefulWidget {
 }
 
 class _QuranPageState extends State<QuranPage> {
-  bool _refreshing = false;
+  static const List<String> _insightFrameImages = [
+    'assets/photos/images/ethreialbloom1.jpeg',
+    'assets/photos/images/EtherealFlower.jpeg',
+    'assets/photos/images/DelicateOrangeFlowerinBloom.jpeg',
+    'assets/photos/images/EtherealFlower-1-.jpeg',
+    'assets/photos/images/Delicate Translucent Flower.png',
+    'assets/photos/images/Ethereal Flower in Motion.png',
+    'assets/photos/images/Ethereal Glowing Flower.png',
+    'assets/photos/images/Radiant Flower Glow.png',
+  ];
+
+  bool _isLoading = true;
   bool _playing = false;
   String? _error;
-  int clicked = 0;
 
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
 
+  // Ayah State
   String arabic = '';
   String transliteration = '';
   String english = '';
   String surah = '';
   int ayahNumber = 0;
-  int globalAyahNumber = 0;
   String audioUrl = '';
 
   final AudioPlayer _player = AudioPlayer();
   String _preparedUrl = '';
 
-  final ScrollController _scrollController = ScrollController();
-  double _pullProgress = 0;
-  bool _armedRefresh = false;
-  bool _thresholdReached = false;
-  bool _isReleasingPull = false;
+  List<InsightCard> _insightCards = [];
 
-  Map<String, dynamic>? _journalInsight;
+  final CardSwiperController _swiperController = CardSwiperController();
+
+  // The deck of widgets dynamically built
+  List<Widget> _deck = [];
 
   @override
   void initState() {
     super.initState();
-    _player.stop();
     _player.setPlayerMode(PlayerMode.mediaPlayer);
-    _fetchAyah();
-    _loadInsight();
 
-    _scrollController.addListener(_handlePullRefresh);
+    _initData();
 
     _player.onPlayerStateChanged.listen((state) {
-      if (mounted) {
-        setState(() {
-          _playing = state == PlayerState.playing;
-        });
-      }
+      if (mounted) setState(() => _playing = state == PlayerState.playing);
     });
-
     _player.onDurationChanged.listen((duration) {
       if (mounted) setState(() => _duration = duration);
     });
-
     _player.onPositionChanged.listen((position) {
       if (mounted) setState(() => _position = position);
     });
-
     _player.onPlayerComplete.listen((_) {
       if (mounted) {
         setState(() {
@@ -83,470 +85,441 @@ class _QuranPageState extends State<QuranPage> {
     });
   }
 
-  Future<void> _loadInsight() async {
-    if (FirebaseAuth.instance.currentUser == null) {
-      return;
-    }
-
-    final insight = await JournalService.getYesterdayJournalInsight();
-    if (mounted) {
-      setState(() {
-        _journalInsight = insight;
-      });
-    }
+  @override
+  void dispose() {
+    _swiperController.dispose();
+    _player.dispose();
+    super.dispose();
   }
 
-  void _handlePullRefresh() {
-    final offset = _scrollController.offset;
+  Future<void> _initData() async {
+    // 1. Instantly load from cache
+    await _loadInsightLocallyOnly();
+    await _loadAyahLocallyOnly();
 
-    if (offset < 0) {
-      final progress = (-offset / 120).clamp(0.0, 1.25).toDouble();
-      final reachedThresholdNow = progress >= 1.0;
+    // 2. Build initial deck and clear loading state immediately
+    _buildDeck();
+    if (mounted) setState(() => _isLoading = false);
 
-      if (reachedThresholdNow && !_thresholdReached) {
-        HapticFeedback.selectionClick();
-      }
+    // 3. Silently fetch fresh data in background from proxy
+    _fetchFreshDataSilently();
+  }
 
-      if (mounted) {
-        if ((progress - _pullProgress).abs() > 0.02) {
-          setState(() {
-            _pullProgress = progress;
-          });
-        }
+  Future<void> _loadInsightLocallyOnly() async {
+    try {
+      final cached = await InsightService.loadCacheInternal(); // I'll add this getter
+      if (mounted && cached != null && cached.isNotEmpty) {
         setState(() {
-          // _pullProgress = progress;
-          _thresholdReached = reachedThresholdNow;
-          _isReleasingPull = false;
+          _insightCards = cached;
+          _buildDeck();
         });
       }
-      return;
-    }
-
-    if (_pullProgress > 0 && mounted) {
-      setState(() {
-        _pullProgress = 0;
-        _isReleasingPull = true;
-      });
-    }
-
-    if (_thresholdReached && !_armedRefresh) {
-      _armedRefresh = true;
-      HapticFeedback.mediumImpact();
-      _fetchAyah(forceRefresh: true).whenComplete(() {
-        _armedRefresh = false;
-      });
-    }
-
-    _thresholdReached = false;
+    } catch (_) {}
   }
 
-  Future<void> _fetchAyah({bool forceRefresh = false}) async {
-    setState(() {
-      _refreshing = true;
-      _error = null;
-      _playing = false;
-      _position = Duration.zero;
-      _duration = Duration.zero;
-      audioUrl = '';
-      _preparedUrl = '';
-    });
-    await _player.stop();
+  Future<void> _loadAyahLocallyOnly() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedData = prefs.getString('ayah_data');
+
+    if (cachedData != null) {
+      try {
+        final data = jsonDecode(cachedData);
+        if (mounted) {
+          setState(() {
+            arabic = data['arabic'] ?? '';
+            transliteration = data['transliteration'] ?? '';
+            english = data['english'] ?? '';
+            surah = data['surah'] ?? '';
+            ayahNumber = data['ayahNumber'] ?? 0;
+            audioUrl = data['audioUrl'] ?? '';
+          });
+
+          if (audioUrl.isNotEmpty && _preparedUrl != audioUrl) {
+            _player.setSourceUrl(audioUrl).catchError((_) {});
+            _preparedUrl = audioUrl;
+          }
+        }
+      } catch (_) {}
+    } else {
+      // Fallback offline Ayah if totally fresh install to prevent empty UI
+      if (mounted) {
+        setState(() {
+          arabic = "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ";
+          transliteration = "Bismillaahir Rahmaanir Raheem";
+          english =
+              "In the name of Allah, the Entirely Merciful, the Especially Merciful.";
+          surah = "Al-Fatihah";
+          ayahNumber = 1;
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchFreshDataSilently() async {
+    // 1. Fetch personalized AI insight cards from V2 Backend
+    if (FirebaseAuth.instance.currentUser != null) {
+      InsightService.fetchPersonalizedInsights(limit: 3, forceRefresh: true).then((cards) {
+        if (mounted && cards.isNotEmpty) {
+          setState(() {
+            _insightCards = cards;
+            _buildDeck();
+          });
+        }
+      });
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final today = DateTime.now().toIso8601String().substring(0, 10);
       final cachedDate = prefs.getString('ayah_date');
 
-      if (!forceRefresh && cachedDate == today) {
-        final cachedData = prefs.getString('ayah_data');
-        if (cachedData != null) {
-          final data = jsonDecode(cachedData);
+      // V2 Turso Backend URL
+      final baseUrl = AppConstants.backendUrl;
+      
+      // Step A: Priority - Use AI suggested verse from the latest insight
+      if (_insightCards.isNotEmpty) {
+        final ref = _insightCards.first.reference;
+        if (ref.contains(':')) { // Looks like a verse reference
+           final res = await http.get(Uri.parse('$baseUrl/ayah?ref=$ref')).timeout(const Duration(seconds: 5));
+           if (res.statusCode == 200) {
+             final data = jsonDecode(res.body);
+             if (mounted) {
+               setState(() {
+                 arabic = data['arabic'];
+                 transliteration = data['transliteration'];
+                 english = data['english'];
+                 surah = data['surah'];
+                 ayahNumber = data['ayahNumber'];
+                 audioUrl = data['audioUrl'] ?? '';
+                 _buildDeck(); 
+               });
+               if (audioUrl.isNotEmpty && _preparedUrl != audioUrl) {
+                 _player.setSourceUrl(audioUrl).catchError((_) {});
+                 _preparedUrl = audioUrl;
+               }
+             }
+             // Cache it even if it's personalized
+             await prefs.setString('ayah_date', today);
+             await prefs.setString('ayah_data', res.body);
+             return; 
+           }
+        }
+      }
+
+      // Step B: Fallback - Random Ayah (if not already fetched today)
+      if (cachedDate == today) return;
+
+      final res = await http.get(Uri.parse('$baseUrl/ayah?ref=random')).timeout(const Duration(seconds: 5));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+
+        if (mounted) {
           setState(() {
             arabic = data['arabic'];
             transliteration = data['transliteration'];
             english = data['english'];
             surah = data['surah'];
             ayahNumber = data['ayahNumber'];
-            globalAyahNumber = data['globalAyahNumber'];
             audioUrl = data['audioUrl'];
-            _refreshing = false;
+            _buildDeck(); // Seamlessly rebuild deck with new data
           });
-          HapticFeedback.mediumImpact();
-          try {
-            await _player.setSource(UrlSource(audioUrl));
+
+          if (audioUrl.isNotEmpty && _preparedUrl != audioUrl) {
+            _player.setSourceUrl(audioUrl).catchError((_) {});
             _preparedUrl = audioUrl;
-          } catch (_) {}
-          return;
+          }
         }
+
+        // Cache it securely for offline reads
+        await prefs.setString('ayah_date', today);
+        await prefs.setString('ayah_data', res.body);
       }
-
-      final textRes = await http.get(
-        Uri.parse(
-          'https://api.alquran.cloud/v1/ayah/random/editions/'
-          'quran-uthmani,en.transliteration,en.sahih',
-        ),
-      );
-
-      final textData = jsonDecode(textRes.body)['data'];
-
-      final arabicAyah = textData[0];
-      final transliterationAyah = textData[1];
-      final englishAyah = textData[2];
-
-      globalAyahNumber = arabicAyah['number'];
-
-      final audioRes = await http.get(
-        Uri.parse(
-          'https://api.alquran.cloud/v1/ayah/$globalAyahNumber/ar.alafasy',
-        ),
-      );
-
-      final audioData = jsonDecode(audioRes.body)['data'];
-
-      setState(() {
-        arabic = arabicAyah['text'];
-        transliteration = transliterationAyah['text'];
-        english = englishAyah['text'];
-        surah = arabicAyah['surah']['englishName'];
-        ayahNumber = arabicAyah['numberInSurah'];
-        audioUrl = audioData['audio'];
-        _refreshing = false;
-      });
-
-      HapticFeedback.mediumImpact();
-
-      try {
-        await _player.setSource(UrlSource(audioUrl));
-        _preparedUrl = audioUrl;
-      } catch (_) {}
-
-      final dataToCache = {
-        'arabic': arabic,
-        'transliteration': transliteration,
-        'english': english,
-        'surah': surah,
-        'ayahNumber': ayahNumber,
-        'globalAyahNumber': globalAyahNumber,
-        'audioUrl': audioUrl,
-      };
-      await prefs.setString('ayah_date', today);
-      await prefs.setString('ayah_data', jsonEncode(dataToCache));
     } catch (e) {
-      setState(() {
-        _error = 'Failed to load verse';
-        _refreshing = false;
-      });
+      // Silently fail if server offline
     }
   }
 
-  Future<void> _toggleAudio() async {
-    if (audioUrl.isEmpty) return;
+  String _frameImageForInsight(InsightCard card, int index) {
+    final seed = '${card.date}|${card.reference}|$index'.hashCode;
+    final normalized = seed.abs() % _insightFrameImages.length;
+    return _insightFrameImages[normalized];
+  }
 
-    HapticFeedback.mediumImpact();
+  void _buildDeck() {
+    _deck = [];
+    final textTheme = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
 
-    if (_playing) {
-      await _player.pause();
-      return;
+    // 1. Personalized AI insight cards — one per fetched insight (tag-ranked)
+    for (final entry in _insightCards.asMap().entries) {
+      final index = entry.key;
+      final card = entry.value;
+      _deck.add(
+        ReflectCard(
+          frameImageAsset: _frameImageForInsight(card, index),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.auto_awesome, color: cs.primary, size: 26),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Your Journal Insight',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: cs.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              // Tag chips
+              if (card.tags.isNotEmpty)
+                Wrap(
+                  spacing: 6,
+                  children: card.tags.map((tag) => Chip(
+                    label: Text(
+                      tag,
+                      style: textTheme.labelSmall?.copyWith(
+                        color: cs.onSecondaryContainer,
+                      ),
+                    ),
+                    backgroundColor: cs.secondaryContainer,
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  )).toList(),
+                ),
+              const SizedBox(height: 16),
+              Text(
+                card.greeting,
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: cs.onSurface,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                card.insight,
+                style: textTheme.bodyLarge?.copyWith(
+                  height: 1.6,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: cs.tertiaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      card.quote,
+                      style: textTheme.bodyMedium?.copyWith(
+                        fontStyle: FontStyle.italic,
+                        height: 1.5,
+                        color: cs.onTertiaryContainer,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        '— ${card.reference}',
+                        style: textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: cs.onTertiaryContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
-    setState(() => clicked += 1);
+    // 2. Ayah Card
+    _deck.add(
+      ReflectCard(
+        showPlayButton: true,
+        isPlaying: _playing,
+        playbackProgress: _duration.inMilliseconds > 0
+            ? _position.inMilliseconds / _duration.inMilliseconds
+            : 0.0,
+        onPlay: () async {
+          if (audioUrl.isEmpty) return;
+          HapticFeedback.mediumImpact();
+          if (_playing) {
+            await _player.pause();
+          } else {
+            try {
+              if (_preparedUrl != audioUrl || _position == Duration.zero) {
+                await _player.play(UrlSource(audioUrl));
+                _preparedUrl = audioUrl;
+              } else {
+                await _player.resume();
+              }
+            } catch (e) {
+              await _player.play(UrlSource(audioUrl));
+              _preparedUrl = audioUrl;
+            }
+          }
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_error != null)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _error!,
+                  style: TextStyle(color: cs.onErrorContainer),
+                ),
+              ),
+            Text(
+              arabic,
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+              style: TextStyle(
+                fontSize: 34,
+                height: 1.8,
+                fontFamily: 'Amiri',
+                color: cs.primary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              transliteration,
+              textAlign: TextAlign.center,
+              style: textTheme.bodyMedium?.copyWith(
+                fontSize: 16,
+                height: 1.5,
+                color: cs.secondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              '\u201c$english\u201d',
+              textAlign: TextAlign.center,
+              style: textTheme.bodyLarge?.copyWith(
+                fontSize: 18,
+                height: 1.6,
+                fontStyle: FontStyle.italic,
+                color: cs.onSurface,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Align(
+              alignment: Alignment.center,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: cs.secondaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$surah : $ayahNumber',
+                  style: textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: cs.onSecondaryContainer,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-    try {
-      if (_preparedUrl != audioUrl) {
-        try {
-          await _player.setSource(UrlSource(audioUrl));
-        } catch (_) {
-          try {
-            await _player.setSourceUrl(audioUrl);
-          } catch (_) {}
-        }
-        _preparedUrl = audioUrl;
-      }
-      await _player.resume();
-    } catch (e) {
-      try {
-        await _player.play(UrlSource(audioUrl));
-      } catch (_) {}
-    }
+  Future<bool> _onSwipe(
+    int previousIndex,
+    int? currentIndex,
+    CardSwiperDirection direction,
+  ) async {
+    HapticFeedback.lightImpact();
+    // If the Ayah card was swiped, optionally fetch a new one
+    // We are implementing looping, so they can keep swiping it.
+    // Let's just allow it completely
+    return true;
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
+
+    // Always rebuild deck for play progress updates (unless still loading)
+    if (!_isLoading) _buildDeck();
+
+    // To ensure the swiper can loop indefinitely, if we only have 1 card
+    // we duplicate it so that cardsCount is at least 2.
+    if (_deck.length == 1) {
+      _deck.add(_deck.first);
+    }
+
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: cs.surfaceContainerLow,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        // centerTitle: true,
         title: Text(
           'Daily Reflection',
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
-            color: colorScheme.primary,
+            color: cs.primary,
           ),
         ),
-        // iconTheme: IconThemeData(color: colorScheme.primary),
-        // actions: [
-        //   Padding(
-        //     padding: const EdgeInsets.only(right: 16),
-        //     child: AnimatedSwitcher(
-        //       duration: const Duration(milliseconds: 300),
-        //       child: _refreshing
-        //           ? SizedBox(
-        //               width: 36,
-        //               height: 36,
-        //               // child: ExpressiveLoader(),
-        //               child: ExpressiveLoadingIndicator( polygons: [
-        //         MaterialShapes.softBurst,
-        //         MaterialShapes.pill,
-        //         MaterialShapes.pentagon,
-        //         MaterialShapes.oval,
-        //       ],
-        //       )
-        //             )
-        //           : const SizedBox.shrink(),
-        //     ),
-        //   ),
-        // ],
       ),
-      body: Stack(
-        children: [
-          CustomScrollView(
-            controller: _scrollController,
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const JournalSection(),
+            Expanded(
+              child: _isLoading
+                  // Shimmer skeleton — mirrors the real card shape exactly
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: InsightCardShimmer(),
+                    )
+                  : _deck.isNotEmpty
+                      ? CardSwiper(
+                          controller: _swiperController,
+                          cardsCount: _deck.length,
+                          numberOfCardsDisplayed: _deck.length > 1 ? 2 : 1,
+                          onSwipe: _onSwipe,
+                          isLoop: true,
+                          cardBuilder: (
+                            context,
+                            index,
+                            percentThresholdX,
+                            percentThresholdY,
+                          ) {
+                            return _deck[index];
+                          },
+                        )
+                      : const Center(child: Text("No cards available")),
             ),
-            slivers: [
-              /// 👇 EXPRESSIVE REFRESH INDICATOR
-              SliverToBoxAdapter(
-                child: AnimatedContainer(
-                  duration: Duration(milliseconds: _isReleasingPull ? 420 : 90),
-                  curve: _isReleasingPull ? Curves.elasticIn : Curves.easeOut,
-                  height: _pullProgress == 0 ? 0 : 120 * _pullProgress,
-                  alignment: Alignment.center,
-                  child: Opacity(
-                    opacity: _pullProgress.clamp(0.0, 1.0).toDouble(),
-                    child: Transform.scale(
-                      scale: 0.6 + (_pullProgress * 0.6),
-                      child: ExpressiveLoadingIndicator(
-                        polygons: [
-                          MaterialShapes.softBurst,
-                          MaterialShapes.pill,
-                          MaterialShapes.pentagon,
-                          MaterialShapes.oval,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              /// YOUR PAGE CONTENT
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
-                sliver: SliverToBoxAdapter(child: _buildContent()),
-              ),
-            ],
-          ),
-
-          /// Bottom audio button stays pinned
-          Padding(
-            padding: const EdgeInsets.only(bottom: 100),
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: WavyPlayButton(
-                isPlaying: _playing,
-                progress: _duration.inMilliseconds > 0
-                    ? _position.inMilliseconds / _duration.inMilliseconds
-                    : 0.0,
-                onTap: _toggleAudio,
-              ),
-            ),
-          ),
-          // SizedBox(height: 60),
-        ],
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _player.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  Widget _buildContent() {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const JournalSection(),
-        const SizedBox(height: 24),
-
-        if (_journalInsight != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 10, bottom: 30),
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: colorScheme.secondaryContainer.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.auto_awesome,
-                        color: colorScheme.primary,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        "Insight from Yesterday's Journal",
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _journalInsight!['greeting'] ?? '',
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSecondaryContainer,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _journalInsight!['insight'] ?? '',
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSecondaryContainer,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _journalInsight!['quote'] ?? '',
-                          style: textTheme.bodyMedium?.copyWith(
-                            fontStyle: FontStyle.italic,
-                            color: colorScheme.onSurface,
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            "— ${_journalInsight!['reference'] ?? ''}",
-                            style: textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-        const SizedBox(height: 14),
-        if (_error != null) ...[
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline,
-                    color: colorScheme.onErrorContainer,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _error!,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onErrorContainer,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-        Text(
-          arabic,
-          textAlign: TextAlign.right,
-          textDirection: TextDirection.rtl,
-          style: TextStyle(
-            fontSize: 32,
-            height: 1.6,
-            fontFamily: 'Amiri',
-            color: colorScheme.primary,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          transliteration,
-          style: textTheme.bodyMedium?.copyWith(
-            fontSize: 14,
-            height: 1.4,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          '\u201c$english\u201d',
-          style: textTheme.bodyLarge?.copyWith(
-            fontSize: 16,
-            height: 1.5,
-            fontStyle: FontStyle.italic,
-            color: colorScheme.onSurface,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Align(
-          alignment: Alignment.centerRight,
-          child: Text(
-            '\u2014 $surah : $ayahNumber',
-            style: textTheme.labelLarge?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

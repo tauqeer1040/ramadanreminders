@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../services/auth_service.dart';
 import 'package:intl/intl.dart';
-import 'package:confetti/confetti.dart';
 import 'package:material_new_shapes/material_new_shapes.dart';
 import '../services/prayer_time_service.dart';
 import 'package:adhan/adhan.dart';
@@ -9,6 +10,7 @@ import './action_prompt_card.dart';
 import './sawab_countdown_card.dart';
 import '../services/notification_service.dart';
 import 'package:expressive_loading_indicator/expressive_loading_indicator.dart';
+import 'profile_bottom_sheet.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -19,16 +21,17 @@ class Homepage extends StatefulWidget {
 
 class _HomepageState extends State<Homepage> {
   final int _streakCount = 82; // Example streak count
-  late ConfettiController _confettiController;
   bool _notificationsEnabled = true;
 
   @override
   void initState() {
     super.initState();
-    _confettiController = ConfettiController(
-      duration: const Duration(milliseconds: 1500),
-    );
     _checkPermissions();
+    
+    // Listen to Auth state to refresh the dynamic avatar automatically!
+    AuthService.authStateChanges.listen((user) {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _checkPermissions() async {
@@ -44,14 +47,12 @@ class _HomepageState extends State<Homepage> {
     await NotificationService.requestPermissions();
     await _checkPermissions();
     if (_notificationsEnabled) {
-      _playConfetti();
       await NotificationService.scheduleDailyNotifications();
     }
   }
 
   @override
   void dispose() {
-    _confettiController.dispose();
     super.dispose();
   }
 
@@ -108,12 +109,42 @@ class _HomepageState extends State<Homepage> {
                         ),
                       ),
                       // Profile avatar
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: cs.secondaryContainer,
-                        child: Icon(
-                          Icons.person_rounded,
-                          color: cs.onSecondaryContainer,
+                      InkWell(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            showDragHandle: true,
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+                            ),
+                            builder: (context) => const ProfileBottomSheet(),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: Builder(
+                          builder: (context) {
+                            final user = AuthService.currentUser;
+                            final isGuest = user == null || user.isAnonymous;
+                            
+                            return CircleAvatar(
+                              radius: 20,
+                              backgroundColor: cs.primaryContainer,
+                              child: Container(
+                                clipBehavior: Clip.antiAlias,
+                                decoration: const BoxDecoration(shape: BoxShape.circle),
+                                child: isGuest
+                                  ? Padding(
+                                      padding: const EdgeInsets.all(4.0),
+                                      child: Image.asset('assets/photos/mascot/trophy.png', fit: BoxFit.contain),
+                                    )
+                                  : (user.photoURL != null && user.photoURL!.isNotEmpty)
+                                    ? Image.network(user.photoURL!, fit: BoxFit.cover)
+                                    : Icon(Icons.person_rounded, color: cs.onPrimaryContainer, size: 24),
+                              ),
+                            );
+                          }
                         ),
                       ),
                     ],
@@ -204,6 +235,14 @@ class _HomepageState extends State<Homepage> {
 
                 const SizedBox(height: 32),
 
+                // ── Bounded Task Carousel ─────────────────────────────────────────────
+                SizedBox(
+                  height: 380,
+                  child: const TaskCarousel(),
+                ),
+
+                const SizedBox(height: 32),
+
                 // ── Prayer / Sehri / Iftar Timings ────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -234,7 +273,6 @@ class _HomepageState extends State<Homepage> {
                             final granted =
                                 await PrayerTimeService.requestLocationPermission();
                             if (granted && mounted) {
-                              _playConfetti();
                               setState(() {}); // Rebuild to fetch timings
                             }
                           },
@@ -252,47 +290,10 @@ class _HomepageState extends State<Homepage> {
                         );
                       }
 
-                      // final timings = snapshot.data!;
-                      // final timeFormat = DateFormat.jm();
-                      // final sehri = timeFormat.format(timings.fajr);
-                      // final namaz = timeFormat.format(timings.dhuhr);
-                      // final iftar = timeFormat.format(timings.maghrib);
-
                       return Column(
                         children: [
                           if (mounted)
                             SawabCountdownCard(timings: snapshot.data!),
-                          // const SizedBox(height: 16),
-                          // Container(
-                          //   padding: const EdgeInsets.all(20),
-                          //   decoration: BoxDecoration(
-                          //     color: cs.secondaryContainer,
-                          //     borderRadius: BorderRadius.circular(24),
-                          //   ),
-                          // child: Row(
-                          //   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          //   children: [
-                          //     _TimingWidget(
-                          //       title: 'Sehri',
-                          //       time: sehri,
-                          //       icon: Icons.wb_twilight,
-                          //       color: Colors.blueAccent,
-                          //     ),
-                          //     _TimingWidget(
-                          //       title: 'Namaz (Dhuhr)',
-                          //       time: namaz,
-                          //       icon: Icons.access_time_filled,
-                          //       color: Colors.green,
-                          //     ),
-                          //     _TimingWidget(
-                          //       title: 'Iftar',
-                          //       time: iftar,
-                          //       icon: Icons.nights_stay,
-                          //       color: Colors.orange,
-                          //     ),
-                          //   ],
-                          // ),
-                          // ),
                         ],
                       );
                     },
@@ -304,51 +305,54 @@ class _HomepageState extends State<Homepage> {
                 // ── Share Button ──────────────────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 48.0),
-                  child: FilledButton(
-                    onPressed: () {
-                      // Trigger instagram share action here
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(
-                        0xFFFF453A,
-                      ), // Vibrant coral/red
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(32),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFFf09433),
+                          Color(0xFFe6683c),
+                          Color(0xFFdc2743),
+                          Color(0xFFcc2366),
+                          Color(0xFFbc1888),
+                        ],
+                        begin: Alignment.bottomLeft,
+                        end: Alignment.topRight,
                       ),
+                      borderRadius: BorderRadius.circular(32),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Text(
-                          'SHARE',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
-                          ),
+                    child: FilledButton(
+                      onPressed: () {
+                        // Trigger instagram share action here
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(32),
                         ),
-                        SizedBox(width: 8),
-                        Icon(Icons.ios_share_rounded, size: 22),
-                      ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Text(
+                            'SHARE',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.ios_share_rounded, size: 22),
+                        ],
+                      ),
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 32),
-
-                // ── Bounded Task Carousel ─────────────────────────────────────────────
-                SizedBox(
-                  height: 380,
-                  child: TaskCarousel(onTaskCompleted: _playConfetti),
-                ),
-
-                // SizedBox(
-                //   height: 380,
-                //   child: TaskScreen()
-                // ),
                 const SizedBox(height: 32),
 
                 // ── Action Prompts (Notifications & Widgets) ────────────────────────
@@ -406,25 +410,8 @@ class _HomepageState extends State<Homepage> {
             ),
           ),
         ),
-        IgnorePointer(
-          child: Align(
-            alignment: Alignment.center,
-            child: ConfettiWidget(
-              confettiController: _confettiController,
-              blastDirectionality: BlastDirectionality.explosive,
-              shouldLoop: false,
-              emissionFrequency: 0.05,
-              numberOfParticles: 20,
-              colors: [cs.primary, cs.secondary, cs.tertiary],
-            ),
-          ),
-        ),
       ],
     );
-  }
-
-  void _playConfetti() {
-    _confettiController.play();
   }
 }
 

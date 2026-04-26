@@ -1,0 +1,30 @@
+name: Local Dev Config
+version: 1.0.0
+schema: v1
+
+models:
+
+# 🔥 Your local llama.cpp model
+
+* name: Local Qwen (llama.cpp)
+  provider: openai
+  model: qwen2.5-coder
+  apiBase: http://127.0.0.1:8012/v1
+  apiKey: dummy
+
+# (Optional) Keep a fallback cloud model
+
+# * name: Claude Sonnet
+#   provider: anthropic
+#   model: claude-3.5-sonnet
+#   apiKey: ${{ secrets.ANTHROPIC_API_KEY }}
+
+# Optional but useful
+
+defaultModel: Local Qwen (llama.cpp)
+
+# MCP (optional)
+
+# mcpServers:
+
+# * uses: anthropic/memory-mcp
