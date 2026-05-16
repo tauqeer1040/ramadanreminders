@@ -17,13 +17,12 @@ class BackgroundMusicService with WidgetsBindingObserver {
     
     WidgetsBinding.instance.addObserver(this);
     _isInitialized = true;
-    
-    await play();
   }
 
-  Future<void> play() async {
+  Future<void> play([String? assetPath]) async {
+    if (assetPath == null) return;
     try {
-      await _player.play(AssetSource('tunes/app_audio_5min.m4a'));
+      await _player.play(AssetSource(assetPath));
     } catch (e) {
       debugPrint("Error playing background music: $e");
     }

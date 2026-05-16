@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audiotags/audiotags.dart';
 import 'onboarding_data.dart';
+import '../../services/audio_service.dart';
 
 class WelcomePage extends StatelessWidget {
   final VoidCallback onNext;
@@ -128,7 +129,10 @@ class _MusicSelectionPageState extends State<MusicSelectionPage> {
               children: [
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() => _selectedTrack = 0),
+                    onTap: () {
+                      setState(() => _selectedTrack = 0);
+                      BackgroundMusicService().play('tunes/1_A.M_Study_Session_lofi_hip_hop_5min.m4a');
+                    },
                     child: Column(
                       children: [
                         Container(
@@ -155,7 +159,10 @@ class _MusicSelectionPageState extends State<MusicSelectionPage> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() => _selectedTrack = 1),
+                    onTap: () {
+                      setState(() => _selectedTrack = 1);
+                      BackgroundMusicService().play('tunes/After_Dark_in_Cairo_Arabic_Melodies_Jazz_Fusion_for_Late_Night_Focus_Study_5min.m4a');
+                    },
                     child: Column(
                       children: [
                         Container(
