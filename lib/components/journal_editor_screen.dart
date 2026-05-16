@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/journal_service.dart';
+import '../core/app_background.dart';
 
 class JournalEditorScreen extends StatefulWidget {
   final String? initialDate;
@@ -49,12 +50,11 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final bgColor = cs.surfaceContainerLowest;
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: bgColor,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: cs.onSurface),
@@ -75,45 +75,47 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
             ),
         ],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.initialDate == null ? "New Journal" : JournalService.formatDisplayDate(_journalDate),
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  onChanged: _onTextChanged,
-                  autofocus: widget.initialDate == null, // Auto-focus if writing a new one
-                  maxLines: null,
-                  textCapitalization: TextCapitalization.sentences,
+      body: AppBackground(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.initialDate == null ? "New Journal" : JournalService.formatDisplayDate(_journalDate),
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w600,
                     color: cs.onSurface,
-                    height: 1.6,
-                  ),
-                  decoration: InputDecoration(
-                    hintText:
-                        "Write your thoughts, struggles, or gratitude here...",
-                    hintStyle: TextStyle(
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                      fontSize: 18,
-                    ),
-                    border: InputBorder.none,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    onChanged: _onTextChanged,
+                    autofocus: widget.initialDate == null, // Auto-focus if writing a new one
+                    maxLines: null,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: cs.onSurface,
+                      height: 1.6,
+                    ),
+                    decoration: InputDecoration(
+                      hintText:
+                          "Write your thoughts, struggles, or gratitude here...",
+                      hintStyle: TextStyle(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                        fontSize: 18,
+                      ),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

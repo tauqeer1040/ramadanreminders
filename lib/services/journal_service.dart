@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants.dart';
 import '../models/bullet_item.dart';
 import 'insight_service.dart';
+import 'streak_service.dart';
 
 class JournalService {
   static const String _keyPrefix = 'journal_';
@@ -15,6 +16,7 @@ class JournalService {
   Future<void> saveJournalGratitude(String date, String gratitude) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('$_keyPrefix${date}_gratitude', gratitude);
+    StreakService.recordActivity();
   }
 
   // Load journal entry (gratitude) for a specific date

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../services/journal_service.dart';
+import '../core/app_background.dart';
 import 'journal_editor_screen.dart';
 
 class JournalListScreen extends StatefulWidget {
@@ -78,13 +79,10 @@ class _JournalListScreenState extends State<JournalListScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    // Using a darker, keep-like surface variation
-    final bgColor = cs.surfaceContainerLowest;
-
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: bgColor,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         title: TextField(
           controller: _searchController,
@@ -100,7 +98,8 @@ class _JournalListScreenState extends State<JournalListScreen> {
           style: TextStyle(color: cs.onSurface, fontSize: 16),
         ),
       ),
-      body: _isLoading
+      body: AppBackground(
+        child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _filteredJournals.isEmpty
           ? Center(
@@ -175,6 +174,7 @@ class _JournalListScreenState extends State<JournalListScreen> {
                 },
               ),
             ),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openEditor(),
         backgroundColor: cs.primaryContainer,

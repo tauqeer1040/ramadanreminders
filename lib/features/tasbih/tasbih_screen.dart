@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
 
 import 'package:flutter_animate/flutter_animate.dart';
+import '../../core/app_background.dart';
 
 import 'controller/tasbih_controller.dart';
 import 'widgets/dhikr_card.dart';

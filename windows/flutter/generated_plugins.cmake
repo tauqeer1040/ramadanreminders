@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   audioplayers_windows
+  audiotags
   cloud_firestore
   desktop_webview_auth
   dynamic_color

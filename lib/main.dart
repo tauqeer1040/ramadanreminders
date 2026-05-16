@@ -1,10 +1,19 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'components/homepage.dart';
 import 'components/quranpage.dart';
 import 'features/tasbih/tasbih_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'components/journal_editor_screen.dart';
+import 'components/journal_bottom_sheet.dart';
+import 'components/profilepage.dart';
+import 'core/app_background.dart';
+import 'services/streak_service.dart';
+import 'services/audio_service.dart';
 
 import 'services/notification_service.dart';
 
@@ -47,6 +56,8 @@ void main() async {
   JournalService.initAutoSync();
 
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  
+  BackgroundMusicService().init();
   
   runApp(const MyApp());
 }
@@ -183,8 +194,6 @@ class MyApp extends StatelessWidget {
 //   }
 // }
 
-// import 'package:flutter/material.dart';
-
 class Material3BottomNav extends StatefulWidget {
   const Material3BottomNav({super.key});
 
@@ -205,6 +214,24 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: _selectedIndex);
+    _checkOnboarding();
+  }
+
+  Future<void> _checkOnboarding() async {
+    StreakService.recordActivity();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      precacheImage(const AssetImage('assets/photos/elements/app_bg2.webp'), context);
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final complete = prefs.getBool('onboarding_complete') ?? false;
+    if (!complete && mounted) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const OnboardingScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+    }
   }
 
   @override
@@ -236,43 +263,46 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: cs.surface,
-      body: Container(
-        decoration: BoxDecoration(
-          // Material 3 Expressive background wash using core semantic containers
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              cs.primaryContainer.withValues(alpha: 0.3),
-              cs.surface,
-              cs.secondaryContainer.withValues(alpha: 0.3),
-              cs.tertiaryContainer.withValues(alpha: 0.3),
-            ],
-            stops: const [0.0, 0.4, 0.7, 1.0],
+      backgroundColor: Colors.transparent,
+      body: AppBackground(
+        child: PageView(
+            controller: _pageController,
+            physics: const NeverScrollableScrollPhysics(),
+            onPageChanged: (index) {
+              setState(() => _selectedIndex = index);
+            },
+            children: _pages,
           ),
         ),
-        child: PageView(
-          controller: _pageController,
-          // BouncingScrollPhysics gives a fluid, natural deceleration curve
-          // instead of the abrupt clamp on Android's default.
-          physics: const BouncingScrollPhysics(parent: PageScrollPhysics()),
-          onPageChanged: (index) {
-            setState(() => _selectedIndex = index);
-          },
-          children: _pages,
-        ),
-      ),
 
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showGlobalPremiumSheet(context),
-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-        icon: const Icon(Icons.workspace_premium_rounded),
-        label: const Text(
-          'Premium',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final limit = await JournalService.isGuestLimitReached();
+          if (limit && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Free Trial limit reached! Tap your Profile to sign up securely and unlock unlimited journals."),
+                duration: Duration(seconds: 4),
+              ),
+            );
+            return;
+          }
+          if (context.mounted) {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              useSafeArea: true,
+              backgroundColor: Colors.transparent,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              builder: (_) => const JournalBottomSheet(),
+            );
+          }
+        },
+        backgroundColor: cs.primaryContainer,
+        foregroundColor: cs.onPrimaryContainer,
+        child: const Icon(Icons.edit_rounded),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: NavigationBar(
@@ -288,7 +318,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
           HapticFeedback.lightImpact();
           navigateToTab(index);
         },
-        destinations: _navBarItems,
+        destinations: _buildNavBarItems(cs),
       ),
     );
   }
@@ -298,162 +328,55 @@ const List<Widget> _pages = [
   Homepage(),
   QuranPage(),
   TasbihScreen(),
+  ProfilePage1(),
 ];
 
-const _navBarItems = [
-  NavigationDestination(
-    icon: Icon(Icons.home_filled),
-    selectedIcon: Icon(Icons.home_filled),
-    label: "home",
-  ),
-  NavigationDestination(
-    icon: Icon(Icons.menu_book_rounded),
-    selectedIcon: Icon(Icons.menu_book_rounded),
-    label: 'Quran',
-  ),
-  NavigationDestination(
-    icon: Icon(Icons.loop_rounded),
-    selectedIcon: Icon(Icons.loop_rounded),
-    label: 'Tesbih',
-  ),
-];
+List<NavigationDestination> _buildNavBarItems(ColorScheme cs) {
+  final user = AuthService.currentUser;
+  final isGuest = user == null || user.isAnonymous;
 
-void _showGlobalPremiumSheet(BuildContext context) {
-  final cs = Theme.of(context).colorScheme;
-  final tt = Theme.of(context).textTheme;
-
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    // M3: showDragHandle renders the spec-compliant handle and top padding
-    showDragHandle: true,
-    // M3: useSafeArea ensures the sheet respects system insets
-    useSafeArea: true,
-    builder: (ctx) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Header ───────────────────────────────────────────────────
-            Row(
-              children: [
-                // M3 filled icon container — uses secondaryContainer token
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: cs.secondaryContainer,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(
-                    Icons.workspace_premium_rounded,
-                    color: cs.onSecondaryContainer,
-                    size: 28,
-                  ),
+  Widget profileIcon(bool selected) {
+    return CircleAvatar(
+      radius: 14,
+      backgroundColor: selected ? cs.secondaryContainer : Colors.transparent,
+      child: isGuest
+        ? Icon(Icons.person_rounded, size: 18, color: selected ? cs.onSecondaryContainer : cs.onSurfaceVariant)
+        : (user.photoURL != null && user.photoURL!.isNotEmpty)
+            ? ClipOval(
+                child: Image.network(
+                  user.photoURL!,
+                  width: 28,
+                  height: 28,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Icon(Icons.person_rounded, size: 18, color: cs.onSurfaceVariant),
                 ),
-                const SizedBox(width: 16),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Ramadan Premium',
-                      style: tt.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Unlock the full experience',
-                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
+              )
+            : Icon(Icons.person_rounded, size: 18, color: cs.onSurfaceVariant),
+    );
+  }
 
-            // ── Perks list ────────────────────────────────────────────────
-            ...([
-              (
-                Icons.all_inclusive_rounded,
-                'Unlimited custom Tasbihayat',
-                cs.primaryContainer,
-                cs.onPrimaryContainer,
-              ),
-              (
-                Icons.bar_chart_rounded,
-                'Daily & weekly dhikr statistics',
-                cs.secondaryContainer,
-                cs.onSecondaryContainer,
-              ),
-              (
-                Icons.notifications_active_rounded,
-                'Smart prayer-time reminders',
-                cs.tertiaryContainer,
-                cs.onTertiaryContainer,
-              ),
-              (
-                Icons.cloud_sync_rounded,
-                'Cross-device sync & backup',
-                cs.primaryContainer,
-                cs.onPrimaryContainer,
-              ),
-              (
-                Icons.auto_awesome_rounded,
-                'Ad-free & distraction-free',
-                cs.secondaryContainer,
-                cs.onSecondaryContainer,
-              ),
-            ].map(
-              (p) => Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: p.$3,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(p.$1, size: 20, color: p.$4),
-                    ),
-                    const SizedBox(width: 16),
-                    Text(
-                      p.$2,
-                      style: tt.bodyLarge?.copyWith(color: cs.onSurface),
-                    ),
-                  ],
-                ),
-              ),
-            )),
-            const SizedBox(height: 20),
-
-            // ── CTA — standard M3 FilledButton ────────────────────────────
-            FilledButton.icon(
-              onPressed: () => Navigator.pop(ctx),
-              icon: const Icon(Icons.star_rounded),
-              label: const Text('Get Premium'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // ── Soft dismiss ──────────────────────────────────────────────
-            Center(
-              child: TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Maybe later'),
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
+  return [
+    const NavigationDestination(
+      icon: Icon(Icons.home_filled),
+      selectedIcon: Icon(Icons.home_filled),
+      label: "home",
+    ),
+    const NavigationDestination(
+      icon: Icon(Icons.menu_book_rounded),
+      selectedIcon: Icon(Icons.menu_book_rounded),
+      label: 'Quran',
+    ),
+    const NavigationDestination(
+      icon: Icon(Icons.loop_rounded),
+      selectedIcon: Icon(Icons.loop_rounded),
+      label: 'Tesbih',
+    ),
+    NavigationDestination(
+      icon: profileIcon(false),
+      selectedIcon: profileIcon(true),
+      label: 'profile',
+    ),
+  ];
 }
+
+

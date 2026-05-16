@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:confetti/confetti.dart';
+import 'package:flutter_confetti/flutter_confetti.dart';
 
 /// A minimal task card for the horizontal tasks carousel.
 ///
@@ -35,22 +35,20 @@ class _TaskCardState extends State<TaskCard> {
   @override
   void initState() {
     super.initState();
-    _confettiController = ConfettiController(
-      duration: const Duration(seconds: 1),
-    );
+    _confettiController = ConfettiController();
   }
 
   @override
   void didUpdateWidget(TaskCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.completed && !oldWidget.completed) {
-      _confettiController.play();
+      _confettiController.launch();
     }
   }
 
   @override
   void dispose() {
-    _confettiController.dispose();
+    _confettiController.kill();
     super.dispose();
   }
 
@@ -98,18 +96,22 @@ class _TaskCardState extends State<TaskCard> {
                   alignment: Alignment.center,
                   children: [
                     IgnorePointer(
-                      child: ConfettiWidget(
-                        confettiController: _confettiController,
-                        blastDirectionality: BlastDirectionality.explosive,
-                        shouldLoop: false,
-                        emissionFrequency: 0.05,
-                        numberOfParticles: 20,
-                        colors: const [
-                          Colors.white,
-                          Colors.white70,
-                          Colors.pinkAccent,
-                          Colors.amberAccent,
-                        ],
+                      child: Confetti(
+                        controller: _confettiController,
+                        options: const ConfettiOptions(
+                          particleCount: 120,
+                          spread: 360,
+                          startVelocity: 30,
+                          decay: 0.95,
+                          gravity: 0.3,
+                          scalar: 1.5,
+                          colors: [
+                            Colors.white,
+                            Colors.white70,
+                            Colors.pinkAccent,
+                            Colors.amberAccent,
+                          ],
+                        ),
                       ),
                     ),
                     AnimatedOpacity(

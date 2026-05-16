@@ -1,0 +1,11 @@
+yt-dlp "https://youtu.be/_aF_r3yz2nU?list=RD_aF_r3yz2nU" \
+  --no-playlist \
+  -f bestaudio \
+  -x \
+  --audio-format m4a \
+  --postprocessor-args "-ss 00:00:00 -t 00:05:00 -c:a aac -b:a 64k" \
+  --embed-metadata \
+  --embed-thumbnail \
+  --add-metadata \
+  --restrict-filenames \
+  --output "%(title)s_5min.%(ext)s"

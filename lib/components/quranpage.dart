@@ -10,8 +10,8 @@ import 'package:flutter_card_swiper/flutter_card_swiper.dart';
 
 
 import '../services/insight_service.dart';
+import '../core/app_background.dart';
 import '../core/constants.dart';
-import './journal_section.dart';
 import './reflect_card.dart';
 import './insight_card_shimmer.dart';
 
@@ -58,6 +58,7 @@ class _QuranPageState extends State<QuranPage> {
 
   // The deck of widgets dynamically built
   List<Widget> _deck = [];
+  int _lastHapticIndex = -1;
 
   @override
   void initState() {
@@ -474,7 +475,7 @@ class _QuranPageState extends State<QuranPage> {
     }
 
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLow,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -490,7 +491,6 @@ class _QuranPageState extends State<QuranPage> {
       body: SafeArea(
         child: Column(
           children: [
-            const JournalSection(),
             Expanded(
               child: _isLoading
                   // Shimmer skeleton — mirrors the real card shape exactly

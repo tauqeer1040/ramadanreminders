@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:expressive_loading_indicator/expressive_loading_indicator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../services/journal_service.dart';
 import '../services/dhikr_service.dart';
+import '../services/streak_service.dart';
+import '../screens/onboarding_screen.dart';
 
 class ProfileBottomSheet extends StatefulWidget {
   const ProfileBottomSheet({super.key});
@@ -16,6 +19,7 @@ class ProfileBottomSheet extends StatefulWidget {
 class _ProfileBottomSheetState extends State<ProfileBottomSheet> {
   User? _user;
   int _totalTasbih = 0;
+  int _streak = 1;
   bool _isSyncing = false;
   final DhikrService _dhikrService = DhikrService();
 
@@ -28,9 +32,11 @@ class _ProfileBottomSheetState extends State<ProfileBottomSheet> {
 
   Future<void> _loadStats() async {
     final count = await _dhikrService.loadTotalDhikrCount();
+    final streak = await StreakService.getStreak();
     if (mounted) {
       setState(() {
         _totalTasbih = count;
+        _streak = streak;
       });
     }
   }
@@ -102,9 +108,9 @@ class _ProfileBottomSheetState extends State<ProfileBottomSheet> {
                 color: Colors.teal,
               ),
               const SizedBox(width: 12),
-              const _StatCard(
+              _StatCard(
                 label: 'Streak',
-                value: '82 Days',
+                value: '$_streak Days',
                 icon: Icons.local_fire_department_rounded,
                 color: Colors.orange,
               ),
@@ -184,10 +190,36 @@ class _ProfileBottomSheetState extends State<ProfileBottomSheet> {
               ),
             ),
           
+          const SizedBox(height: 8),
+
+          // Replay Onboarding
+          OutlinedButton.icon(
+            onPressed: _replayOnboarding,
+            icon: const Icon(Icons.replay_rounded),
+            label: const Text('Replay Onboarding'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+
           const SizedBox(height: 16),
         ],
       ),
     );
+  }
+
+  Future<void> _replayOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_complete', false);
+    if (mounted) {
+      Navigator.pop(context);
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const OnboardingScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+    }
   }
 }
 

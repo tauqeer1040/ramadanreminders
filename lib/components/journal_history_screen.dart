@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/bullet_item.dart';
 import '../services/journal_service.dart';
+import '../core/app_background.dart';
 
 class JournalHistoryScreen extends StatefulWidget {
   const JournalHistoryScreen({super.key});
@@ -50,7 +51,8 @@ class _JournalHistoryScreenState extends State<JournalHistoryScreen> {
         ),
         iconTheme: IconThemeData(color: colorScheme.primary),
       ),
-      body: _isLoading
+      body: AppBackground(
+        child: _isLoading
           ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
           : _dates.isEmpty
           ? Center(
@@ -69,6 +71,7 @@ class _JournalHistoryScreenState extends State<JournalHistoryScreen> {
                 return _buildDateCard(date, colorScheme, textTheme);
               },
             ),
+      ),
     );
   }
 

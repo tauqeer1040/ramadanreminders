@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
+import 'streak_profile_card.dart';
 
 class ProfilePage1 extends StatefulWidget {
   const ProfilePage1({super.key});
@@ -82,18 +83,16 @@ class _ProfilePage1State extends State<ProfilePage1> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            SizedBox(
-              height: MediaQuery.sizeOf(context).height * 0.38,
-              child: _TopPortion(user: _currentUser),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Column(
+    return SingleChildScrollView(
+      child: Column(
+      children: [
+        SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.38,
+          child: _TopPortion(user: _currentUser),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
                 children: [
                   Text(
                     _currentUser != null && !_currentUser!.isAnonymous
@@ -108,6 +107,10 @@ class _ProfilePage1State extends State<ProfilePage1> {
                       letterSpacing: -0.5,
                     ),
                   ),
+                  const SizedBox(height: 16),
+
+                  const StreakProfileCard(),
+
                   const SizedBox(height: 16),
 
                   // Authentication Section
@@ -288,11 +291,11 @@ class _ProfilePage1State extends State<ProfilePage1> {
               ),
             ),
           ],
-        ),
       ),
     );
   }
 }
+
 
 class _ProfileInfoRow extends StatelessWidget {
   const _ProfileInfoRow();

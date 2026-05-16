@@ -25,79 +25,70 @@ class ReflectCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: cs.surface,
+        color: cs.surfaceContainerHigh,
         image: frameImageAsset != null
             ? DecorationImage(
                 image: AssetImage(frameImageAsset!),
                 fit: BoxFit.cover,
                 alignment: Alignment.center,
-                opacity: 0.2,
+                opacity: 0.18,
               )
             : null,
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            cs.surface.withValues(alpha: 0.86),
-            cs.surfaceContainerHigh.withValues(alpha: 0.78),
-            cs.surface.withValues(alpha: 0.9),
+            cs.surfaceContainerHigh,
+            cs.surfaceContainer,
+            cs.surface,
           ],
         ),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: cs.primary.withValues(alpha: 0.5),
+          color: cs.primary.withValues(alpha: 0.4),
           width: 3,
         ),
         boxShadow: [
           BoxShadow(
-            color: cs.shadow.withValues(alpha: 0.18),
+            color: cs.shadow.withValues(alpha: 0.15),
             blurRadius: 22,
             spreadRadius: 3,
             offset: const Offset(0, 10),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest.withValues(alpha: 0.76),
+                color: cs.surface,
                 image: frameImageAsset != null
                     ? DecorationImage(
                         image: AssetImage(frameImageAsset!),
                         fit: BoxFit.cover,
                         alignment: Alignment.center,
-                        opacity: 0.14,
+                        opacity: 0.1,
                       )
                     : null,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    cs.surface.withValues(alpha: 0.38),
-                    cs.surfaceContainerHighest.withValues(alpha: 0.72),
-                    cs.surface.withValues(alpha: 0.44),
-                  ],
-                ),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: cs.primary.withValues(alpha: 0.22),
+                  color: cs.primary.withValues(alpha: 0.18),
                   width: 2,
                 ),
               ),
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(16),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(14),
                 child: SingleChildScrollView(child: child),
               ),
             ),
           ),
           if (showPlayButton)
             Padding(
-              padding: const EdgeInsets.only(top: 20, bottom: 8),
+              padding: const EdgeInsets.only(top: 16, bottom: 4),
               child: Center(
                 child: WavyPlayButton(
                   isPlaying: isPlaying,
