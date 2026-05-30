@@ -79,10 +79,8 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    // Hide heading/buttons as soon as the field is tapped (hasFocus fires
-    // instantly), and restore them the moment focus leaves (keyboard gone).
     final keyboardVisible = _focusNode.hasFocus;
-
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
     final canContinue = _controller.text.trim().isNotEmpty || widget.data.journalEntry != null;
 
     final textField = TextField(
@@ -90,7 +88,8 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
       focusNode: _focusNode,
       onChanged: _onTextChanged,
       autofocus: false,
-      maxLines: null,
+      maxLines: keyboardVisible ? null : 6,
+      minLines: keyboardVisible ? null : 4,
       textCapitalization: TextCapitalization.sentences,
       style: TextStyle(fontSize: 18, color: cs.onSurface, height: 1.6),
       decoration: InputDecoration(
@@ -114,79 +113,78 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
       ),
     );
 
-    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(32, 0, 32, keyboardInset + 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!keyboardVisible) ...[ 
-            Text("Your first reflection", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text("Write about your thoughts, hopes, or anything on your heart.", style: tt.bodyLarge),
-            const SizedBox(height: 24),
-          ],
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: textField,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (!keyboardVisible)
-            Text('Prompt ideas', style: tt.labelMedium?.copyWith(color: cs.onSurface.withValues(alpha: 0.7))),
-          if (!keyboardVisible) const SizedBox(height: 8),
-          SizedBox(
-            height: 36,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _suggestions.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, i) => ActionChip(
-                label: Text(_suggestions[i], style: tt.labelSmall?.copyWith(color: cs.onSurface)),
-                onPressed: () => _selectSuggestion(_suggestions[i]),
-                backgroundColor: cs.surfaceContainerHigh,
-                side: BorderSide.none,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              ),
-            ),
-          ),
-          if (!keyboardVisible) ...[ 
-            const SizedBox(height: 24),
-            if (_saving)
-              const Center(child: CircularProgressIndicator())
-            else
-              Row(
-                children: [
-                  Expanded(
-                    flex: 1,
-                    child: DuoButton(
-                      onPressed: widget.onBack,
-                      backgroundColor: cs.secondaryContainer,
-                      depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
-                      radius: 16,
-                      child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (keyboardInset == 0) ...[
+                  Text("Your first reflection", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text("Write about your thoughts, hopes, or anything on your heart.", style: tt.bodyLarge),
+                  const SizedBox(height: 24),
+                ] else
+                  const SizedBox(height: 16),
+                textField,
+                const SizedBox(height: 12),
+                Text('Prompt ideas', style: tt.labelMedium?.copyWith(color: cs.onSurface.withValues(alpha: 0.7))),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 36,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _suggestions.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (context, i) => ActionChip(
+                      label: Text(_suggestions[i], style: tt.labelSmall?.copyWith(color: cs.onSurface)),
+                      onPressed: () => _selectSuggestion(_suggestions[i]),
+                      backgroundColor: cs.surfaceContainerHigh,
+                      side: BorderSide.none,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    flex: 2,
-                    child: DuoButton(
-                      onPressed: canContinue ? _handleSave : null,
-                      backgroundColor: cs.primary,
-                      depthColor: cs.primary.withValues(alpha: 0.8),
-                      radius: 16,
-                      dimOnDisabled: true,
-                      child: Text("Save & Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (keyboardInset == 0)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
+          child: _saving
+              ? const Center(child: CircularProgressIndicator())
+              : Row(
+                  children: [
+                    Expanded(
+                      flex: 1,
+                      child: DuoButton(
+                        onPressed: widget.onBack,
+                        backgroundColor: cs.secondaryContainer,
+                        depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                        radius: 16,
+                        child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            const SizedBox(height: 48),
-          ],
-        ],
-      ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 2,
+                      child: DuoButton(
+                        onPressed: canContinue ? _handleSave : null,
+                        backgroundColor: cs.primary,
+                        depthColor: cs.primary.withValues(alpha: 0.8),
+                        radius: 16,
+                        dimOnDisabled: true,
+                        child: Text("Save & Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ],
     );
   }
 
