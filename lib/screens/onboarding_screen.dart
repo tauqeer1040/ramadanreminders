@@ -8,6 +8,8 @@ import '../components/onboarding/intro_pages.dart';
 import '../components/onboarding/analogy_pages.dart';
 import '../components/onboarding/final_pages.dart';
 import '../core/app_background.dart';
+import '../components/widgets/duo_progress_bar.dart';
+import '../theme/app_theme.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -16,21 +18,45 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerProviderStateMixin {
   final _pageController = PageController();
   final _data = OnboardingData();
   int _currentPage = 0;
+  int _stars = 0;
+  late AnimationController _bounceController;
+  late Animation<double> _bounceAnimation;
 
   static const int _totalPages = 20;
 
   @override
+  void initState() {
+    super.initState();
+    _bounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _bounceAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.5), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 1.5, end: 0.8), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 0.8, end: 1.0), weight: 50),
+    ]).animate(CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut));
+  }
+
+  @override
   void dispose() {
+    _bounceController.dispose();
     _pageController.dispose();
     super.dispose();
   }
 
+  void _addStars() {
+    setState(() => _stars += 10);
+    _bounceController.forward(from: 0);
+    HapticFeedback.heavyImpact();
+  }
+
   void _goToNext() {
-    HapticFeedback.lightImpact();
+    _addStars();
     if (_currentPage < _totalPages - 1) {
       _pageController.animateToPage(
         _currentPage + 1,
@@ -41,6 +67,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _goBack() {
+    setState(() => _stars = (_stars - 10).clamp(0, 990));
     if (_currentPage > 0) {
       _pageController.animateToPage(
         _currentPage - 1,
@@ -90,21 +117,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  static const Color _starlightWhite = Color(0xFFF5F5F0);
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return Theme(
-      data: Theme.of(context).copyWith(
-        colorScheme: cs.copyWith(
-          brightness: Brightness.dark,
-          onSurface: _starlightWhite,
-          onSurfaceVariant: const Color(0xFFE0E0DA),
-        ),
-      ),
-      child: PopScope(
+    return PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
@@ -116,8 +133,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       },
       child: Scaffold(
         backgroundColor: cs.surface,
+        resizeToAvoidBottomInset: false,
         body: AppBackground(
           backgroundImage: 'assets/photos/elements/onboarding.png',
+          overlayOpacity: 0.35,
           child: SafeArea(
             child: Column(
               children: [
@@ -134,7 +153,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -162,14 +180,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   border: Border.all(color: cs.outlineVariant.withOpacity(0.3)),
                 ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.star_rounded, color: Colors.amber, size: 16),
+                    const Icon(Icons.star_rounded, color: AppTheme.starGold, size: 16),
                     const SizedBox(width: 4),
-                    Text(
-                      '8 🌟', // Changed eggplant to a star or leave it out. We can just use standard emoji.
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.bold,
+                    AnimatedBuilder(
+                      animation: _bounceAnimation,
+                      builder: (context, child) => Transform.scale(
+                        scale: _bounceAnimation.value,
+                        child: child,
+                      ),
+                      child: Text(
+                        '$_stars',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
@@ -178,22 +204,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            children: List.generate(
-              _totalPages,
-              (index) => Expanded(
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: index <= _currentPage
-                        ? cs.primary
-                        : cs.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-            ),
+          DuoProgressBar(
+            progress: (_currentPage + 1) / _totalPages,
+            height: 12,
+            radius: 12,
+            trackColor: cs.surfaceContainerHighest.withOpacity(0.5),
+            fillColor: cs.primary,
           ),
         ],
       ),
@@ -207,23 +223,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       MusicSelectionPage(onNext: _goToNext, onBack: _goBack),
       NamePage(data: _data, onNext: _goToNext, onBack: _goBack),
       AgePhonePage(data: _data, onNext: _goToNext, onBack: _goBack),
-      BombshellPage(data: _data, onNext: _goToNext),
-      BridgePage(onNext: _goToNext),
+      BombshellPage(data: _data, onNext: _goToNext, onBack: _goBack),
+      BridgePage(onNext: _goToNext, onBack: _goBack),
 
       // PART 2: REFLECTION BANK — AI ANALOGIES (Screens 7-14)
       // Q1: Intention
       AnalogyQuestionPage(
         data: _data,
-        question: "What do you want most from this Ramadan?",
+        question: "What do you seek most in your journey to Allah?",
         pills: ["Deeper connection with Allah", "Quran consistency", "Self-discipline", "Gratitude & contentment"],
         dataField: 'intention',
+        useDuoButtons: true,
         onNext: _goToNext,
+        onBack: _goBack,
       ),
       AnalogyRevealPage(
         data: _data,
-        question: "What do you want most from this Ramadan?",
+        question: "What do you seek most in your journey to Allah?",
         analogyField: 'intention',
         onNext: _goToNext,
+        onBack: _goBack,
       ),
 
       // Q2: Heart
@@ -232,55 +251,64 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         question: "How does your heart feel right now?",
         pills: ["Restless / Yearning", "Grateful / At peace", "Overwhelmed / Heavy", "Hopeful / Excited"],
         dataField: 'heart',
+        useDuoButtons: true,
         onNext: _goToNext,
+        onBack: _goBack,
       ),
       AnalogyRevealPage(
         data: _data,
         question: "How does your heart feel right now?",
         analogyField: 'heart',
         onNext: _goToNext,
+        onBack: _goBack,
       ),
 
       // Q3: Challenge
       AnalogyQuestionPage(
         data: _data,
-        question: "What's your biggest barrier this Ramadan?",
+        question: "What's your biggest spiritual barrier?",
         pills: ["Finding time", "Staying consistent", "Phone distractions", "Lack of motivation"],
         dataField: 'challenge',
+        useDuoButtons: true,
         onNext: _goToNext,
+        onBack: _goBack,
       ),
       AnalogyRevealPage(
         data: _data,
-        question: "What's your biggest barrier this Ramadan?",
+        question: "What's your biggest spiritual barrier?",
         analogyField: 'challenge',
         onNext: _goToNext,
+        onBack: _goBack,
       ),
 
       // Q4: Journey
       AnalogyQuestionPage(
         data: _data,
-        question: "Write a reflection about your Ramadan so far",
-        pills: ["I want this Ramadan to be different", "I'm trying my best, but...", "I feel distant but want to return", "I'm excited for what's ahead"],
+        question: "How would you describe your spiritual walk?",
+        pills: ["I want to grow closer to Allah", "I'm trying my best, but...", "I feel distant but want to return", "I'm hopeful and excited"],
         dataField: 'journey',
+        useDuoButtons: true,
         onNext: _goToNext,
+        onBack: _goBack,
       ),
       AnalogyRevealPage(
         data: _data,
-        question: "Write a reflection about your Ramadan so far",
+        question: "How would you describe your spiritual walk?",
         analogyField: 'journey',
         isLast: true,
         onNext: _goToNext,
+        onBack: _goBack,
       ),
 
       // PART 3: CLIMAX (Screens 15-17)
-      FirstJournalPage(data: _data, onNext: _goToNext),
-      AiInsightPage(data: _data, onNext: _goToNext),
-      CelebrationPage(data: _data, onNext: _goToNext),
+      FirstJournalPage(data: _data, onNext: _goToNext, onBack: _goBack),
+      AiInsightPage(data: _data, onNext: _goToNext, onBack: _goBack),
+      CelebrationPage(data: _data, onNext: _goToNext, onBack: _goBack),
 
       // PART 4: CONCLUSION (Screens 18-20)
-      SummaryPage(data: _data, onNext: _goToNext),
-      CommitmentPage(data: _data, onNext: _goToNext),
-      SetupPage(data: _data, onFinish: _finishOnboarding),
+      SummaryPage(data: _data, onNext: _goToNext, onBack: _goBack),
+      CommitmentPage(data: _data, onNext: _goToNext, onBack: _goBack),
+      SetupPage(data: _data, onFinish: _finishOnboarding, onBack: _goBack),
     ];
   }
 }

@@ -55,6 +55,7 @@ class _TaskCardState extends State<TaskCard> {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -126,9 +127,7 @@ class _TaskCardState extends State<TaskCard> {
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.outfit(
                             textStyle: tt.displaySmall,
-                            color: widget.completed
-                                ? Colors.white70
-                                : Colors.white,
+                            color: cs.onSurface,
                             fontWeight: FontWeight.w300,
                             letterSpacing: -1.0,
                             height: 1.1,

@@ -149,7 +149,7 @@ class _HomepageState extends State<Homepage> {
                                     )
                                   : (user.photoURL != null && user.photoURL!.isNotEmpty)
                                     ? Image.network(user.photoURL!, fit: BoxFit.cover)
-                                    : Icon(Icons.person_rounded, color: cs.onPrimaryContainer, size: 24),
+                                    : Icon(Icons.person_rounded, color: cs.onSurface, size: 24),
                               ),
                             );
                           }
@@ -393,14 +393,14 @@ class _TimingWidget extends StatelessWidget {
         Text(
           title,
           style: tt.labelMedium?.copyWith(
-            color: cs.onSecondaryContainer.withValues(alpha: 0.7),
+            color: cs.onSurface.withValues(alpha: 0.7),
           ),
         ),
         const SizedBox(height: 4),
         Text(
           time,
           style: tt.titleMedium?.copyWith(
-            color: cs.onSecondaryContainer,
+            color: cs.onSurface,
             fontWeight: FontWeight.bold,
           ),
         ),

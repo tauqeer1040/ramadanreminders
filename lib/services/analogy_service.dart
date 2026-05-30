@@ -44,7 +44,7 @@ class AnalogyService {
   static String _fallbackAnalogy(String question, String answer) {
     final analogies = {
       'intention': 'Your intention is like a seed planted in blessed soil. '
-          'With each passing day of Ramadan, it sends roots deeper into your heart '
+          'Each day it sends roots deeper into your heart '
           'and reaches toward the light of Allah\'s mercy.',
       'heart': 'Your heart is like the moon — sometimes full and radiant, '
           'sometimes a slim crescent hidden in shadow. '
@@ -52,7 +52,7 @@ class AnalogyService {
       'challenge': 'A mountain path is steep not to stop you, '
           'but to show you how strong you\'ve become with each step. '
           'Allah does not burden a soul beyond what it can bear.',
-      'journey': 'Your Ramadan journey is like a garden waking in spring. '
+      'journey': 'Your spiritual journey is like a garden waking in spring. '
           'Each reflection, each prayer, each moment of patience — '
           'these are the blossoms unfolding at their own time.',
     };
@@ -64,7 +64,7 @@ class AnalogyService {
     }
 
     return 'Like a river finding its way to the ocean, '
-        'your journey through Ramadan is guided by a force greater than you can see. '
+        'your journey is guided by a force greater than you can see. '
         'Trust the current, and let it carry you closer to peace.';
   }
 }

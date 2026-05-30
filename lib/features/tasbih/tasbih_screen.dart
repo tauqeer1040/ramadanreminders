@@ -180,7 +180,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
-                      color: cs.primary,
+                      color: cs.onSurface,
                       fontFamily: 'Amiri',
                     ),
                     textAlign: TextAlign.center,
@@ -189,7 +189,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
                   ),
                   Text(
                     dhikr.name,
-                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                    style: TextStyle(fontSize: 13, color: cs.onSurface),
                     textAlign: TextAlign.center,
                   ),
 
@@ -523,6 +523,7 @@ class _SheetTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -537,21 +538,21 @@ class _SheetTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Row(
               children: [
-                Icon(icon, color: Colors.white, size: 26),
+                Icon(icon, color: cs.onSurface, size: 26),
                 const SizedBox(width: 16),
                 Text(
                   label,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: cs.onSurface,
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.2,
                   ),
                 ),
                 const Spacer(),
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
-                  color: Colors.white54,
+                  color: cs.onSurface.withValues(alpha: 0.5),
                   size: 22,
                 ),
               ],

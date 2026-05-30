@@ -264,7 +264,7 @@ class _QuranPageState extends State<QuranPage> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.auto_awesome, color: cs.primary, size: 26),
+                  Icon(Icons.auto_awesome, color: cs.onSurface, size: 26),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -272,7 +272,7 @@ class _QuranPageState extends State<QuranPage> {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: cs.primary,
+                        color: cs.onSurface,
                       ),
                     ),
                   ),
@@ -287,7 +287,7 @@ class _QuranPageState extends State<QuranPage> {
                     label: Text(
                       tag,
                       style: textTheme.labelSmall?.copyWith(
-                        color: cs.onSecondaryContainer,
+                        color: cs.onSurface,
                       ),
                     ),
                     backgroundColor: cs.secondaryContainer,
@@ -308,7 +308,7 @@ class _QuranPageState extends State<QuranPage> {
                 card.insight,
                 style: textTheme.bodyLarge?.copyWith(
                   height: 1.6,
-                  color: cs.onSurfaceVariant,
+                  color: cs.onSurface,
                 ),
               ),
               const SizedBox(height: 20),
@@ -389,7 +389,7 @@ class _QuranPageState extends State<QuranPage> {
                 ),
                 child: Text(
                   _error!,
-                  style: TextStyle(color: cs.onErrorContainer),
+                  style: TextStyle(color: cs.onSurface),
                 ),
               ),
             Text(
@@ -484,7 +484,7 @@ class _QuranPageState extends State<QuranPage> {
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
-            color: cs.primary,
+            color: cs.onSurface,
           ),
         ),
       ),

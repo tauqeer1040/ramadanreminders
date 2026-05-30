@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'components/homepage.dart';
@@ -14,9 +13,7 @@ import 'components/profilepage.dart';
 import 'core/app_background.dart';
 import 'services/streak_service.dart';
 import 'services/audio_service.dart';
-
 import 'services/notification_service.dart';
-
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'firebase_options.dart';
@@ -25,6 +22,7 @@ import 'services/journal_service.dart';
 import 'services/user_service.dart';
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -67,83 +65,70 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Fallback seed color (Deep Teal/Green for a calmer, better contrast Ramadan theme)
-    const defaultColor = Color(0xFF006A60);
+    final ColorScheme scheme = ColorScheme.fromSeed(
+      seedColor: AppTheme.neonPurple,
+      brightness: Brightness.dark,
+    );
 
-    return DynamicColorBuilder(
-      builder: (lightDynamic, darkDynamic) {
-        ColorScheme lightScheme;
-        ColorScheme darkScheme;
+    ThemeData buildTheme(ColorScheme scheme) {
+      return ThemeData(
+        useMaterial3: true,
+        colorScheme: scheme.copyWith(
+          primary: AppTheme.neonPurple,
+          onSurface: AppTheme.starWhite,
+          onSurfaceVariant: AppTheme.ghostSilver,
+        ),
+        scaffoldBackgroundColor: scheme.surface,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: <TargetPlatform, PageTransitionsBuilder>{
+            TargetPlatform.android: ZoomPageTransitionsBuilder(),
+            TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
+          },
+        ),
+        textTheme:
+            GoogleFonts.interTextTheme().apply(
+              bodyColor: AppTheme.starWhite,
+              displayColor: AppTheme.starWhite,
+            ),
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          backgroundColor: scheme.primary,
+          foregroundColor: scheme.onPrimary,
+          elevation: 0,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: scheme.primary,
+            foregroundColor: scheme.onPrimary,
+            elevation: 0,
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            backgroundColor: scheme.primary,
+            foregroundColor: scheme.onPrimary,
+            elevation: 0,
+          ),
+        ),
+        iconButtonTheme: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            backgroundColor: scheme.primary,
+            foregroundColor: scheme.onPrimary,
+            elevation: 0,
+          ),
+        ),
+      );
+    }
 
-        if (lightDynamic != null && darkDynamic != null) {
-          lightScheme = lightDynamic.harmonized();
-          darkScheme = darkDynamic.harmonized();
-        } else {
-          lightScheme = ColorScheme.fromSeed(
-            seedColor: defaultColor,
-            brightness: Brightness.light,
-          );
-          darkScheme = ColorScheme.fromSeed(
-            seedColor: defaultColor,
-            brightness: Brightness.dark,
-          );
-        }
-
-        ThemeData buildTheme(ColorScheme scheme) {
-          return ThemeData(
-            useMaterial3: true,
-            colorScheme: scheme,
-            scaffoldBackgroundColor: scheme.surface,
-            appBarTheme: const AppBarTheme(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-            ),
-            pageTransitionsTheme: const PageTransitionsTheme(
-              builders: <TargetPlatform, PageTransitionsBuilder>{
-                TargetPlatform.android: ZoomPageTransitionsBuilder(),
-                TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
-              },
-            ),
-            textTheme:
-                GoogleFonts.interTextTheme(), // Apply modern sans globally
-            floatingActionButtonTheme: FloatingActionButtonThemeData(
-              backgroundColor: scheme.primary,
-              foregroundColor: scheme.onPrimary,
-              elevation: 0,
-            ),
-            elevatedButtonTheme: ElevatedButtonThemeData(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: scheme.primary,
-                foregroundColor: scheme.onPrimary,
-                elevation: 0,
-              ),
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                backgroundColor: scheme.primary,
-                foregroundColor: scheme.onPrimary,
-                elevation: 0,
-              ),
-            ),
-            iconButtonTheme: IconButtonThemeData(
-              style: IconButton.styleFrom(
-                backgroundColor: scheme.primary,
-                foregroundColor: scheme.onPrimary,
-                elevation: 0,
-              ),
-            ),
-          );
-        }
-
-        return MaterialApp(
-          title: 'Ramadan Reflections',
-          debugShowCheckedModeBanner: false,
-          theme: buildTheme(lightScheme),
-          darkTheme: buildTheme(darkScheme),
-          themeMode: ThemeMode.system,
-          home: const Material3BottomNav(),
-        );
-      },
+    return MaterialApp(
+          title: 'NoorAI',
+      debugShowCheckedModeBanner: false,
+      theme: buildTheme(scheme),
+      themeMode: ThemeMode.dark,
+      home: const Material3BottomNav(),
     );
   }
 }
@@ -340,7 +325,7 @@ List<NavigationDestination> _buildNavBarItems(ColorScheme cs) {
       radius: 14,
       backgroundColor: selected ? cs.secondaryContainer : Colors.transparent,
       child: isGuest
-        ? Icon(Icons.person_rounded, size: 18, color: selected ? cs.onSecondaryContainer : cs.onSurfaceVariant)
+        ? Icon(Icons.person_rounded, size: 18, color: cs.onSurface)
         : (user.photoURL != null && user.photoURL!.isNotEmpty)
             ? ClipOval(
                 child: Image.network(
@@ -348,10 +333,10 @@ List<NavigationDestination> _buildNavBarItems(ColorScheme cs) {
                   width: 28,
                   height: 28,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(Icons.person_rounded, size: 18, color: cs.onSurfaceVariant),
+                  errorBuilder: (_, __, ___) => Icon(Icons.person_rounded, size: 18, color: cs.onSurface),
                 ),
               )
-            : Icon(Icons.person_rounded, size: 18, color: cs.onSurfaceVariant),
+            : Icon(Icons.person_rounded, size: 18, color: cs.onSurface),
     );
   }
 

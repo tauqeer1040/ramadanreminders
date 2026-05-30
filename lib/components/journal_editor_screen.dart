@@ -107,7 +107,7 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
                       hintText:
                           "Write your thoughts, struggles, or gratitude here...",
                       hintStyle: TextStyle(
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                        color: cs.onSurface.withValues(alpha: 0.6),
                         fontSize: 18,
                       ),
                       border: InputBorder.none,

@@ -125,9 +125,9 @@ class NotificationService {
   }) async {
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-          'ramadan_reminders',
+          'daily_reminders',
           'Gentle Reminders',
-          channelDescription: 'Soft daily reminders to enrich your Ramadan',
+          channelDescription: 'Soft daily reminders for your spiritual journey',
           importance: Importance.defaultImportance,
           priority: Priority.defaultPriority,
           largeIcon: const DrawableResourceAndroidBitmap('mascot_notification'),
@@ -155,7 +155,7 @@ class NotificationService {
   static Future<void> showInstantNotification(String title, String body) async {
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-          'ramadan_reminders_test',
+          'daily_reminders_test',
           'Test Reminders',
           channelDescription: 'Testing channel',
           importance: Importance.max,

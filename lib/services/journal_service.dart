@@ -268,7 +268,7 @@ class JournalService {
           final task = Map<String, dynamic>.from(entry.value as Map);
           return BulletItem(
             id: (task['id'] ?? 'ai_task_$idx').toString(),
-            content: (task['content'] ?? 'Ramadan Task').toString(),
+            content: (task['content'] ?? 'Daily Task').toString(),
             difficulty: (task['difficulty'] ?? _difficultyForIndex(idx)).toString(),
           );
         }).toList();

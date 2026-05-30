@@ -27,7 +27,7 @@ class InsightCardShimmer extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: cs.primary,
+                      color: cs.onSurface,
                     ),
                   ),
                 ),

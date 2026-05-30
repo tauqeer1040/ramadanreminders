@@ -91,9 +91,9 @@ class _JournalListScreenState extends State<JournalListScreen> {
             hintText: "Search your journals...",
             border: InputBorder.none,
             hintStyle: TextStyle(
-              color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+              color: cs.onSurface.withValues(alpha: 0.7),
             ),
-            icon: Icon(Icons.search, color: cs.onSurfaceVariant),
+            icon: Icon(Icons.search, color: cs.onSurface),
           ),
           style: TextStyle(color: cs.onSurface, fontSize: 16),
         ),
@@ -109,12 +109,12 @@ class _JournalListScreenState extends State<JournalListScreen> {
                   Icon(
                     Icons.notes,
                     size: 64,
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+                    color: cs.onSurface.withValues(alpha: 0.3),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     "No journals found",
-                    style: TextStyle(color: cs.onSurfaceVariant),
+                    style: TextStyle(color: cs.onSurface),
                   ),
                 ],
               ),
@@ -153,7 +153,7 @@ class _JournalListScreenState extends State<JournalListScreen> {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: cs.onSurfaceVariant,
+                              color: cs.onSurface,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -178,7 +178,7 @@ class _JournalListScreenState extends State<JournalListScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openEditor(),
         backgroundColor: cs.primaryContainer,
-        child: Icon(Icons.add, color: cs.onPrimaryContainer),
+        child: Icon(Icons.add, color: cs.onSurface),
       ),
     );
   }

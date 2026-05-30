@@ -1,14 +1,14 @@
 // header.dart
 import 'package:flutter/material.dart';
 
-class RamadanHeader extends StatelessWidget {
-  final int ramadanDay;
-  final String monthName;
+class JourneyHeader extends StatelessWidget {
+  final int dayCount;
+  final String journeyLabel;
 
-  const RamadanHeader({
+  const JourneyHeader({
     super.key,
-    this.ramadanDay = 15,
-    this.monthName = 'Ramadan',
+    this.dayCount = 1,
+    this.journeyLabel = 'your journey',
   });
 
   @override
@@ -40,7 +40,7 @@ class RamadanHeader extends StatelessWidget {
                       ],
                     ).createShader(bounds),
                     child: Text(
-                      'Ramadan Journal',
+                      'NoorAI Journal',
                       style: textTheme.displaySmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         fontFamily: 'Crimson Text',
@@ -99,7 +99,7 @@ class RamadanHeader extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '$ramadanDay',
+                  '$dayCount',
                   style: TextStyle(
                     fontSize: 20,
                     fontFamily: 'Crimson Text',
@@ -109,7 +109,7 @@ class RamadanHeader extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'of $monthName',
+                  'of $journeyLabel',
                   style: TextStyle(
                     fontSize: 14,
                     color: colorScheme.onSurfaceVariant,

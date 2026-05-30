@@ -143,7 +143,7 @@ class _ProfilePage1State extends State<ProfilePage1> {
                               Text(
                                 "Sign up to securely sync your data, unlock unlimited journals, and save your progress! Your data is never sold.",
                                 style: TextStyle(
-                                  color: cs.onSurfaceVariant,
+                                  color: cs.onSurface,
                                   height: 1.4,
                                 ),
                               ),
@@ -239,7 +239,7 @@ class _ProfilePage1State extends State<ProfilePage1> {
                             ] else ...[
                               Text(
                                 "Signed in as ${_currentUser!.email}",
-                                style: TextStyle(color: cs.onSurfaceVariant),
+                                style: TextStyle(color: cs.onSurface),
                               ),
                               const SizedBox(height: 20),
                               OutlinedButton.icon(

@@ -82,7 +82,7 @@ class _JournalBottomSheetState extends State<JournalBottomSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+                    color: cs.onSurface.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -124,7 +124,7 @@ class _JournalBottomSheetState extends State<JournalBottomSheet> {
                     style: TextStyle(fontSize: 18, color: cs.onSurface, height: 1.6),
                     decoration: InputDecoration(
                       hintText: "Write your thoughts, struggles, or gratitude here...",
-                      hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 18),
+                      hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 18),
                       border: InputBorder.none,
                     ),
                   ),
@@ -142,7 +142,7 @@ class _JournalBottomSheetState extends State<JournalBottomSheet> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Prompt ideas', style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant)),
+                    Text('Prompt ideas', style: tt.labelMedium),
                     const SizedBox(height: 10),
                     if (bottomInset > 0)
                       SizedBox(
@@ -181,7 +181,7 @@ class _JournalBottomSheetState extends State<JournalBottomSheet> {
                   children: [
                     Text(
                       'Journal auto saved',
-                      style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                      style: tt.labelSmall?.copyWith(color: cs.onSurface.withValues(alpha: 0.5)),
                     ),
                     const SizedBox(height: 4),
                     // Icon(Icons.check_circle_outline_rounded, color: cs.onSurfaceVariant.withValues(alpha: 0.4), size: 18),

@@ -38,13 +38,13 @@ class AddTaskCard extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(color: cs.primary, width: 2),
                 ),
-                child: Icon(Icons.add_rounded, size: 22, color: cs.primary),
+                child: Icon(Icons.add_rounded, size: 22, color: cs.onSurface),
               ),
               const SizedBox(height: 10),
               Text(
                 'Add Task',
                 style: tt.titleSmall?.copyWith(
-                  color: cs.onSurfaceVariant,
+                  color: cs.onSurface,
                   fontWeight: FontWeight.w600,
                   overflow: TextOverflow.fade,
                 ),

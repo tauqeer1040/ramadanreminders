@@ -64,7 +64,7 @@ class JournalSection extends StatelessWidget {
                 children: [
                   Text(
                     "New",
-                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                    style: TextStyle(fontSize: 12, color: cs.onSurface),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -85,9 +85,9 @@ class JournalSection extends StatelessWidget {
                   color: const Color(
                     0xFFE8D5D5,
                   ), // Slightly rosy tint from mockup
-                  border: Border.all(color: Colors.black87, width: 2.5),
+                  border: Border.all(color: cs.onSurface, width: 2.5),
                 ),
-                child: const Icon(Icons.add, color: Colors.black87, size: 28),
+                child: Icon(Icons.add, color: cs.onSurface, size: 28),
               ),
             ],
           ),

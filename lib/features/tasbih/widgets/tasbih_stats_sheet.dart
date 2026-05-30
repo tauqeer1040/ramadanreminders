@@ -161,7 +161,7 @@ class _TasbihStatsSheetState extends State<_TasbihStatsSheet> {
                         Text(
                           'Add at least 3 Tasbihs\nfor the radar chart!',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: cs.onSurfaceVariant),
+                          style: TextStyle(color: cs.onSurface),
                         ),
 
                       // Center Total Pill

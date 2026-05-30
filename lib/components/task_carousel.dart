@@ -443,14 +443,14 @@ class _AddTaskCard extends StatelessWidget {
                         child: Icon(
                           Icons.add_rounded,
                           size: 32,
-                          color: cs.primary,
+                          color: cs.onSurface,
                         ),
                       ),
                       const SizedBox(height: 16),
                       Text(
                         'Add Task',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: cs.primary,
+                          color: cs.onSurface,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -458,7 +458,7 @@ class _AddTaskCard extends StatelessWidget {
                       Text(
                         'Tap to create a new task',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                          color: cs.onSurface.withValues(alpha: 0.6),
                         ),
                       ),
                     ],

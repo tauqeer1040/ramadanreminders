@@ -3,12 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
 import '../../services/journal_service.dart';
 import 'onboarding_data.dart';
+import '../widgets/duo_button.dart';
+import '../../theme/app_theme.dart';
 
 class FirstJournalPage extends StatefulWidget {
   final OnboardingData data;
   final VoidCallback onNext;
+  final VoidCallback onBack;
 
-  const FirstJournalPage({required this.data, required this.onNext, super.key});
+  const FirstJournalPage({required this.data, required this.onNext, required this.onBack, super.key});
 
   @override
   State<FirstJournalPage> createState() => _FirstJournalPageState();
@@ -17,101 +20,171 @@ class FirstJournalPage extends StatefulWidget {
 class _FirstJournalPageState extends State<FirstJournalPage> {
   final _controller = TextEditingController();
   final _journalService = JournalService();
-  final List<String> _selectedTags = [];
+  final _focusNode = FocusNode();
   bool _saving = false;
 
-  final _tagOptions = ["Gratitude", "Reflection", "Prayer", "Hope", "Struggle"];
+  final _suggestions = [
+    "I had a good day today",
+    "Gratitude:",
+    "Things to improve upon",
+    "Today I learned...",
+    "I felt...",
+    "Something that made me smile",
+    "My prayer today",
+    "A challenge I faced",
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChange);
+    if (widget.data.journalEntry != null) {
+      _controller.text = widget.data.journalEntry!;
+    }
+  }
 
   @override
   void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  void _onFocusChange() {
+    setState(() {});
+  }
+
+  void _onTextChanged(String text) {
+    widget.data.journalEntry = text;
+    JournalService.saveLocalJournalWithId(
+      DateTime.now().toIso8601String().split('T')[0],
+      text,
+    );
+    setState(() {});
+  }
+
+  void _selectSuggestion(String suggestion) {
+    final current = _controller.text;
+    if (current.isEmpty) {
+      _controller.text = suggestion;
+    } else {
+      _controller.text = '$current\n$suggestion';
+    }
+    _controller.selection = TextSelection.fromPosition(TextPosition(offset: _controller.text.length));
+    _onTextChanged(_controller.text);
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    // Hide heading/buttons as soon as the field is tapped (hasFocus fires
+    // instantly), and restore them the moment focus leaves (keyboard gone).
+    final keyboardVisible = _focusNode.hasFocus;
 
     final canContinue = _controller.text.trim().isNotEmpty || widget.data.journalEntry != null;
 
+    final textField = TextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      onChanged: _onTextChanged,
+      autofocus: false,
+      maxLines: null,
+      textCapitalization: TextCapitalization.sentences,
+      style: TextStyle(fontSize: 18, color: cs.onSurface, height: 1.6),
+      decoration: InputDecoration(
+        hintText: "Write your thoughts, struggles, or gratitude here...",
+        hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 18),
+        filled: true,
+        fillColor: cs.surfaceContainerLow,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: cs.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: cs.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: cs.primary, width: 2),
+        ),
+        contentPadding: const EdgeInsets.all(20),
+      ),
+    );
+
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: EdgeInsets.fromLTRB(32, 0, 32, keyboardInset + 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Spacer(flex: 1),
-          Text("Your first reflection", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text("Write about your thoughts, hopes, or anything on your heart.", style: tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant)),
-          const SizedBox(height: 24),
-          Container(
-            decoration: BoxDecoration(
-              color: cs.surfaceContainer,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cs.outlineVariant),
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Today I am feeling...", style: tt.labelLarge?.copyWith(color: cs.primary)),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _controller,
-                  maxLines: 4,
-                  decoration: InputDecoration(
-                    hintText: "Share your reflection...",
-                    filled: true,
-                    fillColor: cs.surface,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-              ],
+          if (!keyboardVisible) ...[ 
+            Text("Your first reflection", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text("Write about your thoughts, hopes, or anything on your heart.", style: tt.bodyLarge),
+            const SizedBox(height: 24),
+          ],
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: textField,
             ),
           ),
-          const SizedBox(height: 16),
-          Text("Tags", style: tt.labelLarge?.copyWith(color: cs.onSurfaceVariant)),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _tagOptions.map((tag) {
-              final selected = _selectedTags.contains(tag);
-              return ChoiceChip(
-                label: Text(tag),
-                selected: selected,
-                onSelected: (v) {
-                  setState(() {
-                    if (v) { _selectedTags.add(tag); } else { _selectedTags.remove(tag); }
-                  });
-                },
-                selectedColor: cs.primaryContainer,
-                backgroundColor: cs.surface,
-                labelStyle: TextStyle(
-                  color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                ),
+          if (!keyboardVisible)
+            Text('Prompt ideas', style: tt.labelMedium?.copyWith(color: cs.onSurface.withValues(alpha: 0.7))),
+          if (!keyboardVisible) const SizedBox(height: 8),
+          SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _suggestions.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, i) => ActionChip(
+                label: Text(_suggestions[i], style: tt.labelSmall?.copyWith(color: cs.onSurface)),
+                onPressed: () => _selectSuggestion(_suggestions[i]),
+                backgroundColor: cs.surfaceContainerHigh,
+                side: BorderSide.none,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                side: BorderSide(color: selected ? cs.primary : cs.outlineVariant),
-              );
-            }).toList(),
-          ),
-          const Spacer(flex: 1),
-          if (_saving)
-            const Center(child: CircularProgressIndicator())
-          else
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: FilledButton(
-                onPressed: canContinue ? _handleSave : null,
-                style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                child: const Text("Save & Continue", style: TextStyle(fontSize: 16)),
               ),
             ),
-          const SizedBox(height: 48),
+          ),
+          if (!keyboardVisible) ...[ 
+            const SizedBox(height: 24),
+            if (_saving)
+              const Center(child: CircularProgressIndicator())
+            else
+              Row(
+                children: [
+                  Expanded(
+                    flex: 1,
+                    child: DuoButton(
+                      onPressed: widget.onBack,
+                      backgroundColor: cs.secondaryContainer,
+                      depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                      radius: 16,
+                      child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 2,
+                    child: DuoButton(
+                      onPressed: canContinue ? _handleSave : null,
+                      backgroundColor: cs.primary,
+                      depthColor: cs.primary.withValues(alpha: 0.8),
+                      radius: 16,
+                      dimOnDisabled: true,
+                      child: Text("Save & Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 48),
+          ],
         ],
       ),
     );
@@ -122,7 +195,6 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
     setState(() => _saving = true);
     final text = _controller.text.trim();
     widget.data.journalEntry = text;
-    widget.data.journalTags = List.from(_selectedTags);
     if (text.isNotEmpty) {
       final dateKey = DateTime.now().toIso8601String().split('T')[0];
       await _journalService.saveJournalGratitude(dateKey, text);
@@ -137,8 +209,9 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
 class AiInsightPage extends StatefulWidget {
   final OnboardingData data;
   final VoidCallback onNext;
+  final VoidCallback onBack;
 
-  const AiInsightPage({required this.data, required this.onNext, super.key});
+  const AiInsightPage({required this.data, required this.onNext, required this.onBack, super.key});
 
   @override
   State<AiInsightPage> createState() => _AiInsightPageState();
@@ -167,13 +240,13 @@ class _AiInsightPageState extends State<AiInsightPage> {
         children: [
           const Spacer(flex: 1),
           if (!_revealed) ...[
-            Icon(Icons.auto_awesome_rounded, size: 48, color: cs.primary),
+            Icon(Icons.auto_awesome_rounded, size: 48, color: cs.onSurface),
             const SizedBox(height: 24),
             Text("Reflecting on your words...", style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(height: 16),
             const LinearProgressIndicator(),
           ] else ...[
-            Icon(Icons.lightbulb_rounded, size: 48, color: cs.tertiary),
+            Icon(Icons.lightbulb_rounded, size: 48, color: cs.onSurface),
             const SizedBox(height: 16),
             Text("A thought for you", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 24),
@@ -203,7 +276,7 @@ class _AiInsightPageState extends State<AiInsightPage> {
                     ),
                     child: Text(
                       '"And He gave you all that you asked of Him." — Quran 14:34',
-                      style: tt.bodySmall?.copyWith(fontStyle: FontStyle.italic, color: cs.onSurfaceVariant),
+                      style: tt.bodySmall?.copyWith(fontStyle: FontStyle.italic),
                     ),
                   ),
                 ],
@@ -212,14 +285,30 @@ class _AiInsightPageState extends State<AiInsightPage> {
           ],
           const Spacer(flex: 1),
           if (_revealed)
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: FilledButton(
-                onPressed: widget.onNext,
-                style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                child: const Text("Continue", style: TextStyle(fontSize: 16)),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  flex: 1,
+                  child: DuoButton(
+                    onPressed: widget.onBack,
+                    backgroundColor: cs.secondaryContainer,
+                    depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                    radius: 16,
+                    child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 2,
+                  child: DuoButton(
+                    onPressed: widget.onNext,
+                    backgroundColor: cs.primary,
+                    depthColor: cs.primary.withValues(alpha: 0.8),
+                    radius: 16,
+                    child: Text("Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
             ),
           if (!_revealed) const SizedBox(height: 56),
           const SizedBox(height: 48),
@@ -232,8 +321,9 @@ class _AiInsightPageState extends State<AiInsightPage> {
 class CelebrationPage extends StatefulWidget {
   final OnboardingData data;
   final VoidCallback onNext;
+  final VoidCallback onBack;
 
-  const CelebrationPage({required this.data, required this.onNext, super.key});
+  const CelebrationPage({required this.data, required this.onNext, required this.onBack, super.key});
 
   @override
   State<CelebrationPage> createState() => _CelebrationPageState();
@@ -268,7 +358,7 @@ class _CelebrationPageState extends State<CelebrationPage> {
           child: ConfettiWidget(
             confettiController: _confettiController,
             blastDirectionality: BlastDirectionality.explosive,
-            colors: [cs.primary, cs.tertiary, const Color(0xFFD4AF37)],
+            colors: [cs.primary, cs.tertiary, AppTheme.starGold],
             numberOfParticles: 30,
             maxBlastForce: 20,
           ),
@@ -279,11 +369,11 @@ class _CelebrationPageState extends State<CelebrationPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(flex: 2),
-              Text("Congratulations!", style: tt.displaySmall?.copyWith(fontWeight: FontWeight.bold, color: cs.primary)),
+              Text("Congratulations!", style: tt.displaySmall?.copyWith(fontWeight: FontWeight.bold, color: cs.onSurface)),
               const SizedBox(height: 12),
               Text(
                 "You've completed your first reflection.",
-                style: tt.titleLarge?.copyWith(color: cs.onSurfaceVariant),
+                style: tt.titleLarge,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
@@ -298,22 +388,38 @@ class _CelebrationPageState extends State<CelebrationPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text("1", style: tt.displaySmall?.copyWith(fontWeight: FontWeight.bold, color: cs.primary)),
-                    Text("Day", style: tt.labelLarge?.copyWith(color: cs.primary)),
+                    Text("1", style: tt.displaySmall?.copyWith(fontWeight: FontWeight.bold, color: cs.onSurface)),
+                    Text("Day", style: tt.labelLarge?.copyWith(color: cs.onSurface)),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
-              Text("Your streak starts today", style: tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant)),
-              const SizedBox(height: 48),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: FilledButton(
-                  onPressed: widget.onNext,
-                  style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                  child: const Text("Continue", style: TextStyle(fontSize: 16)),
-                ),
+              Text("Your streak starts today", style: tt.bodyLarge),
+              const SizedBox(height: 32),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 1,
+                    child: DuoButton(
+                      onPressed: widget.onBack,
+                      backgroundColor: cs.secondaryContainer,
+                      depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                      radius: 16,
+                      child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 2,
+                    child: DuoButton(
+                      onPressed: widget.onNext,
+                      backgroundColor: cs.primary,
+                      depthColor: cs.primary.withValues(alpha: 0.8),
+                      radius: 16,
+                      child: Text("Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               TextButton.icon(
@@ -323,7 +429,7 @@ class _CelebrationPageState extends State<CelebrationPage> {
                     SnackBar(content: const Text("Enjoying the app? Leave a review!"), backgroundColor: cs.primary),
                   );
                 },
-                icon: Icon(Icons.star_rounded, size: 18, color: cs.primary),
+                icon: Icon(Icons.star_rounded, size: 18, color: cs.onSurface),
                 label: const Text("Leave a review"),
               ),
               const SizedBox(height: 48),
@@ -338,8 +444,9 @@ class _CelebrationPageState extends State<CelebrationPage> {
 class SummaryPage extends StatelessWidget {
   final OnboardingData data;
   final VoidCallback onNext;
+  final VoidCallback onBack;
 
-  const SummaryPage({required this.data, required this.onNext, super.key});
+  const SummaryPage({required this.data, required this.onNext, required this.onBack, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -352,7 +459,7 @@ class SummaryPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Spacer(flex: 1),
-          Text("Your Ramadan Profile", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+          Text("Your Spiritual Profile", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 24),
           Expanded(
             child: ListView(
@@ -375,14 +482,30 @@ class SummaryPage extends StatelessWidget {
               ],
             ),
           ),
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: FilledButton(
-              onPressed: onNext,
-              style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-              child: const Text("Looks good", style: TextStyle(fontSize: 16)),
-            ),
+          Row(
+            children: [
+              Expanded(
+                flex: 1,
+                child: DuoButton(
+                  onPressed: onBack,
+                  backgroundColor: cs.secondaryContainer,
+                  depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                  radius: 16,
+                  child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 2,
+                child: DuoButton(
+                  onPressed: onNext,
+                  backgroundColor: cs.primary,
+                  depthColor: cs.primary.withValues(alpha: 0.8),
+                  radius: 16,
+                  child: Text("Looks good", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 48),
         ],
@@ -405,7 +528,7 @@ class SummaryPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant)),
+                Text(label, style: tt.labelMedium),
                 const SizedBox(height: 4),
                 Text(value, style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
               ],
@@ -420,8 +543,9 @@ class SummaryPage extends StatelessWidget {
 class CommitmentPage extends StatefulWidget {
   final OnboardingData data;
   final VoidCallback onNext;
+  final VoidCallback onBack;
 
-  const CommitmentPage({required this.data, required this.onNext, super.key});
+  const CommitmentPage({required this.data, required this.onNext, required this.onBack, super.key});
 
   @override
   State<CommitmentPage> createState() => _CommitmentPageState();
@@ -431,7 +555,7 @@ class _CommitmentPageState extends State<CommitmentPage> {
   int? _selected;
 
   final _options = [
-    ("Extremely committed", "I'm ready to transform my Ramadan"),
+    ("Extremely committed", "I'm ready to grow closer to Allah"),
     ("Very committed", "I'll give it my best effort"),
     ("Somewhat committed", "I'm going to try"),
     ("Just exploring", "Let me see what this is about"),
@@ -448,11 +572,11 @@ class _CommitmentPageState extends State<CommitmentPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Spacer(flex: 1),
-          Icon(Icons.verified_rounded, size: 48, color: cs.primary),
+          Icon(Icons.verified_rounded, size: 48, color: cs.onSurface),
           const SizedBox(height: 16),
           Text("How committed are you?", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text("Your honesty helps us support you better", style: tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant)),
+          Text("Your honesty helps us support you better", style: tt.bodyLarge),
           const SizedBox(height: 32),
           ...List.generate(_options.length, (i) {
             final selected = _selected == i;
@@ -478,7 +602,7 @@ class _CommitmentPageState extends State<CommitmentPage> {
                       children: [
                         Icon(
                           selected ? Icons.radio_button_checked : Icons.radio_button_off,
-                          color: selected ? cs.primary : cs.onSurfaceVariant,
+                          color: selected ? cs.onSurface : cs.onSurface.withValues(alpha: 0.7),
                           size: 24,
                         ),
                         const SizedBox(width: 16),
@@ -487,7 +611,7 @@ class _CommitmentPageState extends State<CommitmentPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(_options[i].$1, style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
-                              Text(_options[i].$2, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                              Text(_options[i].$2, style: tt.bodySmall),
                             ],
                           ),
                         ),
@@ -508,31 +632,48 @@ class _CommitmentPageState extends State<CommitmentPage> {
             ),
             child: Row(
               children: [
-                Icon(Icons.people_rounded, color: cs.secondary, size: 24),
+                Icon(Icons.people_rounded, color: cs.onSurface, size: 24),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    "Join 10,000+ Muslims reflecting this Ramadan",
-                    style: tt.bodyMedium?.copyWith(color: cs.onSecondaryContainer),
+                    "Join 10,000+ Muslims reflecting daily",
+                    style: tt.bodyMedium?.copyWith(color: cs.onSurface),
                   ),
                 ),
               ],
             ),
           ),
           const Spacer(flex: 1),
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: FilledButton(
-              onPressed: _selected != null
-                  ? () {
-                      widget.data.commitmentLevel = _options[_selected!].$1;
-                      widget.onNext();
-                    }
-                  : null,
-              style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-              child: const Text("Continue", style: TextStyle(fontSize: 16)),
-            ),
+          Row(
+            children: [
+              Expanded(
+                flex: 1,
+                child: DuoButton(
+                  onPressed: widget.onBack,
+                  backgroundColor: cs.secondaryContainer,
+                  depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                  radius: 16,
+                  child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 2,
+                child: DuoButton(
+                  onPressed: _selected != null
+                      ? () {
+                          widget.data.commitmentLevel = _options[_selected!].$1;
+                          widget.onNext();
+                        }
+                      : null,
+                  backgroundColor: cs.primary,
+                  depthColor: cs.primary.withValues(alpha: 0.8),
+                  radius: 16,
+                  dimOnDisabled: true,
+                  child: Text("Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 48),
         ],
@@ -544,8 +685,9 @@ class _CommitmentPageState extends State<CommitmentPage> {
 class SetupPage extends StatelessWidget {
   final OnboardingData data;
   final VoidCallback onFinish;
+  final VoidCallback onBack;
 
-  const SetupPage({required this.data, required this.onFinish, super.key});
+  const SetupPage({required this.data, required this.onFinish, required this.onBack, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -560,7 +702,7 @@ class SetupPage extends StatelessWidget {
           const Spacer(flex: 1),
           Text("Final setup", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text("Enable these to get the most out of Ramadan Reflections", style: tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant)),
+          Text("Enable these to get the most out of your journey", style: tt.bodyLarge),
           const SizedBox(height: 32),
           _permissionTile(
             cs, tt,
@@ -584,19 +726,30 @@ class SetupPage extends StatelessWidget {
             },
           ),
           const Spacer(flex: 1),
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: FilledButton(
-              onPressed: onFinish,
-              style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-              child: const Text("Start Reflecting", style: TextStyle(fontSize: 16)),
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: onFinish,
-            child: const Text("Skip setup, I'll do it later"),
+          Row(
+            children: [
+              Expanded(
+                flex: 1,
+                child: DuoButton(
+                  onPressed: onBack,
+                  backgroundColor: cs.secondaryContainer,
+                  depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                  radius: 16,
+                  child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 2,
+                child: DuoButton(
+                  onPressed: onFinish,
+                  backgroundColor: cs.primary,
+                  depthColor: cs.primary.withValues(alpha: 0.8),
+                  radius: 16,
+                  child: Text("Start Reflecting", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 48),
         ],
@@ -619,7 +772,7 @@ class SetupPage extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(14)),
-            child: Icon(icon, color: cs.onPrimaryContainer, size: 24),
+            child: Icon(icon, color: cs.onSurface, size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -627,7 +780,7 @@ class SetupPage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
-                Text(subtitle, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text(subtitle, style: tt.bodySmall),
               ],
             ),
           ),

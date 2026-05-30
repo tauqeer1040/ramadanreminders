@@ -74,7 +74,7 @@ class _ProfileBottomSheetState extends State<ProfileBottomSheet> {
                 backgroundColor: cs.primaryContainer,
                 backgroundImage: _user?.photoURL != null ? NetworkImage(_user!.photoURL!) : null,
                 child: _user?.photoURL == null 
-                  ? Icon(Icons.person_rounded, size: 36, color: cs.onPrimaryContainer) 
+                  ? Icon(Icons.person_rounded, size: 36, color: cs.onSurface) 
                   : null,
               ),
               const SizedBox(width: 16),
@@ -89,7 +89,7 @@ class _ProfileBottomSheetState extends State<ProfileBottomSheet> {
                     if (_user?.email != null)
                       Text(
                         _user!.email!,
-                        style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                        style: tt.bodyMedium,
                       ),
                   ],
                 ),
@@ -129,7 +129,7 @@ class _ProfileBottomSheetState extends State<ProfileBottomSheet> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.cloud_sync_rounded, color: cs.primary),
+                  Icon(Icons.cloud_sync_rounded, color: cs.onSurface),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

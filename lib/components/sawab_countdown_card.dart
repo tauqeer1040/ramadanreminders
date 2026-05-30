@@ -157,7 +157,7 @@ class _SawabCountdownCardState extends State<SawabCountdownCard> {
                       startTimeStr,
                       style: tt.labelSmall?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: cs.onSurfaceVariant,
+                        color: cs.onSurface,
                       ),
                     ),
                   ],
@@ -168,7 +168,7 @@ class _SawabCountdownCardState extends State<SawabCountdownCard> {
                       endTimeStr,
                       style: tt.labelSmall?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: cs.onSurfaceVariant,
+                        color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -192,7 +192,7 @@ class _SawabCountdownCardState extends State<SawabCountdownCard> {
             const SizedBox(height: 8),
             Text(
               progressString,
-              style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+              style: tt.labelSmall?.copyWith(color: cs.onSurface),
             ),
           ],
         ],
@@ -207,7 +207,7 @@ class _SawabCountdownCardState extends State<SawabCountdownCard> {
         ':',
         style: tt.headlineLarge?.copyWith(
           fontWeight: FontWeight.w900,
-          color: cs.primary.withValues(alpha: 0.5),
+            color: cs.onSurface.withValues(alpha: 0.5),
         ),
       ),
     );
@@ -226,7 +226,7 @@ class _SawabCountdownCardState extends State<SawabCountdownCard> {
           style: tt.displaySmall?.copyWith(
             fontWeight: FontWeight.w900,
             fontSize: 42,
-            color: cs.primary,
+            color: cs.onSurface,
             letterSpacing: -1.0,
           ),
         ),
@@ -236,7 +236,7 @@ class _SawabCountdownCardState extends State<SawabCountdownCard> {
           style: tt.labelSmall?.copyWith(
             fontWeight: FontWeight.bold,
             letterSpacing: 1.2,
-            color: cs.onSurfaceVariant,
+            color: cs.onSurface,
           ),
         ),
       ],

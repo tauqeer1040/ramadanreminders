@@ -3,8 +3,14 @@ import 'package:flutter/material.dart';
 class AppBackground extends StatelessWidget {
   final Widget child;
   final String? backgroundImage;
+  final double overlayOpacity;
 
-  const AppBackground({required this.child, this.backgroundImage, super.key});
+  const AppBackground({
+    required this.child,
+    this.backgroundImage,
+    this.overlayOpacity = 0.20,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +24,7 @@ class AppBackground extends StatelessWidget {
         ),
         Positioned.fill(
           child: Container(
-            color: Colors.black.withValues(alpha: 0.20),
+            color: Colors.black.withValues(alpha: overlayOpacity),
           ),
         ),
         child,

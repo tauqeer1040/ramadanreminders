@@ -77,7 +77,7 @@ class _JournalEntryState extends State<JournalEntry> {
                 "Today's Journal",
                 style: tt.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: cs.primary,
+                  color: cs.onSurface,
                 ),
               ),
               Row(
@@ -114,7 +114,7 @@ class _JournalEntryState extends State<JournalEntry> {
           // Gratitude prompt
           Text(
             '✦ Today I am grateful for...',
-            style: tt.labelLarge?.copyWith(color: cs.primary),
+            style: tt.labelLarge?.copyWith(color: cs.onSurface),
           ),
           const SizedBox(height: 8),
 
@@ -126,7 +126,7 @@ class _JournalEntryState extends State<JournalEntry> {
             decoration: InputDecoration(
               hintText: 'Write your gratitude here...',
               hintStyle: TextStyle(
-                color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                color: cs.onSurface.withValues(alpha: 0.5),
               ),
               filled: true,
               fillColor: cs.surface,
