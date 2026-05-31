@@ -1,5 +1,6 @@
 class OnboardingData {
   String? displayName;
+  String? catName;
   int? age;
   int? phoneHours;
 
@@ -15,6 +16,7 @@ class OnboardingData {
 
   String? journalEntry;
   List<String> journalTags = [];
+  List<String> journalAnalogies = [];
 
   String? commitmentLevel;
 

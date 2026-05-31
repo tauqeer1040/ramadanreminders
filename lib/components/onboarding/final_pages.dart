@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
+import 'package:flutter_card_swiper/flutter_card_swiper.dart';
+import '../../services/analogy_service.dart';
 import '../../services/journal_service.dart';
 import 'onboarding_data.dart';
 import '../widgets/duo_button.dart';
@@ -22,22 +24,25 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
   final _journalService = JournalService();
   final _focusNode = FocusNode();
   bool _saving = false;
-
-  final _suggestions = [
-    "I had a good day today",
-    "Gratitude:",
-    "Things to improve upon",
-    "Today I learned...",
-    "I felt...",
-    "Something that made me smile",
-    "My prayer today",
-    "A challenge I faced",
-  ];
+  final _suggestionsKey = GlobalKey<AnimatedListState>();
+  final _suggestionsScrollController = ScrollController();
+  final _mainScrollController = ScrollController();
+  late List<String> _suggestions;
 
   @override
   void initState() {
     super.initState();
     _focusNode.addListener(_onFocusChange);
+    _suggestions = [
+      "I had a good day today",
+      "Gratitude:",
+      "Things to improve upon",
+      "Today I learned...",
+      "I felt...",
+      "Something that made me smile",
+      "My prayer today",
+      "A challenge I faced",
+    ];
     if (widget.data.journalEntry != null) {
       _controller.text = widget.data.journalEntry!;
     }
@@ -48,10 +53,19 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
     _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
     _controller.dispose();
+    _suggestionsScrollController.dispose();
+    _mainScrollController.dispose();
     super.dispose();
   }
 
   void _onFocusChange() {
+    if (_focusNode.hasFocus && _mainScrollController.hasClients) {
+      _mainScrollController.animateTo(
+        _mainScrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.elasticOut,
+      );
+    }
     setState(() {});
   }
 
@@ -64,7 +78,7 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
     setState(() {});
   }
 
-  void _selectSuggestion(String suggestion) {
+  void _selectSuggestion(int index, String suggestion) {
     final current = _controller.text;
     if (current.isEmpty) {
       _controller.text = suggestion;
@@ -73,6 +87,30 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
     }
     _controller.selection = TextSelection.fromPosition(TextPosition(offset: _controller.text.length));
     _onTextChanged(_controller.text);
+    final removed = _suggestions.removeAt(index);
+    _suggestionsKey.currentState?.removeItem(
+      index,
+      (context, animation) => _buildSuggestionItem(removed, animation, index),
+      duration: const Duration(milliseconds: 300),
+    );
+  }
+
+  Widget _buildSuggestionItem(String text, Animation<double> animation, int index) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return SizeTransition(
+      sizeFactor: animation,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: ActionChip(
+          label: Text(text, style: tt.labelSmall?.copyWith(color: cs.onSurface)),
+          onPressed: () => _selectSuggestion(index, text),
+          backgroundColor: cs.surfaceContainerHigh,
+          side: BorderSide.none,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        ),
+      ),
+    );
   }
 
   @override
@@ -117,72 +155,95 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
       children: [
         Expanded(
           child: SingleChildScrollView(
+            controller: _mainScrollController,
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (keyboardInset == 0) ...[
-                  Text("Your first reflection", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text("Write about your thoughts, hopes, or anything on your heart.", style: tt.bodyLarge),
-                  const SizedBox(height: 24),
-                ] else
-                  const SizedBox(height: 16),
-                textField,
+                AnimatedOpacity(
+                  opacity: keyboardInset == 0 ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 32),
+                      Text("Your first reflection", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Write about your thoughts, hopes, or anything on your heart.", style: tt.bodyLarge),
+                          const SizedBox(height: 8),
+                          Text("This is your private space to reflect on your day.", style: tt.bodyLarge),
+                          const SizedBox(height: 8),
+                          Text("Share your struggles, your victories, and everything in between.", style: tt.bodyLarge),
+                          const SizedBox(height: 8),
+                          Text("Your words matter here.", style: tt.bodyLarge),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Image.asset('assets/photos/mascot/name.png', height: 200, fit: BoxFit.contain),
+                      const SizedBox(height: 16),
+                    ],
+                    ),
+                  ),
+                  textField,
                 const SizedBox(height: 12),
                 Text('Prompt ideas', style: tt.labelMedium?.copyWith(color: cs.onSurface.withValues(alpha: 0.7))),
                 const SizedBox(height: 8),
                 SizedBox(
                   height: 36,
-                  child: ListView.separated(
+                  child: AnimatedList(
+                    key: _suggestionsKey,
                     scrollDirection: Axis.horizontal,
-                    itemCount: _suggestions.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, i) => ActionChip(
-                      label: Text(_suggestions[i], style: tt.labelSmall?.copyWith(color: cs.onSurface)),
-                      onPressed: () => _selectSuggestion(_suggestions[i]),
-                      backgroundColor: cs.surfaceContainerHigh,
-                      side: BorderSide.none,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
+                    controller: _suggestionsScrollController,
+                    initialItemCount: _suggestions.length,
+                    itemBuilder: (context, i, animation) => _buildSuggestionItem(_suggestions[i], animation, i),
                   ),
                 ),
               ],
             ),
           ),
         ),
-        if (keyboardInset == 0)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
-          child: _saving
-              ? const Center(child: CircularProgressIndicator())
-              : Row(
-                  children: [
-                    Expanded(
-                      flex: 1,
-                      child: DuoButton(
-                        onPressed: widget.onBack,
-                        backgroundColor: cs.secondaryContainer,
-                        depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
-                        radius: 16,
-                        child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
-                      ),
+        AnimatedOpacity(
+          opacity: keyboardInset == 0 ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 200),
+          child: IgnorePointer(
+            ignoring: keyboardInset != 0,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
+              child: _saving
+                  ? const Center(child: CircularProgressIndicator())
+                  : Row(
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: DuoButton(
+                            onPressed: widget.onBack,
+                            backgroundColor: cs.secondaryContainer,
+                            depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                            radius: 16,
+                            child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 2,
+                          child: DuoButton(
+                            onPressed: canContinue ? _handleSave : null,
+                            backgroundColor: cs.primary,
+                            depthColor: cs.primary.withValues(alpha: 0.8),
+                            radius: 16,
+                            dimOnDisabled: true,
+                            child: Text("Save & Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 2,
-                      child: DuoButton(
-                        onPressed: canContinue ? _handleSave : null,
-                        backgroundColor: cs.primary,
-                        depthColor: cs.primary.withValues(alpha: 0.8),
-                        radius: 16,
-                        dimOnDisabled: true,
-                        child: Text("Save & Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+          ),
         ),
       ],
     );
@@ -216,14 +277,104 @@ class AiInsightPage extends StatefulWidget {
 }
 
 class _AiInsightPageState extends State<AiInsightPage> {
-  bool _revealed = false;
+  bool _loading = true;
+  double _progress = 0;
+  final CardSwiperController _swiperController = CardSwiperController();
+  List<_JournalCard> _cards = [];
 
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (mounted) setState(() => _revealed = true);
+    _simulateProgress();
+    _generateCards();
+  }
+
+  void _simulateProgress() {
+    final steps = [0.1, 0.18, 0.27, 0.35, 0.44, 0.52, 0.61, 0.73, 0.82, 0.91];
+    for (var i = 0; i < steps.length; i++) {
+      Future.delayed(Duration(milliseconds: 300 + i * 400), () {
+        if (mounted && _loading) setState(() => _progress = steps[i]);
+      });
+    }
+  }
+
+  Future<void> _generateCards() async {
+    final entry = widget.data.journalEntry;
+    if (entry == null || entry.trim().isEmpty) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    final result = await AnalogyService.generateJournalAnalogies(entry);
+    if (!mounted) return;
+    setState(() {
+      _cards = [
+        _JournalCard(
+          icon: Icons.menu_book_rounded,
+          title: 'A Surah for You',
+          content: result.isNotEmpty ? result[0] : _fallbackSurah,
+        ),
+        _JournalCard(
+          icon: Icons.auto_awesome_rounded,
+          title: 'An Ayah to Hold Onto',
+          content: result.length > 1 ? result[1] : _fallbackAyah,
+        ),
+        _JournalCard(
+          icon: Icons.wb_sunny_rounded,
+          title: 'A Story to Remember',
+          content: result.length > 2 ? result[2] : _fallbackStory,
+        ),
+      ];
+      _loading = false;
     });
+  }
+
+  String get _fallbackSurah =>
+      'Your journey mirrors Surah Ad-Duha — after every night comes the morning light. '
+      'Allah never abandoned you, and what lies ahead is far greater than what has passed. '
+      '— Quran 93:1-5';
+
+  String get _fallbackAyah =>
+      '"And He found you lost and guided you." '
+      'Every step you take toward Him, He runs toward you. '
+      'Your reflection today is proof that He has already placed a light in your heart. '
+      '— Quran 93:7';
+
+  String get _fallbackStory =>
+      'Like the Companion who came to the Prophet ﷺ with a heavy heart, '
+      'you too have chosen to speak your truth. The Prophet ﷺ said: '
+      '"There is no Muslim who calls upon Allah with a supplication, '
+      'except that Allah grants him what he asks or protects him from an equivalent evil." '
+      '— Tirmidhi';
+
+  String _stripVerses(String text) {
+    return text.replaceAll(RegExp(r'— (Quran \d+:\d+|Tirmidhi|Bukhari|Muslim|Ahmad)'), '').trim();
+  }
+
+  List<Widget> _extractPills(String text) {
+    final regex = RegExp(r'— (Quran \d+:\d+|Tirmidhi|Bukhari|Muslim|Ahmad)');
+    final matches = regex.allMatches(text);
+    if (matches.isEmpty) return [];
+    final cs = Theme.of(context).colorScheme;
+    return [
+      const SizedBox(height: 16),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: matches.map((m) {
+          final verse = m.group(1)!;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
+            ),
+            child: Text(verse, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.primary)),
+          );
+        }).toList(),
+      ),
+    ];
   }
 
   @override
@@ -237,52 +388,91 @@ class _AiInsightPageState extends State<AiInsightPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Spacer(flex: 1),
-          if (!_revealed) ...[
-            Icon(Icons.auto_awesome_rounded, size: 48, color: cs.onSurface),
-            const SizedBox(height: 24),
-            Text("Reflecting on your words...", style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 16),
-            const LinearProgressIndicator(),
-          ] else ...[
-            Icon(Icons.lightbulb_rounded, size: 48, color: cs.onSurface),
-            const SizedBox(height: 16),
-            Text("A thought for you", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 24),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: cs.tertiaryContainer.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: cs.tertiary.withValues(alpha: 0.2)),
+          if (_loading) ...[
+            Text("Crafting your reflections...", style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 32),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: _progress,
+                minHeight: 12,
+                backgroundColor: cs.surfaceContainerHighest,
               ),
-              child: Column(
-                children: [
-                  Text(
-                    "Your willingness to reflect is itself an act of worship. "
-                    "Every moment you pause and turn your heart toward gratitude, "
-                    "you water the seeds of faith within you.",
-                    style: tt.bodyLarge?.copyWith(height: 1.6),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+            const SizedBox(height: 12),
+            Text("${(_progress * 100).round()}%", style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            const Spacer(flex: 1),
+          ] else ...[
+            const SizedBox(height: 24),
+            Column(
+              children: [
+                Text("your life", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                Text(" + ", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                Text("the Holy Quran,", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Column(
+              children: [
+                Text("Reflections for you${widget.data.displayName != null ? ", ${widget.data.displayName}" : ""}", style: tt.bodyLarge?.copyWith(color: cs.onSurface.withValues(alpha: 0.7)), textAlign: TextAlign.center),
+                const SizedBox(height: 4),
+                Text("Swipe through", style: tt.bodyLarge?.copyWith(color: cs.onSurface.withValues(alpha: 0.7)), textAlign: TextAlign.center),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: MediaQuery.of(context).size.width * 0.85,
+              height: MediaQuery.of(context).size.height * 0.55,
+              child: CardSwiper(
+                controller: _swiperController,
+                cardsCount: _cards.length,
+                numberOfCardsDisplayed: _cards.length > 1 ? 2 : 1,
+                isLoop: true,
+                cardBuilder: (context, index, _, __) {
+                  final card = _cards[index];
+                  final pastelColors = [cs.primaryContainer, cs.secondaryContainer, cs.tertiaryContainer];
+                  final bgColor = pastelColors[index % pastelColors.length];
+                  return Container(
+                    padding: const EdgeInsets.all(28),
                     decoration: BoxDecoration(
-                      color: cs.surface,
-                      borderRadius: BorderRadius.circular(12),
+                      color: bgColor,
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(color: cs.outlineVariant),
                     ),
-                    child: Text(
-                      '"And He gave you all that you asked of Him." — Quran 14:34',
-                      style: tt.bodySmall?.copyWith(fontStyle: FontStyle.italic),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Icon(card.icon, color: AppTheme.starGold, size: 24),
+                            const SizedBox(width: 10),
+                            _MarqueeText(card.title, style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _stripVerses(card.content),
+                                  style: tt.bodyLarge?.copyWith(height: 1.6),
+                                  textAlign: TextAlign.center,
+                                ),
+                                ..._extractPills(card.content),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
           ],
-          const Spacer(flex: 1),
-          if (_revealed)
+          const SizedBox(height: 24),
+          if (!_loading)
             Row(
               children: [
                 Expanded(
@@ -292,6 +482,7 @@ class _AiInsightPageState extends State<AiInsightPage> {
                     backgroundColor: cs.secondaryContainer,
                     depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
                     radius: 16,
+                    height: 56,
                     child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
                   ),
                 ),
@@ -303,17 +494,25 @@ class _AiInsightPageState extends State<AiInsightPage> {
                     backgroundColor: cs.primary,
                     depthColor: cs.primary.withValues(alpha: 0.8),
                     radius: 16,
+                    height: 56,
                     child: Text("Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
             ),
-          if (!_revealed) const SizedBox(height: 56),
+          if (_loading) const SizedBox(height: 56),
           const SizedBox(height: 48),
         ],
       ),
     );
   }
+}
+
+class _JournalCard {
+  final IconData icon;
+  final String title;
+  final String content;
+  const _JournalCard({required this.icon, required this.title, required this.content});
 }
 
 class CelebrationPage extends StatefulWidget {
@@ -457,26 +656,22 @@ class SummaryPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Spacer(flex: 1),
-          Text("Your Spiritual Profile", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+          Text("${data.displayName != null ? "${data.displayName}'s S" : "Your S"}piritual Profile", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 24),
           Expanded(
             child: ListView(
               children: [
                 _summaryTile(cs, tt, Icons.person_rounded, "Name", data.displayName ?? "Guest", cs.primaryContainer),
-                if (data.intentionAnalogy != null) ...[
-                  const SizedBox(height: 8),
-                  _summaryTile(cs, tt, Icons.auto_awesome_rounded, "Your Intention", data.intentionAnswer ?? "", cs.secondaryContainer),
-                ],
                 if (data.journalEntry != null && data.journalEntry!.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   _summaryTile(cs, tt, Icons.auto_stories_rounded, "First Reflection", data.journalEntry!.length > 80 ? '${data.journalEntry!.substring(0, 80)}...' : data.journalEntry!, cs.tertiaryContainer),
                 ],
+                if (data.journalAnalogies.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _summaryTile(cs, tt, Icons.auto_awesome_rounded, "Insights", "${data.journalAnalogies.length} analogies generated", cs.secondaryContainer),
+                ],
                 const SizedBox(height: 8),
                 _summaryTile(cs, tt, Icons.local_fire_department_rounded, "Streak", "Day 1 begins today!", cs.errorContainer.withValues(alpha: 0.3)),
-                if (data.challengeAnalogy != null) ...[
-                  const SizedBox(height: 8),
-                  _summaryTile(cs, tt, Icons.analytics_rounded, "Your Goal", data.challengeAnswer ?? "Grow spiritually", cs.primaryContainer),
-                ],
               ],
             ),
           ),
@@ -698,7 +893,7 @@ class SetupPage extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Spacer(flex: 1),
-          Text("Final setup", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+          Text(data.displayName != null ? "Final setup, ${data.displayName}" : "Final setup", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text("Enable these to get the most out of your journey", style: tt.bodyLarge),
           const SizedBox(height: 32),
@@ -786,11 +981,84 @@ class SetupPage extends StatelessWidget {
             value: enabled,
             onChanged: (v) {
               onTap();
-              // Toggle handled by parent reconstruction
             },
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MarqueeText extends StatefulWidget {
+  final String text;
+  final TextStyle? style;
+  const _MarqueeText(this.text, {this.style});
+
+  @override
+  State<_MarqueeText> createState() => _MarqueeTextState();
+}
+
+class _MarqueeTextState extends State<_MarqueeText>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+  final ScrollController _scrollController = ScrollController();
+  bool _overflowing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(_measure);
+  }
+
+  void _measure(_) {
+    if (!mounted) return;
+    final textPainter = TextPainter(
+      text: TextSpan(text: widget.text, style: widget.style),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+    )..layout();
+    final availableWidth = context.size?.width ?? double.infinity;
+    final overflows = textPainter.width > availableWidth;
+    setState(() => _overflowing = overflows);
+    if (overflows) _startScroll();
+  }
+
+  void _startScroll() {
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    );
+    final textPainter = TextPainter(
+      text: TextSpan(text: widget.text, style: widget.style),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+    )..layout();
+    final availableWidth = context.size?.width ?? double.infinity;
+    final scrollExtent = textPainter.width - availableWidth + 20;
+    _animation = Tween(begin: 0.0, end: -scrollExtent).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.linear),
+    );
+    _controller.addListener(() {
+      _scrollController.jumpTo(_animation.value);
+    });
+    Future.delayed(const Duration(seconds: 1), () => _controller.repeat(reverse: true));
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      controller: _overflowing ? _scrollController : null,
+      physics: const NeverScrollableScrollPhysics(),
+      child: Text(widget.text, style: widget.style),
     );
   }
 }

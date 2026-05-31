@@ -8,7 +8,7 @@ import '../components/onboarding/intro_pages.dart';
 import '../components/onboarding/analogy_pages.dart';
 import '../components/onboarding/final_pages.dart';
 import '../core/app_background.dart';
-import '../components/widgets/duo_progress_bar.dart';
+import '../components/widgets/step_progress_dots.dart';
 import '../theme/app_theme.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -26,7 +26,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   late AnimationController _bounceController;
   late Animation<double> _bounceAnimation;
 
-  static const int _totalPages = 20;
+  static const int _totalPages = 22;
 
   @override
   void initState() {
@@ -204,12 +204,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
             ],
           ),
           const SizedBox(height: 16),
-          DuoProgressBar(
-            progress: (_currentPage + 1) / _totalPages,
-            height: 12,
-            radius: 12,
-            trackColor: cs.surfaceContainerHighest.withOpacity(0.5),
-            fillColor: cs.primary,
+          StepProgressDots(
+            totalSteps: _totalPages,
+            currentStep: _currentPage,
+            height: 8,
+            spacing: 6,
+            animateActiveWidth: true,
           ),
         ],
       ),
@@ -224,88 +224,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       NamePage(data: _data, onNext: _goToNext, onBack: _goBack),
       AgePhonePage(data: _data, onNext: _goToNext, onBack: _goBack),
       BombshellPage(data: _data, onNext: _goToNext, onBack: _goBack),
-      BridgePage(onNext: _goToNext, onBack: _goBack),
+      BombshellPage2(data: _data, onNext: _goToNext, onBack: _goBack),
+      BombshellPage3(data: _data, onNext: _goToNext, onBack: _goBack),
+      BridgePage(data: _data, onNext: _goToNext, onBack: _goBack),
 
-      // PART 2: REFLECTION BANK — AI ANALOGIES (Screens 7-14)
-      // Q1: Intention
-      AnalogyQuestionPage(
-        data: _data,
-        question: "What do you seek most in your journey to Allah?",
-        pills: ["Deeper connection with Allah", "Quran consistency", "Self-discipline", "Gratitude & contentment"],
-        dataField: 'intention',
-        useDuoButtons: true,
-        onNext: _goToNext,
-        onBack: _goBack,
-      ),
-      AnalogyRevealPage(
-        data: _data,
-        question: "What do you seek most in your journey to Allah?",
-        analogyField: 'intention',
-        onNext: _goToNext,
-        onBack: _goBack,
-      ),
-
-      // Q2: Heart
-      AnalogyQuestionPage(
-        data: _data,
-        question: "How does your heart feel right now?",
-        pills: ["Restless / Yearning", "Grateful / At peace", "Overwhelmed / Heavy", "Hopeful / Excited"],
-        dataField: 'heart',
-        useDuoButtons: true,
-        onNext: _goToNext,
-        onBack: _goBack,
-      ),
-      AnalogyRevealPage(
-        data: _data,
-        question: "How does your heart feel right now?",
-        analogyField: 'heart',
-        onNext: _goToNext,
-        onBack: _goBack,
-      ),
-
-      // Q3: Challenge
-      AnalogyQuestionPage(
-        data: _data,
-        question: "What's your biggest spiritual barrier?",
-        pills: ["Finding time", "Staying consistent", "Phone distractions", "Lack of motivation"],
-        dataField: 'challenge',
-        useDuoButtons: true,
-        onNext: _goToNext,
-        onBack: _goBack,
-      ),
-      AnalogyRevealPage(
-        data: _data,
-        question: "What's your biggest spiritual barrier?",
-        analogyField: 'challenge',
-        onNext: _goToNext,
-        onBack: _goBack,
-      ),
-
-      // Q4: Journey
-      AnalogyQuestionPage(
-        data: _data,
-        question: "How would you describe your spiritual walk?",
-        pills: ["I want to grow closer to Allah", "I'm trying my best, but...", "I feel distant but want to return", "I'm hopeful and excited"],
-        dataField: 'journey',
-        useDuoButtons: true,
-        onNext: _goToNext,
-        onBack: _goBack,
-      ),
-      AnalogyRevealPage(
-        data: _data,
-        question: "How would you describe your spiritual walk?",
-        analogyField: 'journey',
-        isLast: true,
-        onNext: _goToNext,
-        onBack: _goBack,
-      ),
-
-      // PART 3: CLIMAX (Screens 15-17)
+      // PART 2: FIRST JOURNAL
       FirstJournalPage(data: _data, onNext: _goToNext, onBack: _goBack),
       AiInsightPage(data: _data, onNext: _goToNext, onBack: _goBack),
       CelebrationPage(data: _data, onNext: _goToNext, onBack: _goBack),
 
-      // PART 4: CONCLUSION (Screens 18-20)
+      // PART 3: JOURNAL ANALOGIES
+      SwiperAnalogyPage(data: _data, onNext: _goToNext, onBack: _goBack),
+
+      // PART 4: CONCLUSION
       SummaryPage(data: _data, onNext: _goToNext, onBack: _goBack),
       CommitmentPage(data: _data, onNext: _goToNext, onBack: _goBack),
       SetupPage(data: _data, onFinish: _finishOnboarding, onBack: _goBack),

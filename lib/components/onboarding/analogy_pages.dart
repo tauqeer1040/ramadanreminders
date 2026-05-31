@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
+import 'package:flutter_card_swiper/flutter_card_swiper.dart';
 import '../../services/analogy_service.dart';
 import 'onboarding_data.dart';
 import '../widgets/duo_button.dart';
@@ -14,6 +15,7 @@ class AnalogyQuestionPage extends StatefulWidget {
   final VoidCallback onNext;
   final VoidCallback onBack;
   final bool useDuoButtons;
+  final bool showName;
 
   const AnalogyQuestionPage({
     required this.data,
@@ -23,6 +25,7 @@ class AnalogyQuestionPage extends StatefulWidget {
     required this.onNext,
     required this.onBack,
     this.useDuoButtons = false,
+    this.showName = false,
     super.key,
   });
 
@@ -81,9 +84,8 @@ class _AnalogyQuestionPageState extends State<AnalogyQuestionPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Spacer(flex: 1),
-          Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
-          const SizedBox(height: 12),
-          Text(widget.question, style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 32),
+          Text(widget.showName && widget.data.displayName != null ? '${widget.question.substring(0, widget.question.length - 1)}, ${widget.data.displayName}?' : widget.question, style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
           if (widget.useDuoButtons) ...[
             const SizedBox(height: 8),
             Text("Pick all that are relevant to you", style: tt.bodyLarge?.copyWith(color: cs.onSurface.withValues(alpha: 0.7))),
@@ -93,7 +95,6 @@ class _AnalogyQuestionPageState extends State<AnalogyQuestionPage> {
             Column(
               children: List.generate(widget.pills.length, (i) {
                 final selected = _selectedIndices.contains(i);
-                final anySelected = _selectedIndices.isNotEmpty;
                 final colors = [
                   const Color(0xFFE85D75), // vivid pink
                   const Color(0xFF8E4BFF), // vivid purple
@@ -103,19 +104,12 @@ class _AnalogyQuestionPageState extends State<AnalogyQuestionPage> {
                 final c = colors[i % colors.length];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: c.withValues(alpha: 0.5),
-                          blurRadius: 14,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: DuoButton(
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: DuoButton(
                       onPressed: () {
                         setState(() {
                           if (_selectedIndices.contains(i)) {
@@ -125,14 +119,14 @@ class _AnalogyQuestionPageState extends State<AnalogyQuestionPage> {
                           }
                         });
                       },
-                      backgroundColor: selected || !anySelected ? c : c.withValues(alpha: 0.4),
-                      depthColor: selected || !anySelected ? Color.alphaBlend(Colors.black.withValues(alpha: 0.35), c) : Color.alphaBlend(Colors.black.withValues(alpha: 0.6), c.withValues(alpha: 0.4)),
+                      backgroundColor: selected ? c : cs.secondaryContainer,
+                      depthColor: selected ? Color.alphaBlend(Colors.black.withValues(alpha: 0.35), c) : cs.secondaryContainer.withValues(alpha: 0.8),
                       radius: 16,
                       child: Text(
                         widget.pills[i],
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.black,
+                          color: selected ? Colors.black : AppTheme.starWhite,
                           fontWeight: selected ? FontWeight.bold : FontWeight.w500,
                         ),
                       ),
@@ -390,6 +384,33 @@ class _AnalogyRevealPageState extends State<AnalogyRevealPage> {
     }
   }
 
+  List<Widget> _extractVerses(String text) {
+    final regex = RegExp(r'— Quran \d+:\d+');
+    final matches = regex.allMatches(text);
+    if (matches.isEmpty) return [];
+    final cs = Theme.of(context).colorScheme;
+    return [
+      const SizedBox(height: 20),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: matches.map((m) {
+          final verse = m.group(0)!.replaceFirst('— ', '');
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
+            ),
+            child: Text(verse, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.primary)),
+          );
+        }).toList(),
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -409,9 +430,12 @@ class _AnalogyRevealPageState extends State<AnalogyRevealPage> {
                   if (_loading) ...[
                     const CircularProgressIndicator(),
                     const SizedBox(height: 24),
-                    Text("Crafting your personal analogy...", style: tt.bodyLarge),
+                    Text("Crafting your personal analogy${widget.data.displayName != null ? ", ${widget.data.displayName}" : ""}...", style: tt.bodyLarge),
                   ] else ...[
-                    Icon(Icons.auto_awesome_rounded, size: 48, color: cs.onSurface),
+                    const SizedBox(height: 32),
+                    Text("Your first analogy", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 24),
+                    Image.asset('assets/photos/mascot/name.png', height: 200, fit: BoxFit.contain),
                     const SizedBox(height: 24),
                     Container(
                       width: double.infinity,
@@ -428,14 +452,6 @@ class _AnalogyRevealPageState extends State<AnalogyRevealPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Row(
-                            children: [
-                              Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 24),
-                              const SizedBox(width: 8),
-                              Text("Your analogy", style: tt.titleMedium?.copyWith(color: cs.onSurface, fontWeight: FontWeight.w700)),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
                           Text(
                             _analogy,
                             style: tt.titleLarge?.copyWith(
@@ -445,6 +461,7 @@ class _AnalogyRevealPageState extends State<AnalogyRevealPage> {
                             textAlign: TextAlign.center,
                             softWrap: true,
                           ),
+                          ..._extractVerses(_analogy),
                         ],
                       ),
                     ),
@@ -485,5 +502,168 @@ class _AnalogyRevealPageState extends State<AnalogyRevealPage> {
         );
       },
     );
+  }
+}
+
+class SwiperAnalogyPage extends StatefulWidget {
+  final OnboardingData data;
+  final VoidCallback onNext;
+  final VoidCallback onBack;
+
+  const SwiperAnalogyPage({required this.data, required this.onNext, required this.onBack, super.key});
+
+  @override
+  State<SwiperAnalogyPage> createState() => _SwiperAnalogyPageState();
+}
+
+class _SwiperAnalogyPageState extends State<SwiperAnalogyPage> {
+  final CardSwiperController _swiperController = CardSwiperController();
+  List<String> _analogies = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAnalogies();
+  }
+
+  Future<void> _loadAnalogies() async {
+    final entry = widget.data.journalEntry;
+    if (entry == null || entry.trim().isEmpty) {
+      setState(() {
+        _analogies = AnalogyService.fallbackJournalAnalogies;
+        _loading = false;
+      });
+      return;
+    }
+    final result = await AnalogyService.generateJournalAnalogies(entry);
+    if (!mounted) return;
+    setState(() {
+      _analogies = result;
+      _loading = false;
+    });
+    widget.data.journalAnalogies = result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            children: [
+              const Spacer(flex: 1),
+              Text("Your Analogies", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text("Swipe through your personalized reflections", style: tt.bodyLarge?.copyWith(color: cs.onSurface.withValues(alpha: 0.7))),
+              const SizedBox(height: 32),
+              if (_loading)
+                const Expanded(child: Center(child: CircularProgressIndicator()))
+              else
+                Expanded(
+                  child: CardSwiper(
+                    controller: _swiperController,
+                    cardsCount: _analogies.length,
+                    numberOfCardsDisplayed: _analogies.length > 1 ? 2 : 1,
+                    isLoop: true,
+                    cardBuilder: (context, index, _, __) {
+                      return Container(
+                        padding: const EdgeInsets.all(28),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [cs.primaryContainer.withValues(alpha: 0.6), cs.secondaryContainer.withValues(alpha: 0.3)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(32),
+                          border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: Center(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.auto_awesome_rounded, color: AppTheme.starGold, size: 28),
+                                const SizedBox(height: 20),
+                                Text(
+                                  _analogies[index],
+                                  style: tt.titleMedium?.copyWith(height: 1.6, fontStyle: FontStyle.italic),
+                                  textAlign: TextAlign.center,
+                                ),
+                                if (index < _analogies.length) ...[
+                                  const SizedBox(height: 20),
+                                  ..._extractVersesStatic(_analogies[index], cs),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 1,
+                    child: DuoButton(
+                      onPressed: widget.onBack,
+                      backgroundColor: cs.secondaryContainer,
+                      depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                      radius: 16,
+                      height: 56,
+                      child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 2,
+                    child: DuoButton(
+                      onPressed: widget.onNext,
+                      backgroundColor: cs.primary,
+                      depthColor: cs.primary.withValues(alpha: 0.8),
+                      radius: 16,
+                      height: 56,
+                      child: Text("Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 48),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static List<Widget> _extractVersesStatic(String text, ColorScheme cs) {
+    final regex = RegExp(r'— Quran \d+:\d+');
+    final matches = regex.allMatches(text);
+    if (matches.isEmpty) return [];
+    return [
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: matches.map((m) {
+          final verse = m.group(0)!.replaceFirst('— ', '');
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
+            ),
+            child: Text(verse, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.primary)),
+          );
+        }).toList(),
+      ),
+    ];
   }
 }
