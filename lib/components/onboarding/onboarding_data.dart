@@ -1,4 +1,5 @@
 class OnboardingData {
+  final DateTime startTime = DateTime.now();
   String? displayName;
   String? catName;
   int? age;
@@ -17,6 +18,7 @@ class OnboardingData {
   String? journalEntry;
   List<String> journalTags = [];
   List<String> journalAnalogies = [];
+  String? lastGeneratedJournalEntry;
 
   String? commitmentLevel;
 

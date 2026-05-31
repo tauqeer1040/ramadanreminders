@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/user_service.dart';
 import '../components/onboarding/onboarding_data.dart';
 import '../components/onboarding/intro_pages.dart';
-import '../components/onboarding/analogy_pages.dart';
 import '../components/onboarding/final_pages.dart';
 import '../core/app_background.dart';
 import '../components/widgets/step_progress_dots.dart';
@@ -26,7 +25,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   late AnimationController _bounceController;
   late Animation<double> _bounceAnimation;
 
-  static const int _totalPages = 22;
+  static const int _totalPages = 14;
 
   @override
   void initState() {
@@ -49,14 +48,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     super.dispose();
   }
 
-  void _addStars() {
-    setState(() => _stars += 10);
+  void _addStars([int amount = 10]) {
+    setState(() => _stars += amount);
     _bounceController.forward(from: 0);
     HapticFeedback.heavyImpact();
   }
 
   void _goToNext() {
-    _addStars();
+    if (_currentPage != 9) {
+      if (_currentPage == 8) {
+        _addStars(50);
+      } else {
+        _addStars(10);
+      }
+    }
     if (_currentPage < _totalPages - 1) {
       _pageController.animateToPage(
         _currentPage + 1,
@@ -67,7 +72,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   }
 
   void _goBack() {
-    setState(() => _stars = (_stars - 10).clamp(0, 990));
+    int deduct = 10;
+    if (_currentPage == 9) {
+      deduct = 50;
+    } else if (_currentPage == 10) {
+      deduct = 0;
+    }
+    setState(() => _stars = (_stars - deduct).clamp(0, 990));
     if (_currentPage > 0) {
       _pageController.animateToPage(
         _currentPage - 1,
@@ -230,15 +241,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
       // PART 2: FIRST JOURNAL
       FirstJournalPage(data: _data, onNext: _goToNext, onBack: _goBack),
-      AiInsightPage(data: _data, onNext: _goToNext, onBack: _goBack),
+      AiInsightPage(data: _data, onNext: _goToNext, onBack: _goBack, onStarsEarned: _addStars),
       CelebrationPage(data: _data, onNext: _goToNext, onBack: _goBack),
 
-      // PART 3: JOURNAL ANALOGIES
-      SwiperAnalogyPage(data: _data, onNext: _goToNext, onBack: _goBack),
-
-      // PART 4: CONCLUSION
+      // PART 3: CONCLUSION
       SummaryPage(data: _data, onNext: _goToNext, onBack: _goBack),
-      CommitmentPage(data: _data, onNext: _goToNext, onBack: _goBack),
+      AppFeedbackPage(data: _data, onNext: _goToNext, onBack: _goBack),
       SetupPage(data: _data, onFinish: _finishOnboarding, onBack: _goBack),
     ];
   }

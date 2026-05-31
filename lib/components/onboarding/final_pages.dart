@@ -1,19 +1,30 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:confetti/confetti.dart';
 import 'package:flutter_card_swiper/flutter_card_swiper.dart';
+import 'package:text_scroll/text_scroll.dart';
+import 'package:scratcher/scratcher.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:flutter_confetti/flutter_confetti.dart' as fc;
+import 'package:in_app_review/in_app_review.dart';
 import '../../services/analogy_service.dart';
 import '../../services/journal_service.dart';
 import 'onboarding_data.dart';
 import '../widgets/duo_button.dart';
 import '../../theme/app_theme.dart';
+import '../widgets/streak_graph.dart';
 
 class FirstJournalPage extends StatefulWidget {
   final OnboardingData data;
   final VoidCallback onNext;
   final VoidCallback onBack;
 
-  const FirstJournalPage({required this.data, required this.onNext, required this.onBack, super.key});
+  const FirstJournalPage({
+    required this.data,
+    required this.onNext,
+    required this.onBack,
+    super.key,
+  });
 
   @override
   State<FirstJournalPage> createState() => _FirstJournalPageState();
@@ -85,7 +96,9 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
     } else {
       _controller.text = '$current\n$suggestion';
     }
-    _controller.selection = TextSelection.fromPosition(TextPosition(offset: _controller.text.length));
+    _controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: _controller.text.length),
+    );
     _onTextChanged(_controller.text);
     final removed = _suggestions.removeAt(index);
     _suggestionsKey.currentState?.removeItem(
@@ -95,19 +108,64 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
     );
   }
 
-  Widget _buildSuggestionItem(String text, Animation<double> animation, int index) {
+  Widget _buildSuggestionItem(
+    String text,
+    Animation<double> animation,
+    int index,
+  ) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return SizeTransition(
       sizeFactor: animation,
       child: Padding(
         padding: const EdgeInsets.only(right: 8),
-        child: ActionChip(
-          label: Text(text, style: tt.labelSmall?.copyWith(color: cs.onSurface)),
-          onPressed: () => _selectSuggestion(index, text),
-          backgroundColor: cs.surfaceContainerHigh,
-          side: BorderSide.none,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Builder(
+          builder: (chipContext) {
+            return ActionChip(
+              label: Text(
+                text,
+                style: tt.labelSmall?.copyWith(color: cs.onSurface),
+              ),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                final box = chipContext.findRenderObject() as RenderBox?;
+                if (box != null && box.hasSize) {
+                  final size = box.size;
+                  final pos = box.localToGlobal(
+                    Offset(size.width / 2, size.height / 2),
+                  );
+                  final screenSize = MediaQuery.of(chipContext).size;
+                  fc.Confetti.launch(
+                    chipContext,
+                    options: fc.ConfettiOptions(
+                      particleCount: 18,
+                      spread: 360,
+                      angle: 90,
+                      x: pos.dx / screenSize.width,
+                      y: pos.dy / screenSize.height,
+                      startVelocity: 7,
+                      gravity: 0,
+                      decay: 0.98,
+                      scalar: 0.6,
+                      ticks: 20,
+                      colors: const [
+                        Colors.amber,
+                        Colors.orange,
+                        Colors.yellow,
+                        Colors.white,
+                      ],
+                    ),
+                  );
+                }
+                _selectSuggestion(index, text);
+              },
+              backgroundColor: cs.surfaceContainerHigh,
+              side: BorderSide.none,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -119,7 +177,8 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
     final tt = Theme.of(context).textTheme;
     final keyboardVisible = _focusNode.hasFocus;
     final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
-    final canContinue = _controller.text.trim().isNotEmpty || widget.data.journalEntry != null;
+    final canContinue =
+        _controller.text.trim().isNotEmpty || widget.data.journalEntry != null;
 
     final textField = TextField(
       controller: _controller,
@@ -132,7 +191,10 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
       style: TextStyle(fontSize: 18, color: cs.onSurface, height: 1.6),
       decoration: InputDecoration(
         hintText: "Write your thoughts, struggles, or gratitude here...",
-        hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 18),
+        hintStyle: TextStyle(
+          color: cs.onSurface.withValues(alpha: 0.6),
+          fontSize: 18,
+        ),
         filled: true,
         fillColor: cs.surfaceContainerLow,
         border: OutlineInputBorder(
@@ -161,37 +223,67 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AnimatedOpacity(
-                  opacity: keyboardInset == 0 ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 32),
-                      Text("Your first reflection", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("Write about your thoughts, hopes, or anything on your heart.", style: tt.bodyLarge),
-                          const SizedBox(height: 8),
-                          Text("This is your private space to reflect on your day.", style: tt.bodyLarge),
-                          const SizedBox(height: 8),
-                          Text("Share your struggles, your victories, and everything in between.", style: tt.bodyLarge),
-                          const SizedBox(height: 8),
-                          Text("Your words matter here.", style: tt.bodyLarge),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Image.asset('assets/photos/mascot/name.png', height: 200, fit: BoxFit.contain),
-                      const SizedBox(height: 16),
-                    ],
-                    ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  clipBehavior: Clip.antiAlias,
+                  child: AnimatedOpacity(
+                    opacity: keyboardInset == 0 ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: keyboardInset == 0
+                        ? Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 32),
+                              Text(
+                                "Your first diary",
+                                style: tt.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+
+                              Text(
+                                "This is your private space. Nobody else will read this.",
+                                style: tt.bodyLarge,
+                              ),
+                              const SizedBox(height: 8),
+
+                              Text(
+                                "It's completely okay to write here — whatever's on your heart.",
+                                style: tt.bodyLarge,
+                              ),
+                              const SizedBox(height: 16),
+                              GestureDetector(
+                                onTap: () => _focusNode.requestFocus(),
+                                child: Image.asset(
+                                  'assets/photos/mascot/name.png',
+                                  height: 200,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                              Text(
+                                "Did you know: journaling regularly reduces stress, sharpens focus, and improves sleep?",
+                                style: tt.bodyLarge?.copyWith(
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const SizedBox(height: 16),
+                            ],
+                          )
+                        : const SizedBox(width: double.infinity, height: 24),
                   ),
-                  textField,
+                ),
+                textField,
                 const SizedBox(height: 12),
-                Text('Prompt ideas', style: tt.labelMedium?.copyWith(color: cs.onSurface.withValues(alpha: 0.7))),
+                Text(
+                  'Prompt ideas',
+                  style: tt.labelMedium?.copyWith(
+                    color: cs.onSurface.withValues(alpha: 0.7),
+                  ),
+                ),
                 const SizedBox(height: 8),
                 SizedBox(
                   height: 36,
@@ -200,49 +292,70 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
                     scrollDirection: Axis.horizontal,
                     controller: _suggestionsScrollController,
                     initialItemCount: _suggestions.length,
-                    itemBuilder: (context, i, animation) => _buildSuggestionItem(_suggestions[i], animation, i),
+                    itemBuilder: (context, i, animation) =>
+                        _buildSuggestionItem(_suggestions[i], animation, i),
                   ),
                 ),
               ],
             ),
           ),
         ),
-        AnimatedOpacity(
-          opacity: keyboardInset == 0 ? 1.0 : 0.0,
-          duration: const Duration(milliseconds: 200),
-          child: IgnorePointer(
-            ignoring: keyboardInset != 0,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
-              child: _saving
-                  ? const Center(child: CircularProgressIndicator())
-                  : Row(
-                      children: [
-                        Expanded(
-                          flex: 1,
-                          child: DuoButton(
-                            onPressed: widget.onBack,
-                            backgroundColor: cs.secondaryContainer,
-                            depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
-                            radius: 16,
-                            child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          clipBehavior: Clip.antiAlias,
+          child: AnimatedOpacity(
+            opacity: keyboardInset == 0 ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 200),
+            child: keyboardInset == 0
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
+                    child: _saving
+                        ? const Center(child: CircularProgressIndicator())
+                        : Row(
+                            children: [
+                              Expanded(
+                                flex: 1,
+                                child: DuoButton(
+                                  onPressed: widget.onBack,
+                                  backgroundColor: cs.secondaryContainer,
+                                  depthColor: cs.secondaryContainer.withValues(
+                                    alpha: 0.8,
+                                  ),
+                                  radius: 16,
+                                  child: Text(
+                                    "Back",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: cs.onSurface,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                flex: 2,
+                                child: DuoButton(
+                                  onPressed: canContinue ? _handleSave : null,
+                                  backgroundColor: cs.primary,
+                                  depthColor: cs.primary.withValues(alpha: 0.8),
+                                  radius: 16,
+                                  dimOnDisabled: true,
+                                  child: Text(
+                                    "Save & Continue",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: cs.onSurface,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          flex: 2,
-                          child: DuoButton(
-                            onPressed: canContinue ? _handleSave : null,
-                            backgroundColor: cs.primary,
-                            depthColor: cs.primary.withValues(alpha: 0.8),
-                            radius: 16,
-                            dimOnDisabled: true,
-                            child: Text("Save & Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
+                  )
+                : const SizedBox.shrink(),
           ),
         ),
       ],
@@ -269,42 +382,180 @@ class AiInsightPage extends StatefulWidget {
   final OnboardingData data;
   final VoidCallback onNext;
   final VoidCallback onBack;
+  final void Function(int amount)? onStarsEarned;
 
-  const AiInsightPage({required this.data, required this.onNext, required this.onBack, super.key});
+  const AiInsightPage({
+    required this.data,
+    required this.onNext,
+    required this.onBack,
+    this.onStarsEarned,
+    super.key,
+  });
 
   @override
   State<AiInsightPage> createState() => _AiInsightPageState();
 }
 
-class _AiInsightPageState extends State<AiInsightPage> {
+class _AiInsightPageState extends State<AiInsightPage>
+    with SingleTickerProviderStateMixin {
   bool _loading = true;
   double _progress = 0;
+  AnimationController? _loadingController;
+  bool _apiDone = false;
+  bool _animationDone = false;
   final CardSwiperController _swiperController = CardSwiperController();
   List<_JournalCard> _cards = [];
+  int _swipedCount = 0;
+  final Set<int> _revealedCards = {};
+  List<String> _scratchCardImages = [];
 
   @override
   void initState() {
     super.initState();
-    _simulateProgress();
-    _generateCards();
-  }
+    _initScratchImages();
 
-  void _simulateProgress() {
-    final steps = [0.1, 0.18, 0.27, 0.35, 0.44, 0.52, 0.61, 0.73, 0.82, 0.91];
-    for (var i = 0; i < steps.length; i++) {
-      Future.delayed(Duration(milliseconds: 300 + i * 400), () {
-        if (mounted && _loading) setState(() => _progress = steps[i]);
+    final entry = widget.data.journalEntry;
+    final cachedAnalogies = widget.data.journalAnalogies;
+    final lastEntry = widget.data.lastGeneratedJournalEntry;
+
+    final hasCache =
+        entry != null &&
+        entry.trim().isNotEmpty &&
+        cachedAnalogies.isNotEmpty &&
+        lastEntry == entry;
+
+    if (hasCache) {
+      _loading = false;
+      _progress = 1.0;
+      _apiDone = true;
+      _animationDone = true;
+      _generateCards(skipLoading: true);
+    } else {
+      _loading = true;
+      _progress = 0.0;
+      _apiDone = false;
+      _animationDone = false;
+
+      _loadingController = AnimationController(
+        vsync: this,
+        duration: const Duration(seconds: 3),
+      );
+
+      _loadingController!.addListener(() {
+        if (mounted) {
+          setState(() {
+            _progress = _loadingController!.value;
+          });
+        }
       });
+
+      _loadingController!.addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          _animationDone = true;
+          _checkLoadingFinished();
+        }
+      });
+
+      _loadingController!.forward();
+      _generateCards(skipLoading: false);
     }
   }
 
-  Future<void> _generateCards() async {
+  void _initScratchImages() {
+    final images = [
+      'assets/photos/images/scratchCards/scratch.jpg',
+      'assets/photos/images/scratchCards/scratch (2).jpg',
+      'assets/photos/images/scratchCards/scratch (3).jpg',
+      'assets/photos/images/scratchCards/scratch (4).jpg',
+      'assets/photos/images/scratchCards/scratch (5).jpg',
+      'assets/photos/images/scratchCards/scratch (6).jpg',
+      'assets/photos/images/scratchCards/scratch (7).jpg',
+      'assets/photos/images/scratchCards/scratch (8).jpg',
+      'assets/photos/images/scratchCards/scratch (9).jpg',
+    ];
+    images.shuffle();
+    _scratchCardImages = images;
+  }
+
+  @override
+  void dispose() {
+    _loadingController?.dispose();
+    super.dispose();
+  }
+
+  void _onSwipe() {
+    if (_swipedCount >= 3) return;
+    _swipedCount++;
+    widget.onStarsEarned?.call(20);
+  }
+
+  void _triggerConfetti() {
+    final colors = [
+      const Color(0xFFD6DF7E), // Lime
+      const Color(0xFFFAA49A), // Pink
+      const Color(0xFF0052FF), // Electric Blue
+      Colors.amber,
+      Colors.orange,
+      Colors.white,
+    ];
+    // Left burst
+    fc.Confetti.launch(
+      context,
+      options: fc.ConfettiOptions(
+        particleCount: 35,
+        angle: 60,
+        spread: 55,
+        x: 0,
+        y: 0.6,
+        colors: colors,
+      ),
+    );
+    // Right burst
+    fc.Confetti.launch(
+      context,
+      options: fc.ConfettiOptions(
+        particleCount: 35,
+        angle: 120,
+        spread: 55,
+        x: 1,
+        y: 0.6,
+        colors: colors,
+      ),
+    );
+  }
+
+  void _checkLoadingFinished() {
+    if (_apiDone && _animationDone) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _generateCards({bool skipLoading = false}) async {
     final entry = widget.data.journalEntry;
     if (entry == null || entry.trim().isEmpty) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _apiDone = true;
+          _animationDone = true;
+        });
+      }
       return;
     }
-    final result = await AnalogyService.generateJournalAnalogies(entry);
+
+    List<String> result;
+    if (skipLoading) {
+      result = widget.data.journalAnalogies;
+    } else {
+      result = await AnalogyService.generateJournalAnalogies(entry);
+      widget.data.journalAnalogies = result;
+      widget.data.lastGeneratedJournalEntry = entry;
+    }
+
     if (!mounted) return;
     setState(() {
       _cards = [
@@ -324,8 +575,12 @@ class _AiInsightPageState extends State<AiInsightPage> {
           content: result.length > 2 ? result[2] : _fallbackStory,
         ),
       ];
-      _loading = false;
+      _apiDone = true;
     });
+
+    if (!skipLoading) {
+      _checkLoadingFinished();
+    }
   }
 
   String get _fallbackSurah =>
@@ -347,14 +602,18 @@ class _AiInsightPageState extends State<AiInsightPage> {
       '— Tirmidhi';
 
   String _stripVerses(String text) {
-    return text.replaceAll(RegExp(r'— (Quran \d+:\d+|Tirmidhi|Bukhari|Muslim|Ahmad)'), '').trim();
+    return text
+        .replaceAll(
+          RegExp(r'— (Quran \d+:\d+|Tirmidhi|Bukhari|Muslim|Ahmad)'),
+          '',
+        )
+        .trim();
   }
 
-  List<Widget> _extractPills(String text) {
+  List<Widget> _extractPills(String text, Color textCol, Color bgCol) {
     final regex = RegExp(r'— (Quran \d+:\d+|Tirmidhi|Bukhari|Muslim|Ahmad)');
     final matches = regex.allMatches(text);
     if (matches.isEmpty) return [];
-    final cs = Theme.of(context).colorScheme;
     return [
       const SizedBox(height: 16),
       Wrap(
@@ -366,15 +625,34 @@ class _AiInsightPageState extends State<AiInsightPage> {
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.15),
+              color: bgCol,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
+              border: Border.all(color: textCol.withOpacity(0.2)),
             ),
-            child: Text(verse, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.primary)),
+            child: Text(
+              verse,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: textCol,
+              ),
+            ),
           );
         }).toList(),
       ),
     ];
+  }
+
+  String _getLoadingText(double progress) {
+    if (progress < 0.25) {
+      return "Reading the Holy Quran for insights...";
+    } else if (progress < 0.50) {
+      return "Searching ancient wisdom and Tafsir...";
+    } else if (progress < 0.75) {
+      return "Connecting divine verses directly to your heart...";
+    } else {
+      return "Almost there! Unveiling customized reflections...";
+    }
   }
 
   @override
@@ -387,9 +665,16 @@ class _AiInsightPageState extends State<AiInsightPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Spacer(flex: 1),
           if (_loading) ...[
-            Text("Crafting your reflections...", style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
+            const Spacer(flex: 1),
+            Text(
+              _getLoadingText(_progress),
+              style: tt.titleLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 32),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
@@ -400,68 +685,199 @@ class _AiInsightPageState extends State<AiInsightPage> {
               ),
             ),
             const SizedBox(height: 12),
-            Text("${(_progress * 100).round()}%", style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              "${(_progress * 100).round()}%",
+              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
             const Spacer(flex: 1),
           ] else ...[
             const SizedBox(height: 24),
-            Column(
-              children: [
-                Text("your life", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                Text(" + ", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                Text("the Holy Quran,", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Column(
-              children: [
-                Text("Reflections for you${widget.data.displayName != null ? ", ${widget.data.displayName}" : ""}", style: tt.bodyLarge?.copyWith(color: cs.onSurface.withValues(alpha: 0.7)), textAlign: TextAlign.center),
-                const SizedBox(height: 4),
-                Text("Swipe through", style: tt.bodyLarge?.copyWith(color: cs.onSurface.withValues(alpha: 0.7)), textAlign: TextAlign.center),
-              ],
+            Text(
+              "Scratch to reveal your first insights!",
+              style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              width: MediaQuery.of(context).size.width * 0.85,
-              height: MediaQuery.of(context).size.height * 0.55,
-              child: CardSwiper(
-                controller: _swiperController,
-                cardsCount: _cards.length,
-                numberOfCardsDisplayed: _cards.length > 1 ? 2 : 1,
-                isLoop: true,
-                cardBuilder: (context, index, _, __) {
-                  final card = _cards[index];
-                  final pastelColors = [cs.primaryContainer, cs.secondaryContainer, cs.tertiaryContainer];
-                  final bgColor = pastelColors[index % pastelColors.length];
-                  return Container(
-                    padding: const EdgeInsets.all(28),
-                    decoration: BoxDecoration(
-                      color: bgColor,
-                      borderRadius: BorderRadius.circular(32),
-                      border: Border.all(color: cs.outlineVariant),
-                    ),
-                    child: Column(
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final cardHeight = constraints.maxHeight;
+                  return SizedBox(
+                    width: MediaQuery.of(context).size.width * 0.85,
+                    height: cardHeight,
+                    child: Stack(
                       children: [
-                        Row(
-                          children: [
-                            Icon(card.icon, color: AppTheme.starGold, size: 24),
-                            const SizedBox(width: 10),
-                            _MarqueeText(card.title, style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  _stripVerses(card.content),
-                                  style: tt.bodyLarge?.copyWith(height: 1.6),
-                                  textAlign: TextAlign.center,
+                        SizedBox(
+                          width: MediaQuery.of(context).size.width * 0.85,
+                          height: cardHeight,
+                          child: CardSwiper(
+                            controller: _swiperController,
+                            cardsCount: _cards.length,
+                            numberOfCardsDisplayed: 3,
+                            onSwipe: (_, __, ___) {
+                              _onSwipe();
+                              HapticFeedback.mediumImpact();
+                              return true;
+                            },
+                            cardBuilder: (context, index, _, __) {
+                              final card = _cards[index];
+
+                              Color cardBg;
+                              Color textColor;
+                              Color iconColor;
+                              Color pillBg;
+                              Color pillText;
+
+                              if (index % 3 == 0) {
+                                cardBg = const Color(0xFFD6DF7E); // Lime
+                                textColor = const Color(
+                                  0xFF13441A,
+                                ); // Dark Green
+                                iconColor = const Color(
+                                  0xFF187B25,
+                                ); // Vibrant Green
+                                pillBg = const Color(
+                                  0xFF187B25,
+                                ).withOpacity(0.12);
+                                pillText = const Color(0xFF13441A);
+                              } else if (index % 3 == 1) {
+                                cardBg = const Color(0xFFFAA49A); // Pink
+                                textColor = const Color(
+                                  0xFF4E1106,
+                                ); // Dark Burgundy
+                                iconColor = const Color(0xFFC4391D); // Red
+                                pillBg = const Color(
+                                  0xFFC4391D,
+                                ).withOpacity(0.12);
+                                pillText = const Color(0xFF4E1106);
+                              } else {
+                                cardBg = const Color(0xFFA0C4FF); // Sky Blue
+                                textColor = const Color(
+                                  0xFF00154F,
+                                ); // Dark Navy
+                                iconColor = const Color(
+                                  0xFF0052FF,
+                                ); // Electric Blue
+                                pillBg = const Color(
+                                  0xFF0052FF,
+                                ).withOpacity(0.12);
+                                pillText = const Color(0xFF00154F);
+                              }
+
+                              final revealed = _revealedCards.contains(index);
+
+                              Widget cardContent = Container(
+                                padding: const EdgeInsets.all(28),
+                                decoration: BoxDecoration(
+                                  color: cardBg,
+                                  borderRadius: BorderRadius.circular(32),
+                                  border: Border.all(
+                                    color: textColor,
+                                    width: 2,
+                                  ),
                                 ),
-                                ..._extractPills(card.content),
-                              ],
-                            ),
+                                child: DefaultTextStyle(
+                                  style: TextStyle(color: textColor),
+                                  child: Column(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            card.icon,
+                                            color: iconColor,
+                                            size: 24,
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: TextScroll(
+                                              card.title,
+                                              velocity: const Velocity(
+                                                pixelsPerSecond: Offset(40, 0),
+                                              ),
+                                              mode: TextScrollMode.endless,
+                                              delayBefore: const Duration(
+                                                milliseconds: 500,
+                                              ),
+                                              style: tt.titleMedium?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                                color: textColor,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 20),
+                                      Expanded(
+                                        child: SingleChildScrollView(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                _stripVerses(card.content),
+                                                style: tt.bodyLarge?.copyWith(
+                                                  height: 1.6,
+                                                  color: textColor,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                              ..._extractPills(
+                                                card.content,
+                                                pillText,
+                                                pillBg,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+
+                              if (!revealed) {
+                                final scratchImage =
+                                    _scratchCardImages.isNotEmpty
+                                    ? _scratchCardImages[index %
+                                          _scratchCardImages.length]
+                                    : 'assets/photos/elements/app_bg2.webp';
+
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(32),
+                                  child: Stack(
+                                    children: [
+                                      Scratcher(
+                                        brushSize: 30,
+                                        threshold: 35,
+                                        image: Image.asset(
+                                          scratchImage,
+                                          fit: BoxFit.cover,
+                                        ),
+                                        onThreshold: () {
+                                          setState(
+                                            () => _revealedCards.add(index),
+                                          );
+                                          HapticFeedback.heavyImpact();
+                                          _triggerConfetti();
+                                        },
+                                        child: cardContent,
+                                      ),
+                                      IgnorePointer(
+                                        child: Shimmer.fromColors(
+                                          baseColor: Colors.transparent,
+                                          highlightColor: Colors.white
+                                              .withOpacity(0.25),
+                                          period: const Duration(
+                                            milliseconds: 2000,
+                                          ),
+                                          child: Container(color: Colors.black),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              return cardContent;
+                            },
                           ),
                         ),
                       ],
@@ -483,7 +899,14 @@ class _AiInsightPageState extends State<AiInsightPage> {
                     depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
                     radius: 16,
                     height: 56,
-                    child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      "Back",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -495,7 +918,14 @@ class _AiInsightPageState extends State<AiInsightPage> {
                     depthColor: cs.primary.withValues(alpha: 0.8),
                     radius: 16,
                     height: 56,
-                    child: Text("Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      "Continue",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -512,7 +942,11 @@ class _JournalCard {
   final IconData icon;
   final String title;
   final String content;
-  const _JournalCard({required this.icon, required this.title, required this.content});
+  const _JournalCard({
+    required this.icon,
+    required this.title,
+    required this.content,
+  });
 }
 
 class CelebrationPage extends StatefulWidget {
@@ -520,27 +954,34 @@ class CelebrationPage extends StatefulWidget {
   final VoidCallback onNext;
   final VoidCallback onBack;
 
-  const CelebrationPage({required this.data, required this.onNext, required this.onBack, super.key});
+  const CelebrationPage({
+    required this.data,
+    required this.onNext,
+    required this.onBack,
+    super.key,
+  });
 
   @override
   State<CelebrationPage> createState() => _CelebrationPageState();
 }
 
 class _CelebrationPageState extends State<CelebrationPage> {
-  late ConfettiController _confettiController;
-
   @override
   void initState() {
     super.initState();
-    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
-    _confettiController.play();
     HapticFeedback.heavyImpact();
-  }
-
-  @override
-  void dispose() {
-    _confettiController.dispose();
-    super.dispose();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cs = Theme.of(context).colorScheme;
+      fc.Confetti.launch(
+        context,
+        options: fc.ConfettiOptions(
+          particleCount: 100,
+          spread: 360,
+          y: 0.4,
+          colors: [cs.primary, cs.tertiary, AppTheme.starGold],
+        ),
+      );
+    });
   }
 
   @override
@@ -548,92 +989,84 @@ class _CelebrationPageState extends State<CelebrationPage> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    return Stack(
-      children: [
-        Align(
-          alignment: Alignment.topCenter,
-          child: ConfettiWidget(
-            confettiController: _confettiController,
-            blastDirectionality: BlastDirectionality.explosive,
-            colors: [cs.primary, cs.tertiary, AppTheme.starGold],
-            numberOfParticles: 30,
-            maxBlastForce: 20,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(flex: 2),
-              Text("Congratulations!", style: tt.displaySmall?.copyWith(fontWeight: FontWeight.bold, color: cs.onSurface)),
-              const SizedBox(height: 12),
-              Text(
-                "You've completed your first reflection.",
-                style: tt.titleLarge,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: cs.primaryContainer,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: cs.primary, width: 3),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text("1", style: tt.displaySmall?.copyWith(fontWeight: FontWeight.bold, color: cs.onSurface)),
-                    Text("Day", style: tt.labelLarge?.copyWith(color: cs.onSurface)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text("Your streak starts today", style: tt.bodyLarge),
-              const SizedBox(height: 32),
-              Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Expanded(
-                    flex: 1,
-                    child: DuoButton(
-                      onPressed: widget.onBack,
-                      backgroundColor: cs.secondaryContainer,
-                      depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
-                      radius: 16,
-                      child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Congratulations!",
+                    style: tt.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: cs.onSurface,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    flex: 2,
-                    child: DuoButton(
-                      onPressed: widget.onNext,
-                      backgroundColor: cs.primary,
-                      depthColor: cs.primary.withValues(alpha: 0.8),
-                      radius: 16,
-                      child: Text("Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(
+                    "You've completed your first reflection.",
+                    style: tt.bodyLarge?.copyWith(
+                      color: cs.onSurface.withValues(alpha: 0.8),
                     ),
+                    textAlign: TextAlign.center,
                   ),
+                  const SizedBox(height: 12),
+                  const StreakGraph(streak: 1, size: 130),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 1,
+                        child: DuoButton(
+                          onPressed: widget.onBack,
+                          backgroundColor: cs.secondaryContainer,
+                          depthColor: cs.secondaryContainer.withValues(
+                            alpha: 0.8,
+                          ),
+                          radius: 16,
+                          child: Text(
+                            "Back",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 2,
+                        child: DuoButton(
+                          onPressed: widget.onNext,
+                          backgroundColor: cs.primary,
+                          depthColor: cs.primary.withValues(alpha: 0.8),
+                          radius: 16,
+                          child: Text(
+                            "Continue",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                 ],
               ),
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: () {
-                  // App store review prompt — integrated at emotional peak
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: const Text("Enjoying the app? Leave a review!"), backgroundColor: cs.primary),
-                  );
-                },
-                icon: Icon(Icons.star_rounded, size: 18, color: cs.onSurface),
-                label: const Text("Leave a review"),
-              ),
-              const SizedBox(height: 48),
-            ],
+            ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -643,116 +1076,306 @@ class SummaryPage extends StatelessWidget {
   final VoidCallback onNext;
   final VoidCallback onBack;
 
-  const SummaryPage({required this.data, required this.onNext, required this.onBack, super.key});
+  const SummaryPage({
+    required this.data,
+    required this.onNext,
+    required this.onBack,
+    super.key,
+  });
+
+  String _formatTimeSpent(DateTime start) {
+    final diff = DateTime.now().difference(start);
+    final mins = (diff.inSeconds / 60.0).ceil();
+    final clampedMins = mins.clamp(1, 9999);
+    return "$clampedMins ${clampedMins == 1 ? 'min' : 'mins'}";
+  }
+
+  String _getSpiritualProfile(OnboardingData data) {
+    final entry = data.journalEntry?.toLowerCase() ?? "";
+    if (entry.isEmpty) return "Seeker of Light";
+
+    if (entry.contains("thank") ||
+        entry.contains("gratitude") ||
+        entry.contains("bless") ||
+        entry.contains("happy") ||
+        entry.contains("smile")) {
+      return "Mindful & Grateful";
+    } else if (entry.contains("struggle") ||
+        entry.contains("sad") ||
+        entry.contains("hard") ||
+        entry.contains("difficult") ||
+        entry.contains("fear")) {
+      return "Patient & Resilient";
+    } else if (entry.contains("learn") ||
+        entry.contains("read") ||
+        entry.contains("quran") ||
+        entry.contains("knowledge") ||
+        entry.contains("understand")) {
+      return "Thoughtful & Wise";
+    } else if (entry.contains("pray") ||
+        entry.contains("dua") ||
+        entry.contains("allah") ||
+        entry.contains("forgive") ||
+        entry.contains("mercy")) {
+      return "Humble & Devout";
+    } else if (entry.contains("help") ||
+        entry.contains("kind") ||
+        entry.contains("family") ||
+        entry.contains("others") ||
+        entry.contains("love")) {
+      return "Kind & Empathetic";
+    }
+
+    if (data.journalTags.isNotEmpty) {
+      final firstTag = data.journalTags.first.toLowerCase();
+      if (firstTag.contains("gratitude")) return "Mindful Optimist";
+      if (firstTag.contains("struggle")) return "Patient Striver";
+      if (firstTag.contains("prayer")) return "Devout Worshipper";
+    }
+
+    return "Sincere Believer";
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Spacer(flex: 1),
-          Text("${data.displayName != null ? "${data.displayName}'s S" : "Your S"}piritual Profile", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 24),
-          Expanded(
-            child: ListView(
-              children: [
-                _summaryTile(cs, tt, Icons.person_rounded, "Name", data.displayName ?? "Guest", cs.primaryContainer),
-                if (data.journalEntry != null && data.journalEntry!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _summaryTile(cs, tt, Icons.auto_stories_rounded, "First Reflection", data.journalEntry!.length > 80 ? '${data.journalEntry!.substring(0, 80)}...' : data.journalEntry!, cs.tertiaryContainer),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.only(
+                top: 24,
+                left: 32,
+                right: 32,
+                bottom: 24,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "${data.displayName != null ? "${data.displayName}'s S" : "Your S"}piritual Profile",
+                        style: tt.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 28,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Only 12% of users reach this stage. With your first deep reflection saved, you've taken a beautiful step closer to the Holy Quran!\nAdd to that, You have achieved a highscore of 200 stars! Masha’Allah 🌟",
+                        style: tt.bodyMedium?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.7),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      _buildSummaryRow(
+                        cs,
+                        "Username",
+                        data.displayName ?? "Guest",
+                      ),
+                      _buildSummaryRow(
+                        cs,
+                        "Kitty's Name",
+                        data.catName ?? "Meowmin",
+                      ),
+                      _buildSummaryRow(
+                        cs,
+                        "Daily Screen Time",
+                        data.phoneHours != null
+                            ? "${data.phoneHours} hrs/day"
+                            : "Not specified",
+                      ),
+                      _buildSummaryRow(
+                        cs,
+                        "Time spent towards Allah today",
+                        _formatTimeSpent(data.startTime),
+                      ),
+                      if (data.intentionAnswer != null)
+                        _buildSummaryRow(
+                          cs,
+                          "Your Intention",
+                          data.intentionAnswer!,
+                        ),
+                      if (data.challengeAnswer != null)
+                        _buildSummaryRow(
+                          cs,
+                          "Spiritual Goal",
+                          data.challengeAnswer!,
+                        ),
+                      _buildSummaryRow(
+                        cs,
+                        "Commitment Level",
+                        data.commitmentLevel ?? "Highly Committed",
+                      ),
+                      _buildSummaryRow(
+                        cs,
+                        "Quran Read",
+                        "3 Personalized Ayahs",
+                      ),
+                      _buildSummaryRow(
+                        cs,
+                        "Spiritual Archetype",
+                        _getSpiritualProfile(data),
+                      ),
+                      _buildSummaryRow(cs, "Status", "QUEST STARTED"),
+                      _buildSummaryRow(cs, "Onboarding Reward", "200 Stars 🌟"),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 1,
+                        child: DuoButton(
+                          onPressed: onBack,
+                          backgroundColor: cs.secondaryContainer,
+                          depthColor: cs.secondaryContainer.withValues(
+                            alpha: 0.8,
+                          ),
+                          radius: 16,
+                          child: Text(
+                            "Back",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 2,
+                        child: DuoButton(
+                          onPressed: onNext,
+                          backgroundColor: cs.primary,
+                          depthColor: cs.primary.withValues(alpha: 0.8),
+                          radius: 16,
+                          child: Text(
+                            "Looks good",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
-                if (data.journalAnalogies.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _summaryTile(cs, tt, Icons.auto_awesome_rounded, "Insights", "${data.journalAnalogies.length} analogies generated", cs.secondaryContainer),
-                ],
-                const SizedBox(height: 8),
-                _summaryTile(cs, tt, Icons.local_fire_department_rounded, "Streak", "Day 1 begins today!", cs.errorContainer.withValues(alpha: 0.3)),
-              ],
+              ),
             ),
           ),
-          Row(
-            children: [
-              Expanded(
-                flex: 1,
-                child: DuoButton(
-                  onPressed: onBack,
-                  backgroundColor: cs.secondaryContainer,
-                  depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
-                  radius: 16,
-                  child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: DuoButton(
-                  onPressed: onNext,
-                  backgroundColor: cs.primary,
-                  depthColor: cs.primary.withValues(alpha: 0.8),
-                  radius: 16,
-                  child: Text("Looks good", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 48),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _summaryTile(ColorScheme cs, TextTheme tt, IconData icon, String label, String value, Color bgColor) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: cs.onSurface, size: 24),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: tt.labelMedium),
-                const SizedBox(height: 4),
-                Text(value, style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
-              ],
+  Widget _buildSummaryRow(ColorScheme cs, String label, String value) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.6),
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+            const SizedBox(width: 24),
+            Expanded(
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
-class CommitmentPage extends StatefulWidget {
+class AppFeedbackPage extends StatefulWidget {
   final OnboardingData data;
   final VoidCallback onNext;
   final VoidCallback onBack;
 
-  const CommitmentPage({required this.data, required this.onNext, required this.onBack, super.key});
+  const AppFeedbackPage({
+    required this.data,
+    required this.onNext,
+    required this.onBack,
+    super.key,
+  });
 
   @override
-  State<CommitmentPage> createState() => _CommitmentPageState();
+  State<AppFeedbackPage> createState() => _AppFeedbackPageState();
 }
 
-class _CommitmentPageState extends State<CommitmentPage> {
-  int? _selected;
+class _AppFeedbackPageState extends State<AppFeedbackPage> {
+  bool _showReviewScreen = false;
+  bool _continueEnabled = false;
+  int _countdown = 3;
+  Timer? _countdownTimer;
+  final InAppReview _inAppReview = InAppReview.instance;
 
-  final _options = [
-    ("Extremely committed", "I'm ready to grow closer to Allah"),
-    ("Very committed", "I'll give it my best effort"),
-    ("Somewhat committed", "I'm going to try"),
-    ("Just exploring", "Let me see what this is about"),
-  ];
+  String _formatTimeSpent(DateTime start) {
+    final diff = DateTime.now().difference(start);
+    final mins = (diff.inSeconds / 60.0).ceil();
+    final clampedMins = mins.clamp(1, 9999);
+    return "$clampedMins ${clampedMins == 1 ? 'minute' : 'minutes'}";
+  }
+
+  void _startCountdown() {
+    _countdown = 3;
+    _continueEnabled = false;
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() {
+        _countdown--;
+        if (_countdown <= 0) {
+          _continueEnabled = true;
+          t.cancel();
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _showReviewAndNavigate() async {
+    setState(() => _showReviewScreen = true);
+    _startCountdown();
+    HapticFeedback.mediumImpact();
+    if (await _inAppReview.isAvailable()) {
+      await _inAppReview.requestReview();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -761,116 +1384,175 @@ class _CommitmentPageState extends State<CommitmentPage> {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Spacer(flex: 1),
-          Icon(Icons.verified_rounded, size: 48, color: cs.onSurface),
-          const SizedBox(height: 16),
-          Text("How committed are you?", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text("Your honesty helps us support you better", style: tt.bodyLarge),
-          const SizedBox(height: 32),
-          ...List.generate(_options.length, (i) {
-            final selected = _selected == i;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    setState(() => _selected = i);
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: selected ? cs.primaryContainer : cs.surfaceContainer,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: selected ? cs.primary : cs.outlineVariant, width: selected ? 2 : 1),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          selected ? Icons.radio_button_checked : Icons.radio_button_off,
-                          color: selected ? cs.onSurface : cs.onSurface.withValues(alpha: 0.7),
-                          size: 24,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(_options[i].$1, style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
-                              Text(_options[i].$2, style: tt.bodySmall),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cs.secondaryContainer.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.people_rounded, color: cs.onSurface, size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    "Join 10,000+ Muslims reflecting daily",
-                    style: tt.bodyMedium?.copyWith(color: cs.onSurface),
-                  ),
-                ),
-              ],
-            ),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 350),
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.08, 0),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
           ),
-          const Spacer(flex: 1),
-          Row(
-            children: [
-              Expanded(
-                flex: 1,
-                child: DuoButton(
-                  onPressed: widget.onBack,
-                  backgroundColor: cs.secondaryContainer,
-                  depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
-                  radius: 16,
-                  child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: DuoButton(
-                  onPressed: _selected != null
-                      ? () {
-                          widget.data.commitmentLevel = _options[_selected!].$1;
-                          widget.onNext();
-                        }
-                      : null,
-                  backgroundColor: cs.primary,
-                  depthColor: cs.primary.withValues(alpha: 0.8),
-                  radius: 16,
-                  dimOnDisabled: true,
-                  child: Text("Continue", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 48),
-        ],
+        ),
+        child: _showReviewScreen
+            ? _buildReviewScreen(cs, tt)
+            : _buildFeedbackScreen(cs, tt),
       ),
+    );
+  }
+
+  Widget _buildFeedbackScreen(ColorScheme cs, TextTheme tt) {
+    final timeStr = _formatTimeSpent(widget.data.startTime);
+    return Column(
+      key: const ValueKey('feedback_screen'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Spacer(flex: 1),
+        Text(
+          "That's the app!",
+          style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          "I hope this was the most fun $timeStr you've spent learning the Quran in days!",
+          style: tt.bodyLarge?.copyWith(
+            color: cs.onSurface.withOpacity(0.55),
+            height: 1.5,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 24),
+        Text(
+          "So... what do you think?",
+          style: tt.titleLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: cs.onSurface.withOpacity(0.8),
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 32),
+        DuoButton(
+          onPressed: _showReviewAndNavigate,
+          backgroundColor: cs.primary,
+          depthColor: cs.primary.withOpacity(0.8),
+          radius: 16,
+          height: 60,
+          child: Text(
+            "Yes, I love it! 😍",
+            style: TextStyle(
+              fontSize: 18,
+              color: cs.onSurface,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        DuoButton(
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            widget.onNext();
+          },
+          backgroundColor: cs.secondaryContainer,
+          depthColor: cs.secondaryContainer.withOpacity(0.8),
+          radius: 16,
+          height: 60,
+          child: Text(
+            "I'd like to explore more",
+            style: TextStyle(
+              fontSize: 18,
+              color: cs.onSurface,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const Spacer(flex: 1),
+        Row(
+          children: [
+            Expanded(
+              child: DuoButton(
+                onPressed: widget.onBack,
+                backgroundColor: cs.secondaryContainer,
+                depthColor: cs.secondaryContainer.withOpacity(0.8),
+                radius: 16,
+                child: Text(
+                  "Back",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 48),
+      ],
+    );
+  }
+
+  Widget _buildReviewScreen(ColorScheme cs, TextTheme tt) {
+    return Column(
+      key: const ValueKey('review_screen'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Spacer(),
+        Text(
+          "Take a moment to rate us",
+          style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const Spacer(),
+        DuoButton(
+          onPressed: () async {
+            HapticFeedback.heavyImpact();
+            await _inAppReview.openStoreListing();
+          },
+          backgroundColor: cs.primary,
+          depthColor: cs.primary.withOpacity(0.8),
+          radius: 16,
+          height: 60,
+          child: Text(
+            "Rate on Google Play",
+            style: TextStyle(
+              fontSize: 18,
+              color: cs.onSurface,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const Spacer(),
+        DuoButton(
+          onPressed: _continueEnabled
+              ? () {
+                  HapticFeedback.lightImpact();
+                  widget.onNext();
+                }
+              : null,
+          backgroundColor: _continueEnabled
+              ? cs.secondaryContainer
+              : cs.secondaryContainer.withOpacity(0.4),
+          depthColor: _continueEnabled
+              ? cs.secondaryContainer.withOpacity(0.8)
+              : cs.secondaryContainer.withOpacity(0.3),
+          radius: 16,
+          height: 56,
+          child: Text(
+            _continueEnabled ? "Continue" : "Continue in $_countdown...",
+            style: TextStyle(
+              fontSize: 16,
+              color: _continueEnabled
+                  ? cs.onSurface
+                  : cs.onSurface.withOpacity(0.4),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(height: 48),
+      ],
     );
   }
 }
@@ -880,7 +1562,12 @@ class SetupPage extends StatelessWidget {
   final VoidCallback onFinish;
   final VoidCallback onBack;
 
-  const SetupPage({required this.data, required this.onFinish, required this.onBack, super.key});
+  const SetupPage({
+    required this.data,
+    required this.onFinish,
+    required this.onBack,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -893,12 +1580,21 @@ class SetupPage extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Spacer(flex: 1),
-          Text(data.displayName != null ? "Final setup, ${data.displayName}" : "Final setup", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            data.displayName != null
+                ? "Final setup, ${data.displayName}"
+                : "Final setup",
+            style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
-          Text("Enable these to get the most out of your journey", style: tt.bodyLarge),
+          Text(
+            "Enable these to get the most out of your journey",
+            style: tt.bodyLarge,
+          ),
           const SizedBox(height: 32),
           _permissionTile(
-            cs, tt,
+            cs,
+            tt,
             Icons.notifications_active_rounded,
             "Prayer Reminders",
             "Get notified for suhoor, iftar, and prayer times",
@@ -909,7 +1605,8 @@ class SetupPage extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _permissionTile(
-            cs, tt,
+            cs,
+            tt,
             Icons.location_on_rounded,
             "Prayer Times",
             "Automatic prayer times based on your location",
@@ -928,7 +1625,14 @@ class SetupPage extends StatelessWidget {
                   backgroundColor: cs.secondaryContainer,
                   depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
                   radius: 16,
-                  child: Text("Back", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    "Back",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -939,7 +1643,14 @@ class SetupPage extends StatelessWidget {
                   backgroundColor: cs.primary,
                   depthColor: cs.primary.withValues(alpha: 0.8),
                   radius: 16,
-                  child: Text("Start Reflecting", style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    "Start Reflecting",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -950,7 +1661,15 @@ class SetupPage extends StatelessWidget {
     );
   }
 
-  Widget _permissionTile(ColorScheme cs, TextTheme tt, IconData icon, String title, String subtitle, bool enabled, VoidCallback onTap) {
+  Widget _permissionTile(
+    ColorScheme cs,
+    TextTheme tt,
+    IconData icon,
+    String title,
+    String subtitle,
+    bool enabled,
+    VoidCallback onTap,
+  ) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -964,7 +1683,10 @@ class SetupPage extends StatelessWidget {
           Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(14)),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(14),
+            ),
             child: Icon(icon, color: cs.onSurface, size: 24),
           ),
           const SizedBox(width: 16),
@@ -972,7 +1694,10 @@ class SetupPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
+                Text(
+                  title,
+                  style: tt.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                ),
                 Text(subtitle, style: tt.bodySmall),
               ],
             ),
@@ -985,80 +1710,6 @@ class SetupPage extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _MarqueeText extends StatefulWidget {
-  final String text;
-  final TextStyle? style;
-  const _MarqueeText(this.text, {this.style});
-
-  @override
-  State<_MarqueeText> createState() => _MarqueeTextState();
-}
-
-class _MarqueeTextState extends State<_MarqueeText>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-  final ScrollController _scrollController = ScrollController();
-  bool _overflowing = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(_measure);
-  }
-
-  void _measure(_) {
-    if (!mounted) return;
-    final textPainter = TextPainter(
-      text: TextSpan(text: widget.text, style: widget.style),
-      maxLines: 1,
-      textDirection: Directionality.of(context),
-    )..layout();
-    final availableWidth = context.size?.width ?? double.infinity;
-    final overflows = textPainter.width > availableWidth;
-    setState(() => _overflowing = overflows);
-    if (overflows) _startScroll();
-  }
-
-  void _startScroll() {
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    );
-    final textPainter = TextPainter(
-      text: TextSpan(text: widget.text, style: widget.style),
-      maxLines: 1,
-      textDirection: Directionality.of(context),
-    )..layout();
-    final availableWidth = context.size?.width ?? double.infinity;
-    final scrollExtent = textPainter.width - availableWidth + 20;
-    _animation = Tween(begin: 0.0, end: -scrollExtent).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.linear),
-    );
-    _controller.addListener(() {
-      _scrollController.jumpTo(_animation.value);
-    });
-    Future.delayed(const Duration(seconds: 1), () => _controller.repeat(reverse: true));
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      controller: _overflowing ? _scrollController : null,
-      physics: const NeverScrollableScrollPhysics(),
-      child: Text(widget.text, style: widget.style),
     );
   }
 }

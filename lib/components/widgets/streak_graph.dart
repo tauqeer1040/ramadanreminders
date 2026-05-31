@@ -63,7 +63,7 @@ class _StreakGraphState extends State<StreakGraph> with SingleTickerProviderStat
         SizedBox(
           height: widget.size * 0.8,
           child: Lottie.asset(
-            'assets/logo/Streak Fire.json',
+            'assets/photos/elements/Streak Fire.json',
             fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => const Icon(
               Icons.local_fire_department_rounded,
@@ -266,7 +266,7 @@ class _StreakGraphState extends State<StreakGraph> with SingleTickerProviderStat
                       ))
                 : (isCompleted || dayNum == 1)
                     ? Lottie.asset(
-                        'assets/logo/Streak Fire.json',
+                        'assets/photos/elements/Streak Fire.json',
                         width: 44,
                         height: 44,
                         fit: BoxFit.contain,

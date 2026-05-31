@@ -2,7 +2,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/widgets.dart';
 
 class BackgroundMusicService with WidgetsBindingObserver {
-  static final BackgroundMusicService _instance = BackgroundMusicService._internal();
+  static final BackgroundMusicService _instance =
+      BackgroundMusicService._internal();
   factory BackgroundMusicService() => _instance;
   BackgroundMusicService._internal();
 
@@ -11,10 +12,10 @@ class BackgroundMusicService with WidgetsBindingObserver {
 
   Future<void> init() async {
     if (_isInitialized) return;
-    
+
     _player.setReleaseMode(ReleaseMode.loop);
     _player.setVolume(0.5); // Start with moderate volume
-    
+
     WidgetsBinding.instance.addObserver(this);
     _isInitialized = true;
   }
@@ -42,7 +43,9 @@ class BackgroundMusicService with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive || state == AppLifecycleState.detached) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
       pause();
     } else if (state == AppLifecycleState.resumed) {
       resume();

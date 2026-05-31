@@ -331,6 +331,8 @@ class NamePage extends StatefulWidget {
 class _NamePageState extends State<NamePage> {
   final _userController = TextEditingController();
   final _catController = TextEditingController();
+  final _userFocusNode = FocusNode();
+  final _catFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -347,6 +349,8 @@ class _NamePageState extends State<NamePage> {
   void dispose() {
     _userController.dispose();
     _catController.dispose();
+    _userFocusNode.dispose();
+    _catFocusNode.dispose();
     super.dispose();
   }
 
@@ -382,12 +386,16 @@ class _NamePageState extends State<NamePage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Give yourself and your cat a name",
+                  "Give yourself and me a name",
                   style: tt.bodyLarge?.copyWith(color: cs.onSurface),
                 ),
                 const SizedBox(height: 32),
                 TextField(
                   controller: _userController,
+                  focusNode: _userFocusNode,
+                  autofocus: true,
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: (_) => _catFocusNode.requestFocus(),
                   maxLength: 24,
                   maxLengthEnforcement:
                       MaxLengthEnforcement.truncateAfterCompositionEnds,
@@ -420,6 +428,9 @@ class _NamePageState extends State<NamePage> {
                 const SizedBox(height: 8),
                 TextField(
                   controller: _catController,
+                  focusNode: _catFocusNode,
+                  autofocus: false,
+                  textInputAction: TextInputAction.done,
                   maxLength: 24,
                   maxLengthEnforcement:
                       MaxLengthEnforcement.truncateAfterCompositionEnds,
@@ -538,13 +549,30 @@ class AgePhonePage extends StatefulWidget {
 class _AgePhonePageState extends State<AgePhonePage> {
   int _age = 25;
   double _phoneHours = 4;
+  int _stepIndex = 0; // 0: Ask ready, 1: Million dollars, 2: Wake up, 3: Conclusion, 4: Phone hours
+  bool _chosenHard = false;
 
   @override
   void initState() {
     super.initState();
     if (widget.data.age != null) _age = widget.data.age!;
-    if (widget.data.phoneHours != null)
+    if (widget.data.phoneHours != null) {
       _phoneHours = widget.data.phoneHours!.toDouble();
+    }
+  }
+
+  void _handleBack() {
+    if (_stepIndex == 0) {
+      widget.onBack();
+    } else if (_stepIndex == 4) {
+      if (_chosenHard) {
+        setState(() => _stepIndex = 3);
+      } else {
+        setState(() => _stepIndex = 0);
+      }
+    } else {
+      setState(() => _stepIndex--);
+    }
   }
 
   @override
@@ -554,124 +582,438 @@ class _AgePhonePageState extends State<AgePhonePage> {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Spacer(flex: 1),
-          // Text("A little about you${widget.data.displayName != null ? ", ${widget.data.displayName}" : ""}", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: cs.onSurface)),
-          // const SizedBox(height: 8),
-          // Text("This helps us personalize your journey", style: tt.bodyLarge?.copyWith(color: cs.onSurface)),
-          // const SizedBox(height: 40),
-          // TODO: age question — uncomment when ready
-          // Text("How old are you?", style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: cs.onSurface)),
-          // const SizedBox(height: 12),
-          // SizedBox(
-          //   height: 120,
-          //   child: ListWheelScrollView.useDelegate(
-          //     itemExtent: 40,
-          //     diameterRatio: 1.5,
-          //     onSelectedItemChanged: (i) => setState(() => _age = i + 10),
-          //     childDelegate: ListWheelChildBuilderDelegate(
-          //       builder: (ctx, i) {
-          //         final val = i + 10;
-          //         final isSelected = val == _age;
-          //         return Center(
-          //           child: Text(
-          //             "$val",
-          //             style: tt.headlineMedium?.copyWith(
-          //               fontWeight: isSelected ? FontWeight.bold : FontWeight.w300,
-          //               color: isSelected ? cs.onSurface : cs.onSurface.withValues(alpha: 0.5),
-          //             ),
-          //           ),
-          //         );
-          //       },
-          //       childCount: 70,
-          //     ),
-          //   ),
-          // ),
-          // const SizedBox(height: 32),
-          Text(
-            "How many hours do you spend on your phone daily${widget.data.displayName != null ? " ${widget.data.displayName}" : ""}?",
-            style: tt.titleLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: cs.onSurface,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "${_phoneHours.toInt()} hrs/day",
-            style: tt.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: cs.onSurface,
-            ),
-          ),
-          Slider(
-            value: _phoneHours,
-            min: 0,
-            max: 16,
-            divisions: 16,
-            onChanged: (v) => setState(() => _phoneHours = v),
-          ),
-          const Spacer(flex: 1),
-          Row(
-            children: [
-              Expanded(
-                flex: 1,
-                child: DuoButton(
-                  onPressed: widget.onBack,
-                  backgroundColor: cs.secondaryContainer,
-                  depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
-                  radius: 16,
-                  height: 56,
-                  child: Text(
-                    "Back",
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: DuoButton(
-                  onPressed: () {
-                    widget.data.age = _age;
-                    widget.data.phoneHours = _phoneHours.toInt();
-                    widget.onNext();
-                  },
-                  backgroundColor: cs.primary,
-                  depthColor: cs.primary.withValues(alpha: 0.8),
-                  radius: 16,
-                  height: 56,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        "Continue",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 20,
-                        color: cs.onSurface,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 48),
-        ],
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _buildCurrentStep(cs, tt),
       ),
+    );
+  }
+
+  Widget _buildCurrentStep(ColorScheme cs, TextTheme tt) {
+    switch (_stepIndex) {
+      case 0:
+        return _buildReadyStep(cs, tt);
+      case 1:
+        return _buildMillionDollarsStep(cs, tt);
+      case 2:
+        return _buildWakeUpStep(cs, tt);
+      case 3:
+        return _buildConclusionStep(cs, tt);
+      case 4:
+        return _buildPhoneHoursStep(cs, tt);
+      default:
+        return _buildReadyStep(cs, tt);
+    }
+  }
+
+  Widget _buildReadyStep(ColorScheme cs, TextTheme tt) {
+    final name = widget.data.displayName;
+    return Column(
+      key: const ValueKey('ready_step'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Spacer(flex: 1),
+        Text(
+          "Are you ready for a deep reflection${name != null ? ", $name" : ""}?",
+          style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          "A moment of honest clarity can sometimes bring the most beautiful insights. Are you ready for a hard question${name != null ? ", $name" : ""}?",
+          style: tt.bodyLarge?.copyWith(
+            color: cs.onSurface.withValues(alpha: 0.8),
+            height: 1.5,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 32),
+        DuoButton(
+          onPressed: () {
+            HapticFeedback.mediumImpact();
+            setState(() {
+              _chosenHard = true;
+              _stepIndex = 1;
+            });
+          },
+          backgroundColor: cs.primary,
+          depthColor: cs.primary.withValues(alpha: 0.8),
+          radius: 16,
+          height: 56,
+          child: Text(
+            "Yeah, hit me!",
+            style: TextStyle(
+              fontSize: 16,
+              color: cs.onSurface,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        DuoButton(
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            setState(() {
+              _chosenHard = false;
+              _stepIndex = 4;
+            });
+          },
+          backgroundColor: cs.secondaryContainer,
+          depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+          radius: 16,
+          height: 56,
+          child: Text(
+            "No hard questions today, please",
+            style: TextStyle(
+              fontSize: 16,
+              color: cs.onSurface,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const Spacer(flex: 1),
+        Row(
+          children: [
+            Expanded(
+              child: DuoButton(
+                onPressed: _handleBack,
+                backgroundColor: cs.secondaryContainer,
+                depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                radius: 16,
+                child: Text(
+                  "Back",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 48),
+      ],
+    );
+  }
+
+  Widget _buildMillionDollarsStep(ColorScheme cs, TextTheme tt) {
+    return Column(
+      key: const ValueKey('million_dollars_step'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Spacer(flex: 1),
+        Image.asset(
+          'assets/photos/elements/money-bag_1f4b0.webp',
+          height: 120,
+          fit: BoxFit.contain,
+        ),
+        const SizedBox(height: 24),
+        Text(
+          "First, take a gentle breath and imagine...",
+          style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          "If someone offered you 10 million dollars right now, would you take it?",
+          style: tt.bodyLarge?.copyWith(
+            color: cs.onSurface.withValues(alpha: 0.8),
+            height: 1.6,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const Spacer(flex: 1),
+        Row(
+          children: [
+            Expanded(
+              flex: 1,
+              child: DuoButton(
+                onPressed: _handleBack,
+                backgroundColor: cs.secondaryContainer,
+                depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                radius: 16,
+                child: Text(
+                  "Back",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 2,
+              child: DuoButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  setState(() => _stepIndex = 2);
+                },
+                backgroundColor: cs.primary,
+                depthColor: cs.primary.withValues(alpha: 0.8),
+                radius: 16,
+                child: Text(
+                  "Yeah!",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 48),
+      ],
+    );
+  }
+
+  Widget _buildWakeUpStep(ColorScheme cs, TextTheme tt) {
+    return Column(
+      key: const ValueKey('wakeup_step'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Spacer(flex: 1),
+        Image.asset(
+          'assets/photos/elements/hourglass-done_231b.webp',
+          height: 120,
+          fit: BoxFit.contain,
+        ),
+        const SizedBox(height: 24),
+        Text(
+          "There's one catch though...",
+          style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          "You don't get to wake up tomorrow morning. Your time here ends tonight. The 10 million is yours — but so is that.\n\nWould you still take it?",
+          style: tt.bodyLarge?.copyWith(
+            color: cs.onSurface.withValues(alpha: 0.8),
+            height: 1.6,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const Spacer(flex: 1),
+        Row(
+          children: [
+            Expanded(
+              flex: 1,
+              child: DuoButton(
+                onPressed: _handleBack,
+                backgroundColor: cs.secondaryContainer,
+                depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                radius: 16,
+                child: Text(
+                  "Back",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 2,
+              child: DuoButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  setState(() => _stepIndex = 3);
+                },
+                backgroundColor: cs.primary,
+                depthColor: cs.primary.withValues(alpha: 0.8),
+                radius: 16,
+                child: Text(
+                  "Nah!",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 48),
+      ],
+    );
+  }
+
+  Widget _buildConclusionStep(ColorScheme cs, TextTheme tt) {
+    return Column(
+      key: const ValueKey('conclusion_step'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Spacer(flex: 1),
+        Text(
+          "Exactly!",
+          style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          "That means waking up tomorrow is worth more than 10 million dollars for you, ${widget.data.displayName != null ? widget.data.displayName! : 'friend'}.\n\nWake up with a smile on your face every single day, do good, wish well towards others, and be kind to all — because you are worth a million bucks.\n\nAnd the time you spend towards Allah? He'll reward you in the Aakhirah with endless riches that make 10 million look like nothing.",
+          style: tt.bodyLarge?.copyWith(
+            color: cs.onSurface.withValues(alpha: 0.8),
+            height: 1.6,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const Spacer(flex: 1),
+        Row(
+          children: [
+            Expanded(
+              flex: 1,
+              child: DuoButton(
+                onPressed: _handleBack,
+                backgroundColor: cs.secondaryContainer,
+                depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                radius: 16,
+                child: Text(
+                  "Back",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 2,
+              child: DuoButton(
+                onPressed: () {
+                  HapticFeedback.mediumImpact();
+                  setState(() => _stepIndex = 4);
+                },
+                backgroundColor: cs.primary,
+                depthColor: cs.primary.withValues(alpha: 0.8),
+                radius: 16,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "Continue",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 20,
+                      color: cs.onSurface,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 48),
+      ],
+    );
+  }
+
+  Widget _buildPhoneHoursStep(ColorScheme cs, TextTheme tt) {
+    return Column(
+      key: const ValueKey('phone_hours_step'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Spacer(flex: 1),
+        Text(
+          "How many hours do you spend on your phone daily${widget.data.displayName != null ? " ${widget.data.displayName}" : ""}?",
+          style: tt.titleLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: cs.onSurface,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          "${_phoneHours.toInt()} hrs/day",
+          style: tt.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Slider(
+          value: _phoneHours,
+          min: 0,
+          max: 16,
+          divisions: 16,
+          onChanged: (v) => setState(() => _phoneHours = v),
+        ),
+        const Spacer(flex: 1),
+        Row(
+          children: [
+            Expanded(
+              flex: 1,
+              child: DuoButton(
+                onPressed: _handleBack,
+                backgroundColor: cs.secondaryContainer,
+                depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
+                radius: 16,
+                height: 56,
+                child: Text(
+                  "Back",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 2,
+              child: DuoButton(
+                onPressed: () {
+                  HapticFeedback.mediumImpact();
+                  widget.data.age = _age;
+                  widget.data.phoneHours = _phoneHours.toInt();
+                  widget.onNext();
+                },
+                backgroundColor: cs.primary,
+                depthColor: cs.primary.withValues(alpha: 0.8),
+                radius: 16,
+                height: 56,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "Continue",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 20,
+                      color: cs.onSurface,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 48),
+      ],
     );
   }
 }
