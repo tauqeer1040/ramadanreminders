@@ -8,6 +8,8 @@ import '../components/onboarding/intro_pages.dart';
 import '../components/onboarding/final_pages.dart';
 import '../core/app_background.dart';
 import '../components/widgets/step_progress_dots.dart';
+import 'google_signin_page.dart';
+import '../components/onboarding/paywall_pages.dart';
 import '../theme/app_theme.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -25,7 +27,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   late AnimationController _bounceController;
   late Animation<double> _bounceAnimation;
 
-  static const int _totalPages = 14;
+  static const int _totalPages = 18;
 
   @override
   void initState() {
@@ -91,6 +93,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   Future<void> _finishOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_complete', true);
+
+    await prefs.setString('onboarding_displayName', _data.displayName ?? '');
+    if (_data.age != null) await prefs.setInt('onboarding_age', _data.age!);
+    if (_data.phoneHours != null) {
+      await prefs.setInt('onboarding_phoneHours', _data.phoneHours!);
+    }
+    if (_data.catName != null) {
+      await prefs.setString('onboarding_catName', _data.catName!);
+    }
+    if (_data.intentionAnswer != null) {
+      await prefs.setString('onboarding_intention', _data.intentionAnswer!);
+    }
+    if (_data.heartAnswer != null) {
+      await prefs.setString('onboarding_heart', _data.heartAnswer!);
+    }
+    if (_data.challengeAnswer != null) {
+      await prefs.setString('onboarding_challenge', _data.challengeAnswer!);
+    }
+    if (_data.journeyAnswer != null) {
+      await prefs.setString('onboarding_journey', _data.journeyAnswer!);
+    }
+    if (_data.commitmentLevel != null) {
+      await prefs.setString('onboarding_commitment', _data.commitmentLevel!);
+    }
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -247,7 +273,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       // PART 3: CONCLUSION
       SummaryPage(data: _data, onNext: _goToNext, onBack: _goBack),
       AppFeedbackPage(data: _data, onNext: _goToNext, onBack: _goBack),
-      SetupPage(data: _data, onFinish: _finishOnboarding, onBack: _goBack),
+       SetupPage(data: _data, onNext: _goToNext, onBack: _goBack, onStarsEarned: _addStars),
+       GoogleSignInPage(onFinish: _goToNext, onBack: _goBack),
+       PaywallPage1(data: _data, onNext: _goToNext, onBack: _goBack),
+       PaywallPage2(data: _data, onNext: _goToNext, onBack: _goBack),
+       PaywallPage3(data: _data, onNext: _finishOnboarding),
     ];
   }
 }

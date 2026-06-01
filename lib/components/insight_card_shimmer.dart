@@ -14,6 +14,8 @@ class InsightCardShimmer extends StatelessWidget {
     return Skeletonizer(
       enabled: true,
       child: ReflectCard(
+        backgroundColor: cs.surfaceContainerHigh,
+        borderColor: cs.primary.withValues(alpha: 0.4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

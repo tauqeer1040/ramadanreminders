@@ -1,4 +1,4 @@
-package com.example.ramadan_reflections
+package com.taucity.meowmin
 
 import io.flutter.embedding.android.FlutterActivity
 

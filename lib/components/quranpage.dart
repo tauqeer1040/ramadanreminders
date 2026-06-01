@@ -6,14 +6,18 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_card_swiper/flutter_card_swiper.dart';
-
-
+import 'package:text_scroll/text_scroll.dart';
+import 'package:scratcher/scratcher.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:flutter_confetti/flutter_confetti.dart';
 
 import '../services/insight_service.dart';
+import '../services/favorites_service.dart';
 import '../core/app_background.dart';
 import '../core/constants.dart';
 import './reflect_card.dart';
 import './insight_card_shimmer.dart';
+import './favorites_page.dart';
 
 class QuranPage extends StatefulWidget {
   const QuranPage({super.key});
@@ -23,15 +27,22 @@ class QuranPage extends StatefulWidget {
 }
 
 class _QuranPageState extends State<QuranPage> {
-  static const List<String> _insightFrameImages = [
-    'assets/photos/images/ethreialbloom1.jpeg',
-    'assets/photos/images/EtherealFlower.jpeg',
-    'assets/photos/images/DelicateOrangeFlowerinBloom.jpeg',
-    'assets/photos/images/EtherealFlower-1-.jpeg',
-    'assets/photos/images/Delicate Translucent Flower.png',
-    'assets/photos/images/Ethereal Flower in Motion.png',
-    'assets/photos/images/Ethereal Glowing Flower.png',
-    'assets/photos/images/Radiant Flower Glow.png',
+  static const List<_CardColorTheme> _cardColorSchemes = [
+    _CardColorTheme(
+      bg: Color(0xFFD6DF7E),
+      text: Color(0xFF13441A),
+      accent: Color(0xFF187B25),
+    ),
+    _CardColorTheme(
+      bg: Color(0xFFFAA49A),
+      text: Color(0xFF4E1106),
+      accent: Color(0xFFC4391D),
+    ),
+    _CardColorTheme(
+      bg: Color(0xFFA0C4FF),
+      text: Color(0xFF00154F),
+      accent: Color(0xFF0052FF),
+    ),
   ];
 
   bool _isLoading = true;
@@ -58,13 +69,19 @@ class _QuranPageState extends State<QuranPage> {
 
   // The deck of widgets dynamically built
   List<Widget> _deck = [];
-  int _lastHapticIndex = -1;
+  final Set<int> _revealedCards = {};
+  List<String> _scratchCardImages = [];
+  final List<_HeartBurst> _hearts = [];
+  late String _revealedKey;
 
   @override
   void initState() {
     super.initState();
     _player.setPlayerMode(PlayerMode.mediaPlayer);
 
+    _revealedKey = 'quran_revealed_${DateTime.now().toIso8601String().substring(0, 10)}';
+    _initScratchImages();
+    _loadRevealedCards();
     _initData();
 
     _player.onPlayerStateChanged.listen((state) {
@@ -241,30 +258,109 @@ class _QuranPageState extends State<QuranPage> {
     }
   }
 
-  String _frameImageForInsight(InsightCard card, int index) {
-    final seed = '${card.date}|${card.reference}|$index'.hashCode;
-    final normalized = seed.abs() % _insightFrameImages.length;
-    return _insightFrameImages[normalized];
+  void _initScratchImages() {
+    final images = [
+      'assets/photos/images/scratchCards/scratch.jpg',
+      'assets/photos/images/scratchCards/scratch (2).jpg',
+      'assets/photos/images/scratchCards/scratch (3).jpg',
+      'assets/photos/images/scratchCards/scratch (4).jpg',
+      'assets/photos/images/scratchCards/scratch (5).jpg',
+      'assets/photos/images/scratchCards/scratch (6).jpg',
+      'assets/photos/images/scratchCards/scratch (7).jpg',
+      'assets/photos/images/scratchCards/scratch (8).jpg',
+      'assets/photos/images/scratchCards/scratch (9).jpg',
+    ];
+    images.shuffle();
+    _scratchCardImages = images;
   }
+
+  Future<void> _loadRevealedCards() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_revealedKey);
+    if (raw != null) {
+      setState(() {
+        _revealedCards.addAll(raw.map(int.parse).toSet());
+      });
+    }
+  }
+
+  Future<void> _saveRevealedCards() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _revealedKey,
+      _revealedCards.map((e) => e.toString()).toList(),
+    );
+  }
+
+  void _showHeart() {
+    final burst = _HeartBurst();
+    setState(() => _hearts.add(burst));
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) setState(() => _hearts.remove(burst));
+    });
+  }
+
+  void _favoriteCurrentInsight(int cardIndex) async {
+    if (cardIndex < 0 || cardIndex >= _deck.length) return;
+    if (cardIndex < _insightCards.length) {
+      final card = _insightCards[cardIndex];
+      await FavoritesService.addFavorite(FavoriteItem(
+        type: FavoriteType.insight,
+        savedAt: DateTime.now(),
+        date: card.date,
+        greeting: card.greeting,
+        insight: card.insight,
+        reference: card.reference,
+        quote: card.quote,
+        tags: card.tags,
+      ));
+    } else {
+      await FavoritesService.addFavorite(FavoriteItem(
+        type: FavoriteType.ayah,
+        savedAt: DateTime.now(),
+        arabic: arabic,
+        transliteration: transliteration,
+        english: english,
+        surah: surah,
+        ayahNumber: ayahNumber,
+        audioUrl: audioUrl,
+      ));
+    }
+  }
+
+  void _triggerConfetti() {
+    Confetti.launch(
+      context,
+      options: ConfettiOptions(
+        particleCount: 40,
+        spread: 60,
+        y: 0.5,
+      ),
+    );
+  }
+
 
   void _buildDeck() {
     _deck = [];
     final textTheme = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
 
     // 1. Personalized AI insight cards — one per fetched insight (tag-ranked)
     for (final entry in _insightCards.asMap().entries) {
       final index = entry.key;
       final card = entry.value;
+      final theme = _cardColorSchemes[index % _cardColorSchemes.length];
+      final pillBg = theme.accent.withOpacity(0.12);
+
       _deck.add(
         ReflectCard(
-          frameImageAsset: _frameImageForInsight(card, index),
+          backgroundColor: theme.bg,
+          borderColor: theme.text,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Icon(Icons.auto_awesome, color: cs.onSurface, size: 26),
+                  Icon(Icons.auto_awesome, color: theme.text, size: 26),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -272,7 +368,7 @@ class _QuranPageState extends State<QuranPage> {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: cs.onSurface,
+                        color: theme.text,
                       ),
                     ),
                   ),
@@ -287,10 +383,10 @@ class _QuranPageState extends State<QuranPage> {
                     label: Text(
                       tag,
                       style: textTheme.labelSmall?.copyWith(
-                        color: cs.onSurface,
+                        color: theme.text,
                       ),
                     ),
-                    backgroundColor: cs.secondaryContainer,
+                    backgroundColor: pillBg,
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                   )).toList(),
@@ -300,7 +396,7 @@ class _QuranPageState extends State<QuranPage> {
                 card.greeting,
                 style: textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
+                  color: theme.text,
                 ),
               ),
               const SizedBox(height: 10),
@@ -308,14 +404,14 @@ class _QuranPageState extends State<QuranPage> {
                 card.insight,
                 style: textTheme.bodyLarge?.copyWith(
                   height: 1.6,
-                  color: cs.onSurface,
+                  color: theme.text,
                 ),
               ),
               const SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: cs.tertiaryContainer,
+                  color: pillBg,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
@@ -326,7 +422,7 @@ class _QuranPageState extends State<QuranPage> {
                       style: textTheme.bodyMedium?.copyWith(
                         fontStyle: FontStyle.italic,
                         height: 1.5,
-                        color: cs.onTertiaryContainer,
+                        color: theme.text,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -336,7 +432,7 @@ class _QuranPageState extends State<QuranPage> {
                         '— ${card.reference}',
                         style: textTheme.labelMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: cs.onTertiaryContainer,
+                          color: theme.text,
                         ),
                       ),
                     ),
@@ -350,8 +446,15 @@ class _QuranPageState extends State<QuranPage> {
     }
 
     // 2. Ayah Card
+    final ayahIndex = _insightCards.length;
+    final ayahTheme = _cardColorSchemes[ayahIndex % _cardColorSchemes.length];
+    final ayahPillBg = ayahTheme.accent.withOpacity(0.12);
+
     _deck.add(
       ReflectCard(
+        backgroundColor: ayahTheme.bg,
+        borderColor: ayahTheme.text,
+        playButtonColor: ayahTheme.text,
         showPlayButton: true,
         isPlaying: _playing,
         playbackProgress: _duration.inMilliseconds > 0
@@ -384,12 +487,12 @@ class _QuranPageState extends State<QuranPage> {
                 padding: const EdgeInsets.all(12),
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: cs.errorContainer,
+                  color: ayahPillBg,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   _error!,
-                  style: TextStyle(color: cs.onSurface),
+                  style: TextStyle(color: ayahTheme.text),
                 ),
               ),
             Text(
@@ -400,7 +503,7 @@ class _QuranPageState extends State<QuranPage> {
                 fontSize: 34,
                 height: 1.8,
                 fontFamily: 'Amiri',
-                color: cs.primary,
+                color: ayahTheme.text,
               ),
             ),
             const SizedBox(height: 24),
@@ -410,7 +513,7 @@ class _QuranPageState extends State<QuranPage> {
               style: textTheme.bodyMedium?.copyWith(
                 fontSize: 16,
                 height: 1.5,
-                color: cs.secondary,
+                color: ayahTheme.text.withOpacity(0.8),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -422,7 +525,7 @@ class _QuranPageState extends State<QuranPage> {
                 fontSize: 18,
                 height: 1.6,
                 fontStyle: FontStyle.italic,
-                color: cs.onSurface,
+                color: ayahTheme.text,
               ),
             ),
             const SizedBox(height: 24),
@@ -431,14 +534,14 @@ class _QuranPageState extends State<QuranPage> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: cs.secondaryContainer,
+                  color: ayahPillBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   '$surah : $ayahNumber',
                   style: textTheme.labelLarge?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: cs.onSecondaryContainer,
+                    color: ayahTheme.text,
                   ),
                 ),
               ),
@@ -479,47 +582,201 @@ class _QuranPageState extends State<QuranPage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(
-          'Daily Reflection',
+        title: _revealedCards.length >= _deck.length
+            ? null
+            : TextScroll(
+          'scratch for your personalized insights',
+          velocity: const Velocity(pixelsPerSecond: Offset(40, 0)),
+          mode: TextScrollMode.endless,
+          delayBefore: const Duration(milliseconds: 500),
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: cs.onSurface,
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.favorite_rounded),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const FavoritesPage()),
+              );
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
-              child: _isLoading
-                  // Shimmer skeleton — mirrors the real card shape exactly
-                  ? const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      child: InsightCardShimmer(),
-                    )
-                  : _deck.isNotEmpty
-                      ? CardSwiper(
-                          controller: _swiperController,
-                          cardsCount: _deck.length,
-                          numberOfCardsDisplayed: _deck.length > 1 ? 2 : 1,
-                          onSwipe: _onSwipe,
-                          isLoop: true,
-                          cardBuilder: (
-                            context,
-                            index,
-                            percentThresholdX,
-                            percentThresholdY,
-                          ) {
-                            return _deck[index];
-                          },
-                        )
-                      : const Center(child: Text("No cards available")),
+              child: Center(
+                child: SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.9,
+                  height: 520,
+                  child: _isLoading
+                      ? const InsightCardShimmer()
+                      : _deck.isNotEmpty
+                          ? CardSwiper(
+                              controller: _swiperController,
+                              cardsCount: _deck.length,
+                              numberOfCardsDisplayed: _deck.length > 1 ? 2 : 1,
+                              onSwipe: _onSwipe,
+                              isLoop: true,
+                              cardBuilder: (
+                                context,
+                                index,
+                                percentThresholdX,
+                                percentThresholdY,
+                              ) {
+                                final revealed = _revealedCards.contains(index);
+                                Widget card = _deck[index];
+
+                                if (!revealed) {
+                                  card = ClipRRect(
+                                    borderRadius: BorderRadius.circular(32),
+                                    child: Stack(
+                                      children: [
+                                        Scratcher(
+                                          brushSize: 30,
+                                          threshold: 35,
+                                          image: Image.asset(
+                                            _scratchCardImages[index % _scratchCardImages.length],
+                                            fit: BoxFit.cover,
+                                          ),
+                                          onThreshold: () {
+                                            setState(() => _revealedCards.add(index));
+                                            _saveRevealedCards();
+                                            HapticFeedback.heavyImpact();
+                                            _triggerConfetti();
+                                          },
+                                          child: card,
+                                        ),
+                                        IgnorePointer(
+                                          child: Shimmer.fromColors(
+                                            baseColor: Colors.transparent,
+                                            highlightColor: Colors.white.withOpacity(0.25),
+                                            period: const Duration(milliseconds: 2000),
+                                            child: Container(color: Colors.black),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                } else {
+                                  card = GestureDetector(
+                                    onDoubleTapDown: (details) {
+                                      _showHeart();
+                                      _favoriteCurrentInsight(index);
+                                      HapticFeedback.mediumImpact();
+                                    },
+                                    child: Stack(
+                                      children: [
+                                        card,
+                                        for (final heart in _hearts)
+                                          IgnorePointer(
+                                            child: _HeartWidget(heart: heart),
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                }
+
+                                return card;
+                              },
+                            )
+                          : const Center(child: Text("No cards available")),
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 32),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CardColorTheme {
+  final Color bg;
+  final Color text;
+  final Color accent;
+  const _CardColorTheme({
+    required this.bg,
+    required this.text,
+    required this.accent,
+  });
+}
+
+class _HeartBurst {
+  final DateTime createdAt = DateTime.now();
+}
+
+class _HeartWidget extends StatefulWidget {
+  final _HeartBurst heart;
+  const _HeartWidget({required this.heart});
+
+  @override
+  State<_HeartWidget> createState() => _HeartWidgetState();
+}
+
+class _HeartWidgetState extends State<_HeartWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnim;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _scaleAnim = Tween<double>(begin: 0.0, end: 1.3).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    );
+    _fadeAnim = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+      ),
+    );
+    _slideAnim = Tween<Offset>(
+      begin: Offset.zero,
+      end: const Offset(0, -0.4),
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _controller.forward();
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        // handled by timer in _showHeart
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return FractionalTranslation(
+          translation: _slideAnim.value,
+          child: Opacity(
+            opacity: _fadeAnim.value,
+            child: Transform.scale(
+              scale: _scaleAnim.value,
+              child: const Icon(Icons.favorite, size: 80, color: Colors.red),
+            ),
+          ),
+        );
+      },
     );
   }
 }

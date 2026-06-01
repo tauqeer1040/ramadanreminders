@@ -1,18 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
-import 'package:material_new_shapes/material_new_shapes.dart';
 import '../services/streak_service.dart';
-import 'streak_card.dart';
-import '../services/prayer_time_service.dart';
-import 'package:adhan/adhan.dart';
+import '../services/notification_service.dart';
 import './task_carousel.dart';
 import './action_prompt_card.dart';
-import './sawab_countdown_card.dart';
-import '../services/notification_service.dart';
-import 'package:expressive_loading_indicator/expressive_loading_indicator.dart';
 import 'package:lottie/lottie.dart';
-import 'profile_bottom_sheet.dart';
+import 'about_bottom_sheet.dart';
+import 'package:home_widget/home_widget.dart';
+
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -85,6 +81,33 @@ class _HomepageState extends State<Homepage> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      // Profile avatar
+                      InkWell(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            showDragHandle: true,
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+                            ),
+                            builder: (context) => const AboutBottomSheet(),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: CircleAvatar(
+                          radius: 20,
+                          backgroundColor: cs.primaryContainer,
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/photos/mascot/hi.webp',
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 20),
+                            ),
+                          ),
+                        ),
+                      ),
                       // Streak badge
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -98,8 +121,8 @@ class _HomepageState extends State<Homepage> {
                         child: Row(
                           children: [
                             SizedBox(
-                              width: 24,
-                              height: 24,
+                              width: 36,
+                              height: 36,
                               child: Lottie.asset(
                                 'assets/photos/elements/Streak Fire.json',
                                 fit: BoxFit.contain,
@@ -116,45 +139,6 @@ class _HomepageState extends State<Homepage> {
                           ],
                         ),
                       ),
-                      // Profile avatar
-                      InkWell(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            showDragHandle: true,
-                            shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-                            ),
-                            builder: (context) => const ProfileBottomSheet(),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(20),
-                        child: Builder(
-                          builder: (context) {
-                            final user = AuthService.currentUser;
-                            final isGuest = user == null || user.isAnonymous;
-                            
-                            return CircleAvatar(
-                              radius: 20,
-                              backgroundColor: cs.primaryContainer,
-                              child: Container(
-                                clipBehavior: Clip.antiAlias,
-                                decoration: const BoxDecoration(shape: BoxShape.circle),
-                                child: isGuest
-                                  ? Padding(
-                                      padding: const EdgeInsets.all(4.0),
-                                      child: Image.asset('assets/photos/mascot/trophy.png', fit: BoxFit.contain),
-                                    )
-                                  : (user.photoURL != null && user.photoURL!.isNotEmpty)
-                                    ? Image.network(user.photoURL!, fit: BoxFit.cover)
-                                    : Icon(Icons.person_rounded, color: cs.onSurface, size: 24),
-                              ),
-                            );
-                          }
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -164,20 +148,15 @@ class _HomepageState extends State<Homepage> {
                 // ── Title ─────────────────────────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                  child: Builder(
-                    builder: (context) {
-                      final hijriDate = PrayerTimeService.getDynamicHijriDate();
-                      return Text(
-                        'Day ${hijriDate.hDay} of ${hijriDate.longMonthName}',
-                        textAlign: TextAlign.center,
-                        style: tt.headlineLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: cs.onSurface,
-                          height: 1.2,
-                          fontSize: 28,
-                        ),
-                      );
-                    },
+                  child: Text(
+                    '3 tasks for you',
+                    textAlign: TextAlign.center,
+                    style: tt.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: cs.onSurface,
+                      height: 1.2,
+                      fontSize: 28,
+                    ),
                   ),
                 ),
 
@@ -191,67 +170,41 @@ class _HomepageState extends State<Homepage> {
 
                 const SizedBox(height: 24),
 
-                // // ── Streak Card ────────────────────────────────────────────────────────
-                // const StreakCard(),
-                //
-                // const SizedBox(height: 24),
-                //
-                // // ── Prayer / Sehri / Iftar Timings ────────────────────────────────────
-                // Padding(
-                //   padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                //   child: FutureBuilder<PrayerTimes?>(
-                //     future: PrayerTimeService.getPrayerTimes(),
-                //     builder: (context, snapshot) {
-                //       if (snapshot.connectionState == ConnectionState.waiting) {
-                //         return Center(
-                //           child: ExpressiveLoadingIndicator(
-                //             polygons: [
-                //               MaterialShapes.softBurst,
-                //               MaterialShapes.heart,
-                //               MaterialShapes.pill,
-                //               MaterialShapes.pentagon,
-                //             ],
-                //           ),
-                //         );
-                //       }
-                //       if (snapshot.hasError ||
-                //           !snapshot.hasData ||
-                //           snapshot.data == null) {
-                //         return ActionPromptCard(
-                //           title: 'Enable Location',
-                //           subtitle:
-                //               'Please enable location access to view accurate prayer times for your region.',
-                //           buttonText: 'Enable',
-                //           onPressed: () async {
-                //             final granted =
-                //                 await PrayerTimeService.requestLocationPermission();
-                //             if (granted && mounted) {
-                //               setState(() {}); // Rebuild to fetch timings
-                //             }
-                //           },
-                //           backgroundColor: const Color(
-                //             0xFFE8F5E9,
-                //           ), // Light green
-                //           foregroundColor: const Color(
-                //             0xFF1B5E20,
-                //           ), // Dark green
-                //           icon: const Icon(
-                //             Icons.location_on_rounded,
-                //             size: 64,
-                //             color: Color(0xFF4CAF50),
-                //           ),
-                //         );
-                //       }
-                //
-                //       return Column(
-                //         children: [
-                //           if (mounted)
-                //             SawabCountdownCard(timings: snapshot.data!),
-                //         ],
-                //       );
-                //     },
-                //   ),
-                // ),
+                // ── Homescreen Widget Card ─────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: ActionPromptCard(
+                    title: 'Homescreen Widget',
+                    subtitle:
+                        'Add a homescreen widget for one-tap access\nto your daily tasks and streak.',
+                    buttonText: 'Add Widget',
+                    onPressed: () async {
+                      final supported = await HomeWidget.isRequestPinWidgetSupported() ?? false;
+                      if (supported) {
+                        await HomeWidget.requestPinWidget(
+                          androidName: 'StreakWidgetProvider',
+                          name: 'StreakWidgetProvider',
+                        );
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Long-press your home screen → Widgets → Meowmin Ai Diary to add it.'),
+                              backgroundColor: Color(0xFF311B92),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    backgroundColor: const Color(0xFFE1BEE7),
+                    foregroundColor: const Color(0xFF311B92),
+                    icon: const Icon(
+                      Icons.widgets_rounded,
+                      size: 64,
+                      color: Color(0xFFAB47BC),
+                    ),
+                  ),
+                ),
 
                 const SizedBox(height: 32),
 
@@ -308,8 +261,8 @@ class _HomepageState extends State<Homepage> {
 
                 const SizedBox(height: 32),
 
-                // ── Action Prompts (Notifications & Widgets) ────────────────────────
-                if (!_notificationsEnabled) ...[
+                // ── Notification Prompt ──────────────────────────────────────────────
+                if (!_notificationsEnabled)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24.0),
                     child: ActionPromptCard(
@@ -318,10 +271,8 @@ class _HomepageState extends State<Homepage> {
                           'Never miss your morning routine!\nSet a reminder to stay on track',
                       buttonText: 'Set Now',
                       onPressed: _handleNotificationRequest,
-                      backgroundColor: const Color(
-                        0xFFFFE0B2,
-                      ), // Light peach/orange
-                      foregroundColor: const Color(0xFF4E342E), // Dark brown
+                      backgroundColor: const Color(0xFFFFE0B2),
+                      foregroundColor: const Color(0xFF4E342E),
                       icon: const Icon(
                         Icons.notifications_active_rounded,
                         size: 64,
@@ -329,32 +280,12 @@ class _HomepageState extends State<Homepage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                ],
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: ActionPromptCard(
-                    title: 'Quick Access',
-                    subtitle:
-                        'Add a widget to your home screen\nfor instant access to your tasks.',
-                    buttonText: 'Add Widget',
-                    onPressed: () {},
-                    backgroundColor: const Color(0xFFE1BEE7), // Light purple
-                    foregroundColor: const Color(0xFF311B92), // Dark purple
-                    icon: const Icon(
-                      Icons.widgets_rounded,
-                      size: 64,
-                      color: Color(0xFFAB47BC),
-                    ),
-                  ),
-                ),
 
                 const SizedBox(height: 32),
 
                 // ── Footer Mascot ──────────────────────
                 Image.asset(
-                  'assets/photos/mascot/trio.png',
+                  'assets/photos/mascot/trio2.png',
                   width: double.infinity,
                   fit: BoxFit.fitWidth,
                 ),

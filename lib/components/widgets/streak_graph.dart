@@ -105,7 +105,7 @@ class _StreakGraphState extends State<StreakGraph> with SingleTickerProviderStat
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: const Color(0xFF121212).withValues(alpha: 0.6),
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
               color: AppTheme.starWhite.withValues(alpha: 0.1),

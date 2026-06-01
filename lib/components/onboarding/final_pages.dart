@@ -9,8 +9,11 @@ import 'package:flutter_confetti/flutter_confetti.dart' as fc;
 import 'package:in_app_review/in_app_review.dart';
 import '../../services/analogy_service.dart';
 import '../../services/journal_service.dart';
+import '../../services/notification_service.dart';
 import 'onboarding_data.dart';
 import '../widgets/duo_button.dart';
+import '../../theme/app_theme.dart';
+import '../widgets/streak_graph.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/streak_graph.dart';
 
@@ -323,6 +326,7 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
                                     alpha: 0.8,
                                   ),
                                   radius: 16,
+                                  sfxType: DuoSfxType.negative,
                                   child: Text(
                                     "Back",
                                     style: TextStyle(
@@ -342,6 +346,7 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
                                   depthColor: cs.primary.withValues(alpha: 0.8),
                                   radius: 16,
                                   dimOnDisabled: true,
+                                  sfxType: DuoSfxType.positive,
                                   child: Text(
                                     "Save & Continue",
                                     style: TextStyle(
@@ -899,6 +904,7 @@ class _AiInsightPageState extends State<AiInsightPage>
                     depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
                     radius: 16,
                     height: 56,
+                    sfxType: DuoSfxType.negative,
                     child: Text(
                       "Back",
                       style: TextStyle(
@@ -918,6 +924,7 @@ class _AiInsightPageState extends State<AiInsightPage>
                     depthColor: cs.primary.withValues(alpha: 0.8),
                     radius: 16,
                     height: 56,
+                    sfxType: DuoSfxType.positive,
                     child: Text(
                       "Continue",
                       style: TextStyle(
@@ -1030,6 +1037,7 @@ class _CelebrationPageState extends State<CelebrationPage> {
                             alpha: 0.8,
                           ),
                           radius: 16,
+                          sfxType: DuoSfxType.negative,
                           child: Text(
                             "Back",
                             style: TextStyle(
@@ -1048,6 +1056,7 @@ class _CelebrationPageState extends State<CelebrationPage> {
                           backgroundColor: cs.primary,
                           depthColor: cs.primary.withValues(alpha: 0.8),
                           radius: 16,
+                          sfxType: DuoSfxType.positive,
                           child: Text(
                             "Continue",
                             style: TextStyle(
@@ -1242,6 +1251,7 @@ class SummaryPage extends StatelessWidget {
                             alpha: 0.8,
                           ),
                           radius: 16,
+                          sfxType: DuoSfxType.negative,
                           child: Text(
                             "Back",
                             style: TextStyle(
@@ -1260,6 +1270,7 @@ class SummaryPage extends StatelessWidget {
                           backgroundColor: cs.primary,
                           depthColor: cs.primary.withValues(alpha: 0.8),
                           radius: 16,
+                          sfxType: DuoSfxType.positive,
                           child: Text(
                             "Looks good",
                             style: TextStyle(
@@ -1426,13 +1437,22 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
         ),
         const SizedBox(height: 24),
         Text(
-          "So... what do you think?",
+          "Wanna learn the Quran everyday this way?",
           style: tt.titleLarge?.copyWith(
             fontWeight: FontWeight.w600,
             color: cs.onSurface.withOpacity(0.8),
           ),
           textAlign: TextAlign.center,
         ),
+        const SizedBox(height: 16),
+        // Text(
+        //   "Just write your diary everyday, and Meowmin will make you personalized reflections and share meaningful insights from the Quran with you.",
+        //   style: tt.titleLarge?.copyWith(
+        //     fontWeight: FontWeight.w600,
+        //     color: cs.onSurface.withOpacity(0.8),
+        //   ),
+        //   textAlign: TextAlign.center,
+        // ),
         const SizedBox(height: 32),
         DuoButton(
           onPressed: _showReviewAndNavigate,
@@ -1440,6 +1460,7 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
           depthColor: cs.primary.withOpacity(0.8),
           radius: 16,
           height: 60,
+          sfxType: DuoSfxType.positive,
           child: Text(
             "Yes, I love it! 😍",
             style: TextStyle(
@@ -1459,6 +1480,7 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
           depthColor: cs.secondaryContainer.withOpacity(0.8),
           radius: 16,
           height: 60,
+          sfxType: DuoSfxType.positive,
           child: Text(
             "I'd like to explore more",
             style: TextStyle(
@@ -1477,6 +1499,7 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
                 backgroundColor: cs.secondaryContainer,
                 depthColor: cs.secondaryContainer.withOpacity(0.8),
                 radius: 16,
+                sfxType: DuoSfxType.negative,
                 child: Text(
                   "Back",
                   style: TextStyle(
@@ -1515,6 +1538,7 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
           depthColor: cs.primary.withOpacity(0.8),
           radius: 16,
           height: 60,
+          sfxType: DuoSfxType.positive,
           child: Text(
             "Rate on Google Play",
             style: TextStyle(
@@ -1540,6 +1564,7 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
               : cs.secondaryContainer.withOpacity(0.3),
           radius: 16,
           height: 56,
+          sfxType: DuoSfxType.positive,
           child: Text(
             _continueEnabled ? "Continue" : "Continue in $_countdown...",
             style: TextStyle(
@@ -1557,17 +1582,68 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
   }
 }
 
-class SetupPage extends StatelessWidget {
+class SetupPage extends StatefulWidget {
   final OnboardingData data;
-  final VoidCallback onFinish;
+  final VoidCallback onNext;
   final VoidCallback onBack;
+  final ValueChanged<int>? onStarsEarned;
 
   const SetupPage({
     required this.data,
-    required this.onFinish,
+    required this.onNext,
     required this.onBack,
+    this.onStarsEarned,
     super.key,
   });
+
+  @override
+  State<SetupPage> createState() => _SetupPageState();
+}
+
+class _SetupPageState extends State<SetupPage> {
+  late bool _notificationsEnabled;
+  late bool _locationEnabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _notificationsEnabled = widget.data.notificationsEnabled;
+    _locationEnabled = widget.data.locationEnabled;
+  }
+
+  Future<void> _onNotificationToggle() async {
+    if (_notificationsEnabled) {
+      setState(() => _notificationsEnabled = false);
+      widget.data.notificationsEnabled = false;
+      return;
+    }
+
+    final granted = await NotificationService.requestPermissions();
+    setState(() => _notificationsEnabled = granted);
+    widget.data.notificationsEnabled = granted;
+
+    if (granted) {
+      NotificationService.scheduleDailyNotifications();
+      widget.onStarsEarned?.call(10);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Prayer reminders enabled! +10 ⭐'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You can enable notifications later in your profile for more stars!'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1581,8 +1657,8 @@ class SetupPage extends StatelessWidget {
         children: [
           const Spacer(flex: 1),
           Text(
-            data.displayName != null
-                ? "Final setup, ${data.displayName}"
+            widget.data.displayName != null
+                ? "Final setup, ${widget.data.displayName}"
                 : "Final setup",
             style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
@@ -1598,10 +1674,8 @@ class SetupPage extends StatelessWidget {
             Icons.notifications_active_rounded,
             "Prayer Reminders",
             "Get notified for suhoor, iftar, and prayer times",
-            data.notificationsEnabled,
-            () async {
-              // NotificationService.requestPermissions() would be called here
-            },
+            _notificationsEnabled,
+            _onNotificationToggle,
           ),
           const SizedBox(height: 12),
           _permissionTile(
@@ -1610,7 +1684,7 @@ class SetupPage extends StatelessWidget {
             Icons.location_on_rounded,
             "Prayer Times",
             "Automatic prayer times based on your location",
-            data.locationEnabled,
+            _locationEnabled,
             () async {
               // Geolocator.requestPermission() would be called here
             },
@@ -1621,10 +1695,11 @@ class SetupPage extends StatelessWidget {
               Expanded(
                 flex: 1,
                 child: DuoButton(
-                  onPressed: onBack,
+                  onPressed: widget.onBack,
                   backgroundColor: cs.secondaryContainer,
                   depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
                   radius: 16,
+                  sfxType: DuoSfxType.negative,
                   child: Text(
                     "Back",
                     style: TextStyle(
@@ -1639,10 +1714,11 @@ class SetupPage extends StatelessWidget {
               Expanded(
                 flex: 2,
                 child: DuoButton(
-                  onPressed: onFinish,
+                  onPressed: widget.onNext,
                   backgroundColor: cs.primary,
                   depthColor: cs.primary.withValues(alpha: 0.8),
                   radius: 16,
+                  sfxType: DuoSfxType.positive,
                   child: Text(
                     "Start Reflecting",
                     style: TextStyle(

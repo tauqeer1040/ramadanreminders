@@ -1,27 +1,29 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:flutter/services.dart';
+import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'components/homepage.dart';
 import 'components/quranpage.dart';
 import 'features/tasbih/tasbih_screen.dart';
 import 'screens/onboarding_screen.dart';
-import 'components/journal_editor_screen.dart';
 import 'components/journal_bottom_sheet.dart';
 import 'components/profilepage.dart';
 import 'core/app_background.dart';
 import 'services/streak_service.dart';
 import 'services/audio_service.dart';
+import 'services/sfx_service.dart';
 import 'services/notification_service.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
+import 'services/auth_debug_service.dart';
 import 'services/journal_service.dart';
 import 'services/user_service.dart';
-import 'package:firebase_ui_auth/firebase_ui_auth.dart';
-import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -31,10 +33,6 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    FirebaseUIAuth.configureProviders([
-      EmailAuthProvider(),
-      GoogleProvider(clientId: AuthService.serverClientId),
-    ]);
     
     // Natively initialize Guest Account immediately if completely logged out!
     if (FirebaseAuth.instance.currentUser == null) {
@@ -48,14 +46,16 @@ void main() async {
   }
 
   NotificationService.init();
-  NotificationService.requestPermissions();
   NotificationService.scheduleDailyNotifications();
 
   JournalService.initAutoSync();
 
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   
-  BackgroundMusicService().init();
+  await BackgroundMusicService().init();
+  await SfxService().init();
+
+  Superwall.configure('pk_H_7a9WkW5nHJqKZPKsub1');
   
   runApp(const MyApp());
 }
@@ -124,7 +124,7 @@ class MyApp extends StatelessWidget {
     }
 
     return MaterialApp(
-          title: 'NoorAI',
+          title: 'Meowmin Ai Diary',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(scheme),
       themeMode: ThemeMode.dark,
@@ -194,11 +194,21 @@ class Material3BottomNav extends StatefulWidget {
 class _Material3BottomNavState extends State<Material3BottomNav> {
   int _selectedIndex = 0;
   late final PageController _pageController;
+  StreamSubscription? _authSubscription;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: _selectedIndex);
+    _authSubscription = AuthService.authStateChanges.listen((user) {
+      if (mounted) setState(() {});
+      AuthDebugService().logAuthStateChange({
+        'uid': user?.uid ?? 'null',
+        'isAnonymous': '${user?.isAnonymous}',
+        'email': user?.email ?? 'none',
+        'providerCount': '${user?.providerData.length ?? 0}',
+      });
+    });
     _checkOnboarding();
   }
 
@@ -221,6 +231,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -247,48 +258,109 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppBackground(
-        child: PageView(
-            controller: _pageController,
-            physics: const NeverScrollableScrollPhysics(),
-            onPageChanged: (index) {
-              setState(() => _selectedIndex = index);
-            },
-            children: _pages,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _showExitConfirmation();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: AppBackground(
+          child: PageView(
+              controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              onPageChanged: (index) {
+                setState(() => _selectedIndex = index);
+              },
+              children: _pages,
+            ),
           ),
-        ),
 
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final limit = await JournalService.isGuestLimitReached();
-          if (limit && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Free Trial limit reached! Tap your Profile to sign up securely and unlock unlimited journals."),
-                duration: Duration(seconds: 4),
+      floatingActionButton: _selectedIndex == 0
+        ? Stack(
+            clipBehavior: Clip.none,
+            children: [
+              FloatingActionButton(
+                onPressed: () async {
+                  final limit = await JournalService.isGuestLimitReached();
+                  if (limit && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Free Trial limit reached! Tap your Profile to sign up securely and unlock unlimited journals."),
+                        duration: Duration(seconds: 4),
+                      ),
+                    );
+                    return;
+                  }
+                  if (context.mounted) {
+                    await showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      backgroundColor: Colors.transparent,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                      ),
+                      builder: (_) => const JournalBottomSheet(),
+                    );
+                    if (context.mounted) {
+                      Confetti.launch(
+                        context,
+                        options: ConfettiOptions(
+                          particleCount: 30,
+                          spread: 360,
+                          startVelocity: 10,
+                          gravity: 0.3,
+                          scalar: 0.8,
+                          ticks: 40,
+                          colors: const [
+                            Color(0xFFFFD700),
+                            Color(0xFFFFA500),
+                            Color(0xFFFF6347),
+                            Color(0xFF00CED1),
+                            Color(0xFFFFFFFF),
+                          ],
+                        ),
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Row(
+                            children: [
+                              Icon(Icons.check_circle, color: Colors.white, size: 20),
+                              SizedBox(width: 10),
+                              Text('Diary saved', style: TextStyle(fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                          behavior: SnackBarBehavior.floating,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  }
+                },
+                backgroundColor: cs.primaryContainer,
+                foregroundColor: cs.onPrimaryContainer,
+                child: const Icon(Icons.edit_rounded),
               ),
-            );
-            return;
-          }
-          if (context.mounted) {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              useSafeArea: true,
-              backgroundColor: Colors.transparent,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Shimmer.fromColors(
+                    baseColor: Colors.transparent,
+                    highlightColor: Colors.white.withValues(alpha: 0.25),
+                    period: const Duration(milliseconds: 2000),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              builder: (_) => const JournalBottomSheet(),
-            );
-          }
-        },
-        backgroundColor: cs.primaryContainer,
-        foregroundColor: cs.onPrimaryContainer,
-        child: const Icon(Icons.edit_rounded),
-      ),
+            ],
+          )
+        : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: NavigationBar(
         backgroundColor: Theme.of(
@@ -304,6 +376,30 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
           navigateToTab(index);
         },
         destinations: _buildNavBarItems(cs),
+      ),
+    ),
+    );
+  }
+
+  void _showExitConfirmation() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Quit Meowmin Ai Diary?'),
+        content: const Text('Are you sure you want to exit the app?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              SystemNavigator.pop();
+            },
+            child: const Text('Exit'),
+          ),
+        ],
       ),
     );
   }

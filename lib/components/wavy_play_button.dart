@@ -10,11 +10,13 @@ class WavyPlayButton extends StatefulWidget {
     required this.isPlaying,
     required this.onTap,
     this.progress = 0.0,
+    this.color,
   });
 
   final bool isPlaying;
   final VoidCallback onTap;
   final double progress;
+  final Color? color;
 
   @override
   State<WavyPlayButton> createState() => _WavyPlayButtonState();
@@ -34,10 +36,11 @@ class _WavyPlayButtonState extends State<WavyPlayButton> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final fillColor = colorScheme.primaryContainer;
-    final outlineColor = colorScheme.primaryContainer;
-    final iconColor = colorScheme.onPrimaryContainer;
-    final progressColor = colorScheme.primary;
+    final c = widget.color ?? colorScheme.primaryContainer;
+    final fillColor = c;
+    final outlineColor = c;
+    final iconColor = widget.color != null ? Colors.white : colorScheme.onPrimaryContainer;
+    final progressColor = widget.color ?? colorScheme.primary;
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,

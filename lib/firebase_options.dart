@@ -41,51 +41,49 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDS02CESoPw0BCduBG5KYJnjCHshYrhtf0',
-    appId: '1:1059339297432:web:d2bd974fcb2c1a253a66ed',
-    messagingSenderId: '1059339297432',
-    projectId: 'aliapp-909a0',
-    authDomain: 'aliapp-909a0.firebaseapp.com',
-    storageBucket: 'aliapp-909a0.firebasestorage.app',
-    measurementId: 'G-3NPYHF9WC8',
+    apiKey: 'AIzaSyALM62rXympv6akAsC-2YIyKvnHn9_v3og',
+    appId: '1:1001153353947:web:753ebed9db2b11515614fe',
+    messagingSenderId: '1001153353947',
+    projectId: 'meowmin-34db1',
+    authDomain: 'meowmin-34db1.firebaseapp.com',
+    storageBucket: 'meowmin-34db1.firebasestorage.app',
+    measurementId: 'G-EJYEJ2XFT7',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAjcFTIEKfX3FjaFBXnzi4_PHSJl-gsECI',
-    appId: '1:1059339297432:android:608dc44c27bb755c3a66ed',
-    messagingSenderId: '1059339297432',
-    projectId: 'aliapp-909a0',
-    storageBucket: 'aliapp-909a0.firebasestorage.app',
+    apiKey: 'AIzaSyBJcutitXJsnNfQGpkMZD7OWETVNpSCj9A',
+    appId: '1:1001153353947:android:b149e20257ef3c9c5614fe',
+    messagingSenderId: '1001153353947',
+    projectId: 'meowmin-34db1',
+    storageBucket: 'meowmin-34db1.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyC4oc5jxlRhc49Cly161hjcNWe_QrTIM4c',
-    appId: '1:1059339297432:ios:762ae6339812bdcb3a66ed',
-    messagingSenderId: '1059339297432',
-    projectId: 'aliapp-909a0',
-    storageBucket: 'aliapp-909a0.firebasestorage.app',
-    iosClientId: '1059339297432-ebut10jtshmkgg4vf6a3frgioc5p60ob.apps.googleusercontent.com',
-    iosBundleId: 'com.example.ramadanApp',
+    apiKey: 'AIzaSyC8FWiD3l0Q81Z0dSJ4hBhEXXFWN_g0Km0',
+    appId: '1:1001153353947:ios:861c31f5200db1395614fe',
+    messagingSenderId: '1001153353947',
+    projectId: 'meowmin-34db1',
+    storageBucket: 'meowmin-34db1.firebasestorage.app',
+    iosBundleId: 'com.taucity.meowmin',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyC4oc5jxlRhc49Cly161hjcNWe_QrTIM4c',
-    appId: '1:1059339297432:ios:762ae6339812bdcb3a66ed',
-    messagingSenderId: '1059339297432',
-    projectId: 'aliapp-909a0',
-    storageBucket: 'aliapp-909a0.firebasestorage.app',
-    iosClientId: '1059339297432-ebut10jtshmkgg4vf6a3frgioc5p60ob.apps.googleusercontent.com',
+    apiKey: 'AIzaSyC8FWiD3l0Q81Z0dSJ4hBhEXXFWN_g0Km0',
+    appId: '1:1001153353947:ios:6c98e8960d5dd5765614fe',
+    messagingSenderId: '1001153353947',
+    projectId: 'meowmin-34db1',
+    storageBucket: 'meowmin-34db1.firebasestorage.app',
     iosBundleId: 'com.example.ramadanApp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyDS02CESoPw0BCduBG5KYJnjCHshYrhtf0',
-    appId: '1:1059339297432:web:905214871de532de3a66ed',
-    messagingSenderId: '1059339297432',
-    projectId: 'aliapp-909a0',
-    authDomain: 'aliapp-909a0.firebaseapp.com',
-    storageBucket: 'aliapp-909a0.firebasestorage.app',
-    measurementId: 'G-J0HPWW3V92',
+    apiKey: 'AIzaSyALM62rXympv6akAsC-2YIyKvnHn9_v3og',
+    appId: '1:1001153353947:web:207924e5b74c94265614fe',
+    messagingSenderId: '1001153353947',
+    projectId: 'meowmin-34db1',
+    authDomain: 'meowmin-34db1.firebaseapp.com',
+    storageBucket: 'meowmin-34db1.firebasestorage.app',
+    measurementId: 'G-HMX736JRG9',
   );
 
 }

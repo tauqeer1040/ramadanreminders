@@ -1,37 +1,45 @@
 {
   "project_info": {
-    "project_number": "1059339297432",
-    "project_id": "aliapp-909a0",
-    "storage_bucket": "aliapp-909a0.firebasestorage.app"
+    "project_number": "1001153353947",
+    "project_id": "meowmin-34db1",
+    "storage_bucket": "meowmin-34db1.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1059339297432:android:608dc44c27bb755c3a66ed",
+        "mobilesdk_app_id": "1:1001153353947:android:b149e20257ef3c9c5614fe",
         "android_client_info": {
-          "package_name": "com.example.ramadan_app"
+          "package_name": "com.taucity.meowmin"
         }
       },
       "oauth_client": [
         {
-          "client_id": "1059339297432-ms94q606vo3v8pa9rupob039l8ko4saf.apps.googleusercontent.com",
+          "client_id": "1001153353947-75u2ab2qmujqpb8dut3d8b9ku3h8ifia.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.taucity.meowmin",
+            "certificate_hash": "beddef4ae1757b10218c3a1f75ac201938e02cff"
+          }
+        },
+        {
+          "client_id": "1001153353947-qkgmnq123huhc2b0mk2gegkhosj6ulqf.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyAjcFTIEKfX3FjaFBXnzi4_PHSJl-gsECI"
+          "current_key": "AIzaSyBJcutitXJsnNfQGpkMZD7OWETVNpSCj9A"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "1059339297432-ms94q606vo3v8pa9rupob039l8ko4saf.apps.googleusercontent.com",
+              "client_id": "1001153353947-qkgmnq123huhc2b0mk2gegkhosj6ulqf.apps.googleusercontent.com",
               "client_type": 3
             },
             {
-              "client_id": "1059339297432-ebut10jtshmkgg4vf6a3frgioc5p60ob.apps.googleusercontent.com",
+              "client_id": "1001153353947-34uqcnvp1j8tp1jjaikemke6765m9oqk.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
                 "bundle_id": "com.example.ramadanApp"

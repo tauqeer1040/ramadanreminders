@@ -7,84 +7,36 @@ class ReflectCard extends StatelessWidget {
   final bool isPlaying;
   final double playbackProgress;
   final bool showPlayButton;
-  final String? frameImageAsset;
+  final Color backgroundColor;
+  final Color borderColor;
+  final Color? playButtonColor;
 
   const ReflectCard({
     super.key,
     required this.child,
+    required this.backgroundColor,
+    required this.borderColor,
     this.onPlay,
     this.isPlaying = false,
     this.playbackProgress = 0.0,
     this.showPlayButton = false,
-    this.frameImageAsset,
+    this.playButtonColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Container(
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        image: frameImageAsset != null
-            ? DecorationImage(
-                image: AssetImage(frameImageAsset!),
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-                opacity: 0.18,
-              )
-            : null,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            cs.surfaceContainerHigh,
-            cs.surfaceContainer,
-            cs.surface,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: cs.primary.withValues(alpha: 0.4),
-          width: 3,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withValues(alpha: 0.15),
-            blurRadius: 22,
-            spreadRadius: 3,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: borderColor, width: 2),
       ),
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: cs.surface,
-                image: frameImageAsset != null
-                    ? DecorationImage(
-                        image: AssetImage(frameImageAsset!),
-                        fit: BoxFit.cover,
-                        alignment: Alignment.center,
-                        opacity: 0.1,
-                      )
-                    : null,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: cs.primary.withValues(alpha: 0.18),
-                  width: 2,
-                ),
-              ),
-              padding: const EdgeInsets.all(16),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: SingleChildScrollView(child: child),
-              ),
-            ),
+            child: SingleChildScrollView(child: child),
           ),
           if (showPlayButton)
             Padding(
@@ -94,6 +46,7 @@ class ReflectCard extends StatelessWidget {
                   isPlaying: isPlaying,
                   progress: playbackProgress,
                   onTap: onPlay ?? () {},
+                  color: playButtonColor,
                 ),
               ),
             ),

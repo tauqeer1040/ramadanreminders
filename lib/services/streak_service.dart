@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ramadan_reflections/services/widget_service.dart' show WidgetService;
 
 class StreakService {
   static const _streakKey = 'streak';
@@ -64,6 +65,7 @@ class StreakService {
 
     await prefs.setInt(_streakKey, streak);
     await prefs.setString(_lastActivityDateKey, todayStr);
+    await WidgetService.updateStreakWidget(streak);
   }
 
   static Future<void> recordActivity() async {

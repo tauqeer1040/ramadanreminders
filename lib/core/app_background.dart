@@ -8,7 +8,7 @@ class AppBackground extends StatelessWidget {
   const AppBackground({
     required this.child,
     this.backgroundImage,
-    this.overlayOpacity = 0.20,
+    this.overlayOpacity = 0.45,
     super.key,
   });
 

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../services/sfx_service.dart';
+
+enum DuoSfxType { positive, negative, none }
 
 class DuoButton extends StatefulWidget {
   final VoidCallback? onPressed;
@@ -9,6 +12,7 @@ class DuoButton extends StatefulWidget {
   final double radius;
   final Widget child;
   final bool dimOnDisabled;
+  final DuoSfxType sfxType;
 
   const DuoButton({
     super.key,
@@ -19,6 +23,7 @@ class DuoButton extends StatefulWidget {
     this.height = 52,
     this.radius = 12,
     this.dimOnDisabled = false,
+    this.sfxType = DuoSfxType.none,
   });
 
   @override
@@ -29,6 +34,16 @@ class _DuoButtonState extends State<DuoButton> {
   bool _pressed = false;
 
   bool get _isDisabled => widget.onPressed == null;
+
+  void _playSfx() {
+    if (widget.sfxType == DuoSfxType.none) return;
+    final sfx = SfxService();
+    if (widget.sfxType == DuoSfxType.positive) {
+      sfx.playPositive();
+    } else {
+      sfx.playNegative();
+    }
+  }
 
   @override
   void didUpdateWidget(covariant DuoButton oldWidget) {
@@ -54,6 +69,7 @@ class _DuoButtonState extends State<DuoButton> {
             ? null
             : (_) {
                 HapticFeedback.lightImpact();
+                _playSfx();
                 setState(() => _pressed = true);
               },
         onPointerUp: (_) {

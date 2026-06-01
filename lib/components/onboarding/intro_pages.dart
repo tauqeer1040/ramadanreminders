@@ -45,6 +45,7 @@ class WelcomePage extends StatelessWidget {
             backgroundColor: cs.primary,
             depthColor: cs.primary.withValues(alpha: 0.8),
             radius: 16,
+            sfxType: DuoSfxType.positive,
             child: const Text(
               "Waalikumassalam 😄👋",
               style: TextStyle(
@@ -263,6 +264,7 @@ class _MusicSelectionPageState extends State<MusicSelectionPage> {
                   depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
                   radius: 16,
                   height: 56,
+                  sfxType: DuoSfxType.negative,
                   child: Text(
                     "Back",
                     style: TextStyle(
@@ -282,6 +284,7 @@ class _MusicSelectionPageState extends State<MusicSelectionPage> {
                   depthColor: cs.primary.withValues(alpha: 0.8),
                   radius: 16,
                   height: 56,
+                  sfxType: DuoSfxType.positive,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: const [
@@ -468,6 +471,7 @@ class _NamePageState extends State<NamePage> {
                         ),
                         radius: 16,
                         height: 56,
+                        sfxType: DuoSfxType.negative,
                         child: Text(
                           "Back",
                           style: TextStyle(
@@ -497,6 +501,7 @@ class _NamePageState extends State<NamePage> {
                         depthColor: cs.primary.withValues(alpha: 0.8),
                         radius: 16,
                         height: 56,
+                        sfxType: DuoSfxType.positive,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -640,6 +645,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
           depthColor: cs.primary.withValues(alpha: 0.8),
           radius: 16,
           height: 56,
+          sfxType: DuoSfxType.positive,
           child: Text(
             "Yeah, hit me!",
             style: TextStyle(
@@ -662,6 +668,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
           depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
           radius: 16,
           height: 56,
+          sfxType: DuoSfxType.negative,
           child: Text(
             "No hard questions today, please",
             style: TextStyle(
@@ -680,6 +687,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
                 backgroundColor: cs.secondaryContainer,
                 depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
                 radius: 16,
+                sfxType: DuoSfxType.negative,
                 child: Text(
                   "Back",
                   style: TextStyle(
@@ -733,6 +741,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
                 backgroundColor: cs.secondaryContainer,
                 depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
                 radius: 16,
+                sfxType: DuoSfxType.negative,
                 child: Text(
                   "Back",
                   style: TextStyle(
@@ -754,6 +763,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
                 backgroundColor: cs.primary,
                 depthColor: cs.primary.withValues(alpha: 0.8),
                 radius: 16,
+                sfxType: DuoSfxType.positive,
                 child: Text(
                   "Yeah!",
                   style: TextStyle(
@@ -807,6 +817,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
                 backgroundColor: cs.secondaryContainer,
                 depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
                 radius: 16,
+                sfxType: DuoSfxType.negative,
                 child: Text(
                   "Back",
                   style: TextStyle(
@@ -828,6 +839,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
                 backgroundColor: cs.primary,
                 depthColor: cs.primary.withValues(alpha: 0.8),
                 radius: 16,
+                sfxType: DuoSfxType.positive,
                 child: Text(
                   "Nah!",
                   style: TextStyle(
@@ -875,6 +887,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
                 backgroundColor: cs.secondaryContainer,
                 depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
                 radius: 16,
+                sfxType: DuoSfxType.negative,
                 child: Text(
                   "Back",
                   style: TextStyle(
@@ -896,6 +909,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
                 backgroundColor: cs.primary,
                 depthColor: cs.primary.withValues(alpha: 0.8),
                 radius: 16,
+                sfxType: DuoSfxType.positive,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -965,6 +979,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
                 depthColor: cs.secondaryContainer.withValues(alpha: 0.8),
                 radius: 16,
                 height: 56,
+                sfxType: DuoSfxType.negative,
                 child: Text(
                   "Back",
                   style: TextStyle(
@@ -989,6 +1004,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
                 depthColor: cs.primary.withValues(alpha: 0.8),
                 radius: 16,
                 height: 56,
+                sfxType: DuoSfxType.positive,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -1135,6 +1151,7 @@ class BombshellPage1 extends StatelessWidget {
                             ),
                             radius: 16,
                             height: 56,
+                            sfxType: DuoSfxType.negative,
                             child: Text(
                               'Back',
                               style: TextStyle(
@@ -1154,6 +1171,7 @@ class BombshellPage1 extends StatelessWidget {
                             depthColor: cs.primary.withValues(alpha: 0.8),
                             radius: 16,
                             height: 56,
+                            sfxType: DuoSfxType.positive,
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -1279,6 +1297,7 @@ class BombshellPage2 extends StatelessWidget {
                             ),
                             radius: 16,
                             height: 56,
+                            sfxType: DuoSfxType.negative,
                             child: Text(
                               'Back',
                               style: TextStyle(
@@ -1298,6 +1317,7 @@ class BombshellPage2 extends StatelessWidget {
                             depthColor: cs.primary.withValues(alpha: 0.8),
                             radius: 16,
                             height: 56,
+                            sfxType: DuoSfxType.positive,
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -1429,6 +1449,7 @@ class BombshellPage3 extends StatelessWidget {
                             ),
                             radius: 16,
                             height: 56,
+                            sfxType: DuoSfxType.negative,
                             child: Text(
                               'Back',
                               style: TextStyle(
@@ -1448,6 +1469,7 @@ class BombshellPage3 extends StatelessWidget {
                             depthColor: cs.primary.withValues(alpha: 0.8),
                             radius: 16,
                             height: 56,
+                            sfxType: DuoSfxType.positive,
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -1563,6 +1585,7 @@ class BridgePage extends StatelessWidget {
                             ),
                             radius: 16,
                             height: 56,
+                            sfxType: DuoSfxType.negative,
                             child: Text(
                               'Back',
                               style: TextStyle(
@@ -1582,6 +1605,7 @@ class BridgePage extends StatelessWidget {
                             depthColor: cs.primary.withValues(alpha: 0.8),
                             radius: 16,
                             height: 56,
+                            sfxType: DuoSfxType.positive,
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
