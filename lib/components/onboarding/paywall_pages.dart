@@ -68,6 +68,7 @@ class _PaywallPage1State extends State<PaywallPage1> {
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 32),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -78,25 +79,19 @@ class _PaywallPage1State extends State<PaywallPage1> {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const SizedBox(height: 32),
-                    RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
-                        style: tt.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: cs.onSurface,
-                        ),
-                        children: [
-                          // if (name != null) TextSpan(text: '$name, '),
-                          const TextSpan(
-                            text: "A word from the guy who made Meowmin...",
-                          ),
-                        ],
+                    const SizedBox(height: 24),
+                    Text(
+                      "A word from the guy who made Meowmin...",
+                      style: tt.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
                       ),
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
-                    Text("Hi, $name, ",
-                     style: tt.bodyLarge?.copyWith(
+                    Text(
+                      "Hi $name,",
+                      style: tt.bodyLarge?.copyWith(
                         color: cs.onSurface,
                       ),
                       textAlign: TextAlign.center,
@@ -223,6 +218,7 @@ class _PaywallPage2State extends State<PaywallPage2> {
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 32),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
@@ -253,9 +249,8 @@ class _PaywallPage2State extends State<PaywallPage2> {
                     if (_slotNumber > 0) ...[
                       Text(
                         "Limited to 300 members",
-                        style: TextStyle(
+                        style: tt.labelMedium?.copyWith(
                           color: cs.onSurface.withValues(alpha: 0.7),
-                          fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -266,20 +261,20 @@ class _PaywallPage2State extends State<PaywallPage2> {
                         radius: 10,
                         fillColor: AppTheme.starGold,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 12),
                       Shimmer.fromColors(
-                        baseColor: AppTheme.starGold.withValues(alpha: 0.4),
+                        baseColor: AppTheme.starGold.withValues(alpha: 0.7),
                         highlightColor: AppTheme.starGold,
                         period: const Duration(milliseconds: 2000),
                         child: Text(
                           "$_slotNumber of 300 slots filled",
-                          style: TextStyle(
+                          style: tt.labelSmall?.copyWith(
                             color: AppTheme.starWhite,
-                            fontSize: 11,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
+                      const SizedBox(height: 24),
                     ],
                   ],
                 ),
@@ -401,6 +396,36 @@ class _PaywallPage3State extends State<PaywallPage3> {
     }
   }
 
+  Widget _buildStat(ColorScheme cs, TextTheme tt, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 5),
+            width: 4,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppTheme.starGold,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: tt.bodyMedium?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.8),
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -411,33 +436,40 @@ class _PaywallPage3State extends State<PaywallPage3> {
       builder: (context, constraints) {
         return SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 32),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 32),
-                  Text(
-                    "Support independent software",
-                    style: tt.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: cs.onSurface,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const SizedBox(height: 32),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      "Keep Meowmin independent",
+                      style: tt.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    "$name, if Meowmin has helped you think\nclearer, reflect deeper, or simply feel a little\nmore understood, this is your chance\nto keep it alive.\n\nJoin with a membership of your choice.",
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: 14,
-                      height: 1.5,
+                    const SizedBox(height: 16),
+                    Text(
+                      "$name, if Meowmin has helped you think\nclearer, reflect deeper, or simply feel a little\nmore understood, this is your chance\nto keep it alive.\n\nJoin with a membership of your choice.",
+                      style: tt.bodyLarge?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.7),
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 24),
+                    _buildStat(cs, tt, "You wrote your first journal entry."),
+                    _buildStat(cs, tt, "You reflected on what's in your heart."),
+                    if (widget.data.commitmentLevel != null)
+                      _buildStat(cs, tt, "You committed to follow the Quran more closely."),
+                    if (widget.data.journalTags.isNotEmpty)
+                      _buildStat(cs, tt, "You chose ${widget.data.journalTags.length} spiritual ${widget.data.journalTags.length == 1 ? 'tag' : 'tags'} for your journey."),
+                    const SizedBox(height: 32),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     decoration: BoxDecoration(
@@ -519,7 +551,7 @@ class _PaywallPage3State extends State<PaywallPage3> {
                   const SizedBox(height: 48),
                 ],
               ),
-            ),
+            ],
           ),
         );
       },

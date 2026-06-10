@@ -32,6 +32,8 @@ class AboutBottomSheet extends StatelessWidget {
               fontWeight: FontWeight.w500,
             ),
           ),
+          const SizedBox(height: 12),
+          _PrivacyPolicyLink(),
           const SizedBox(height: 24),
           _ReplayButton(),
           const SizedBox(height: 24),
@@ -309,6 +311,84 @@ class _OtherAppsSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PrivacyPolicyLink extends StatelessWidget {
+  const _PrivacyPolicyLink();
+
+  void _showPrivacyPolicy(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.privacy_tip_rounded, color: AppTheme.neonPurple, size: 24),
+            SizedBox(width: 10),
+            Text('Privacy Policy', style: TextStyle(color: AppTheme.starWhite, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: DefaultTextStyle(
+            style: const TextStyle(color: AppTheme.ghostSilver, fontSize: 13, height: 1.6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _p('Last updated: May 2026'),
+                _p('Meowmin Ai Diary ("we", "our", "app") respects your privacy. This policy explains how we handle your data.'),
+                _section('Data We Collect'),
+                _p('• Journal entries you write (stored securely on our server)\n• Email and display name (if you sign in with Google)\n• Approximate location (only for prayer time calculation)\n• Device information for push notifications'),
+                _section('How We Use Data'),
+                _p('• Journal text is processed by AI (OpenRouter) to generate insights and suggested tasks\n• Location is used locally for adhan prayer times — never uploaded or shared\n• Email is used only for account identification'),
+                _section('Data Sharing'),
+                _p('We do not sell your data. Journal content is sent to OpenRouter for AI analysis. Payments are processed by Superwall and Google Play — we never see your payment details.'),
+                _section('Data Deletion'),
+                _p('You can delete your account and all associated data from Profile → Delete Account. Data is permanently removed within 30 days.'),
+                _section('Contact'),
+                _p('Questions? Reach out at meowmin.app@tauqeer.dev'),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close', style: TextStyle(color: AppTheme.neonPurple)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _p(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(text),
+  );
+
+  Widget _section(String title) => Padding(
+    padding: const EdgeInsets.only(top: 12, bottom: 4),
+    child: Text(title, style: const TextStyle(color: AppTheme.starWhite, fontWeight: FontWeight.bold, fontSize: 14)),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _showPrivacyPolicy(context);
+      },
+      child: const Text(
+        'Privacy Policy',
+        style: TextStyle(
+          color: AppTheme.ghostSilver,
+          fontSize: 12,
+          decoration: TextDecoration.underline,
+        ),
+      ),
     );
   }
 }

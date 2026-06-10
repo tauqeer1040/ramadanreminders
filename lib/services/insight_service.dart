@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../core/constants.dart';
+import '../core/api_client.dart';
 
 /// A single resolved AI insight card ready to be displayed on the Quran page.
 class InsightCard {
@@ -135,6 +136,7 @@ class InsightService {
     try {
       final response = await http.get(
         Uri.parse('$_backendUrl/user/${user.uid}/daily-content?day=${_today()}'),
+        headers: await ApiClient.authHeaders(),
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {

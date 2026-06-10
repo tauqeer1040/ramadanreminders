@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import '../core/constants.dart';
+import '../core/api_client.dart';
 
 class AnalogyService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -21,7 +22,7 @@ class AnalogyService {
       final response = await http
           .post(
             Uri.parse(analogyUrl),
-            headers: {'Content-Type': 'application/json'},
+            headers: await ApiClient.postHeaders(),
             body: jsonEncode({
               'uid': uid,
               'question': question,
@@ -84,7 +85,7 @@ class AnalogyService {
         final response = await http
             .post(
               Uri.parse(analogyUrl),
-              headers: {'Content-Type': 'application/json'},
+              headers: await ApiClient.postHeaders(),
               body: jsonEncode({
                 'uid': uid,
                 'question': 'Based on this journal entry, provide a deeply spiritual $theme analogy.',

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants.dart';
+import '../core/api_client.dart';
 import '../models/bullet_item.dart';
 import 'insight_service.dart';
 import 'streak_service.dart';
@@ -232,7 +233,10 @@ class JournalService {
       final response = await http
           .post(
             Uri.parse(syncUrl),
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              ...await ApiClient.authHeaders(),
+            },
             body: jsonEncode({
               'uid': user.uid,
               'displayName': user.displayName,
@@ -318,7 +322,10 @@ class JournalService {
     // Read the user's journal feed from the backend and pick yesterday's row.
     try {
       final response = await http
-          .get(Uri.parse('$_backendUrl/user/${user.uid}/journals'))
+          .get(
+            Uri.parse('$_backendUrl/user/${user.uid}/journals'),
+            headers: await ApiClient.authHeaders(),
+          )
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {

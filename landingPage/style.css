@@ -1,0 +1,154 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0D0D1A;
+  color: #C8C8D4;
+  line-height: 1.7;
+  min-height: 100vh;
+}
+
+a { color: #9B6BFF; text-decoration: underline; }
+
+/* Landing page */
+.landing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.landing .logo {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #9B6BFF, #6A00FF);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  margin-bottom: 24px;
+}
+
+.landing .icon {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 24px;
+  box-shadow: 0 0 40px rgba(155, 107, 255, 0.3);
+}
+
+.landing h1 {
+  color: #FFFFFF;
+  font-size: 32px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.landing p {
+  max-width: 480px;
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.landing .sub {
+  font-size: 14px;
+  color: #888;
+}
+
+.landing .links {
+  margin-top: 32px;
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.landing .links a {
+  font-size: 14px;
+}
+
+.landing .play-btn {
+  display: inline-block;
+  background: linear-gradient(135deg, #9B6BFF, #6A00FF);
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 12px 28px;
+  border-radius: 28px;
+  text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.landing .play-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 24px rgba(155, 107, 255, 0.5);
+}
+
+.landing .footer {
+  margin-top: 48px;
+  font-size: 13px;
+  color: #555;
+}
+
+/* Privacy page */
+.privacy {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.privacy h1 {
+  color: #FFFFFF;
+  font-size: 28px;
+  margin-bottom: 6px;
+  font-weight: 800;
+}
+
+.privacy .subtitle {
+  color: #888;
+  font-size: 14px;
+  margin-bottom: 32px;
+}
+
+.privacy h2 {
+  color: #FFFFFF;
+  font-size: 18px;
+  margin-top: 28px;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.privacy p {
+  margin-bottom: 14px;
+  font-size: 15px;
+}
+
+.privacy ul {
+  margin: 8px 0 16px 20px;
+}
+
+.privacy li {
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+
+.privacy hr {
+  border: none;
+  border-top: 1px solid #2A2A3E;
+  margin: 32px 0;
+}
+
+.privacy .footer {
+  font-size: 13px;
+  color: #666;
+}
+
+.privacy .back {
+  display: inline-block;
+  margin-bottom: 24px;
+  font-size: 14px;
+}
