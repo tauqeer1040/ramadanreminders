@@ -7,6 +7,7 @@ import '../core/api_client.dart';
 class AnalogyService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final String _backendUrl = AppConstants.backendUrl;
+  static final Map<int, List<String>> _insightsCache = {};
 
   static Future<String> generateAnalogy({
     required String question,
@@ -107,6 +108,38 @@ class AnalogyService {
     }
 
     return results;
+  }
+
+  static Future<List<String>> generateJournalInsights(String journalEntry) async {
+    final user = _auth.currentUser;
+    if (user == null) return fallbackJournalAnalogies;
+
+    final hash = journalEntry.hashCode;
+    final cached = _insightsCache[hash];
+    if (cached != null) return cached;
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_backendUrl/generate-insights'),
+            headers: await ApiClient.postHeaders(),
+            body: jsonEncode({'journalEntry': journalEntry}),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final insights = (data['insights'] as List<dynamic>).cast<String>();
+        if (insights.length == 3) {
+          _insightsCache[hash] = insights;
+          return insights;
+        }
+      }
+    } catch (e) {
+      print('AnalogyService generateJournalInsights error: $e');
+    }
+
+    return generateJournalAnalogies(journalEntry);
   }
 
   static List<String> get fallbackJournalAnalogies => [

@@ -49,6 +49,8 @@ dependencies:
   share_plus: ^10.1.4
   superwallkit_flutter: ^2.4.12
   home_widget: ^0.9.2
+  speech_to_text: 7.0.0
+  video_player: ^2.11.1
 
 dev_dependencies:
   flutter_test:
@@ -65,6 +67,7 @@ flutter:
     - assets/photos/mascot/
     - assets/photos/elements/
     - assets/tunes/
+    - assets/chatbubbles/
   fonts:
     - family: Amiri
       fonts:

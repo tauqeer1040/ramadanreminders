@@ -1,16 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:shimmer/shimmer.dart';
-import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:flutter/services.dart';
 import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'components/homepage.dart';
+import 'components/shop_screen.dart';
 import 'components/quranpage.dart';
-import 'features/tasbih/tasbih_screen.dart';
+// import 'features/tasbih/tasbih_screen.dart';
 import 'screens/onboarding_screen.dart';
-import 'components/journal_bottom_sheet.dart';
 import 'components/profilepage.dart';
 import 'core/app_background.dart';
 import 'services/streak_service.dart';
@@ -20,10 +18,10 @@ import 'services/notification_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
-import 'services/auth_service.dart';
-import 'services/auth_debug_service.dart';
 import 'services/journal_service.dart';
+import 'services/auth_service.dart';
 import 'services/user_service.dart';
+import 'services/auth_debug_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -55,7 +53,13 @@ void main() async {
   await BackgroundMusicService().init();
   await SfxService().init();
 
-  Superwall.configure('pk_H_7a9WkW5nHJqKZPKsub1');
+  try {
+    final swOptions = SuperwallOptions()
+      ..logging.level = LogLevel.debug;
+    Superwall.configure('pk_H_7a9WkW5nHJqKZPKsub1', options: swOptions);
+  } catch (e) {
+    debugPrint("Superwall configure error: $e");
+  }
   
   runApp(const MyApp());
 }
@@ -193,14 +197,23 @@ class Material3BottomNav extends StatefulWidget {
 
 class _Material3BottomNavState extends State<Material3BottomNav> {
   int _selectedIndex = 0;
+  int _shopRefresh = 0;
+  final _homepageKey = GlobalKey<HomepageState>();
   late final PageController _pageController;
   StreamSubscription? _authSubscription;
+
+  List<Widget> get _pages => [
+    Homepage(key: _homepageKey),
+    QuranPage(),
+    ShopScreen(key: ValueKey('shop_$_shopRefresh')),
+    ProfilePage1(),
+  ];
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: _selectedIndex);
-    _authSubscription = AuthService.authStateChanges.listen((user) {
+    _authSubscription = AuthService.userChanges.listen((user) {
       if (mounted) setState(() {});
       AuthDebugService().logAuthStateChange({
         'uid': user?.uid ?? 'null',
@@ -220,12 +233,14 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
     final prefs = await SharedPreferences.getInstance();
     final complete = prefs.getBool('onboarding_complete') ?? false;
     if (!complete && mounted) {
-      Navigator.of(context).push(
+      await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => const OnboardingScreen(),
           fullscreenDialog: true,
         ),
       );
+      setState(() => _shopRefresh++);
+      await _homepageKey.currentState?.loadStars();
     }
   }
 
@@ -237,7 +252,8 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   }
 
   void navigateToTab(int index) {
-    setState(() => _selectedIndex = index);
+    final clamped = index.clamp(0, _pages.length - 1);
+    setState(() => _selectedIndex = clamped);
 
     // Jump instantly for tabs that are far away so the user doesn't
     // watch a slow multi-screen scroll-through.
@@ -277,91 +293,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
             ),
           ),
 
-      floatingActionButton: _selectedIndex == 0
-        ? Stack(
-            clipBehavior: Clip.none,
-            children: [
-              FloatingActionButton(
-                onPressed: () async {
-                  final limit = await JournalService.isGuestLimitReached();
-                  if (limit && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Free Trial limit reached! Tap your Profile to sign up securely and unlock unlimited journals."),
-                        duration: Duration(seconds: 4),
-                      ),
-                    );
-                    return;
-                  }
-                  if (context.mounted) {
-                    await showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
-                      backgroundColor: Colors.transparent,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                      ),
-                      builder: (_) => const JournalBottomSheet(),
-                    );
-                    if (context.mounted) {
-                      Confetti.launch(
-                        context,
-                        options: ConfettiOptions(
-                          particleCount: 30,
-                          spread: 360,
-                          startVelocity: 10,
-                          gravity: 0.3,
-                          scalar: 0.8,
-                          ticks: 40,
-                          colors: const [
-                            Color(0xFFFFD700),
-                            Color(0xFFFFA500),
-                            Color(0xFFFF6347),
-                            Color(0xFF00CED1),
-                            Color(0xFFFFFFFF),
-                          ],
-                        ),
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Row(
-                            children: [
-                              Icon(Icons.check_circle, color: Colors.white, size: 20),
-                              SizedBox(width: 10),
-                              Text('Diary saved', style: TextStyle(fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                          behavior: SnackBarBehavior.floating,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  }
-                },
-                backgroundColor: cs.primaryContainer,
-                foregroundColor: cs.onPrimaryContainer,
-                child: const Icon(Icons.edit_rounded),
-              ),
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Shimmer.fromColors(
-                    baseColor: Colors.transparent,
-                    highlightColor: Colors.white.withValues(alpha: 0.25),
-                    period: const Duration(milliseconds: 2000),
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          )
-        : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+
       bottomNavigationBar: NavigationBar(
         backgroundColor: Theme.of(
           context,
@@ -370,7 +302,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
           context,
         ).colorScheme.secondaryContainer.withValues(alpha: 0.8),
         animationDuration: const Duration(milliseconds: 400),
-        selectedIndex: _selectedIndex,
+        selectedIndex: _selectedIndex.clamp(0, _buildNavBarItems(cs).length - 1),
         onDestinationSelected: (index) {
           HapticFeedback.lightImpact();
           navigateToTab(index);
@@ -405,56 +337,83 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   }
 }
 
-const List<Widget> _pages = [
-  Homepage(),
-  QuranPage(),
-  TasbihScreen(),
-  ProfilePage1(),
-];
+class _ProfileTabIcon extends StatefulWidget {
+  final bool selected;
+  final ColorScheme cs;
 
-List<NavigationDestination> _buildNavBarItems(ColorScheme cs) {
-  final user = AuthService.currentUser;
-  final isGuest = user == null || user.isAnonymous;
+  const _ProfileTabIcon({required this.selected, required this.cs});
 
-  Widget profileIcon(bool selected) {
-    return CircleAvatar(
-      radius: 14,
-      backgroundColor: selected ? cs.secondaryContainer : Colors.transparent,
-      child: isGuest
-        ? Icon(Icons.person_rounded, size: 18, color: cs.onSurface)
-        : (user.photoURL != null && user.photoURL!.isNotEmpty)
-            ? ClipOval(
-                child: Image.network(
-                  user.photoURL!,
-                  width: 28,
-                  height: 28,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(Icons.person_rounded, size: 18, color: cs.onSurface),
-                ),
-              )
-            : Icon(Icons.person_rounded, size: 18, color: cs.onSurface),
-    );
+  @override
+  State<_ProfileTabIcon> createState() => _ProfileTabIconState();
+}
+
+class _ProfileTabIconState extends State<_ProfileTabIcon> {
+  User? _user;
+  StreamSubscription? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _user = AuthService.currentUser;
+    _sub = AuthService.userChanges.listen((u) {
+      if (mounted) setState(() => _user = u);
+    });
   }
 
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final photoUrl = AuthService.getPhotoUrl(_user);
+
+    if (photoUrl != null && photoUrl.isNotEmpty) {
+      final size = widget.selected ? 28.0 : 24.0;
+      final borderWidth = widget.selected ? 2.0 : 1.0;
+      final borderColor = widget.selected ? AppTheme.neonPurple : AppTheme.ghostSilver;
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: borderColor, width: borderWidth),
+        ),
+        child: ClipOval(
+          child: Image.network(photoUrl, fit: BoxFit.cover),
+        ),
+      );
+    }
+
+    if (widget.selected) {
+      return const Icon(Icons.person_rounded, color: AppTheme.neonPurple);
+    }
+    return const Icon(Icons.person_outline_rounded, color: AppTheme.ghostSilver);
+  }
+}
+
+List<NavigationDestination> _buildNavBarItems(ColorScheme cs) {
   return [
     const NavigationDestination(
       icon: Icon(Icons.home_filled),
       selectedIcon: Icon(Icons.home_filled),
       label: "home",
     ),
-    const NavigationDestination(
-      icon: Icon(Icons.menu_book_rounded),
-      selectedIcon: Icon(Icons.menu_book_rounded),
-      label: 'Quran',
+    NavigationDestination(
+      icon: ImageIcon(AssetImage('assets/photos/elements/icons8-cards-64.png')),
+      selectedIcon: ImageIcon(AssetImage('assets/photos/elements/icons8-cards-64.png')),
+      label: 'Insights',
     ),
     const NavigationDestination(
-      icon: Icon(Icons.loop_rounded),
-      selectedIcon: Icon(Icons.loop_rounded),
-      label: 'Tesbih',
+      icon: Icon(Icons.store_rounded),
+      selectedIcon: Icon(Icons.store_rounded),
+      label: "shop",
     ),
     NavigationDestination(
-      icon: profileIcon(false),
-      selectedIcon: profileIcon(true),
+      icon: _ProfileTabIcon(selected: false, cs: cs),
+      selectedIcon: _ProfileTabIcon(selected: true, cs: cs),
       label: 'profile',
     ),
   ];

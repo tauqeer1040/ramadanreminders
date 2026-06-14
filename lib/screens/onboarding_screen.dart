@@ -27,7 +27,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   late AnimationController _bounceController;
   late Animation<double> _bounceAnimation;
 
-  static const int _totalPages = 18;
+  static const int _totalPages = 17;
 
   @override
   void initState() {
@@ -125,6 +125,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       }
       await UserService.syncUser(user);
     }
+
+    await prefs.setInt('total_stars', _stars);
 
     if (mounted) {
       Navigator.of(context).pop();
@@ -272,9 +274,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
       // PART 3: CONCLUSION
       SummaryPage(data: _data, onNext: _goToNext, onBack: _goBack),
-      AppFeedbackPage(data: _data, onNext: _goToNext, onBack: _goBack),
-       SetupPage(data: _data, onNext: _goToNext, onBack: _goBack, onStarsEarned: _addStars),
-       GoogleSignInPage(onFinish: _goToNext, onBack: _goBack),
+       AppFeedbackPage(data: _data, onNext: _goToNext, onBack: _goBack),
+        GoogleSignInPage(onFinish: _goToNext, onBack: _goBack),
        PaywallPage1(data: _data, onNext: _goToNext, onBack: _goBack),
        PaywallPage2(data: _data, onNext: _goToNext, onBack: _goBack),
        PaywallPage3(data: _data, onNext: _finishOnboarding),

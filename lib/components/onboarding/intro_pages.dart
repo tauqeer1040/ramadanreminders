@@ -6,6 +6,7 @@ import 'package:audiotags/audiotags.dart';
 import 'onboarding_data.dart';
 import '../../services/audio_service.dart';
 import '../widgets/duo_button.dart';
+import '../widgets/commitment_button.dart';
 import '../../theme/app_theme.dart';
 
 class WelcomePage extends StatelessWidget {
@@ -138,7 +139,7 @@ class _MusicSelectionPageState extends State<MusicSelectionPage> {
           ),
           const SizedBox(height: 24),
           Text(
-            "By the end, you'd have written your first journal, an AI generated reflection of your journal entry, completed 3 tasks, and earned 200 stars!",
+            "By the end, you'd have written your first journal, unlocked 3 scratch cards (containing personalized AI insights from the Holy Quran), named your Cat, and earned 200 stars!",
             style: tt.bodyLarge?.copyWith(
               color: cs.onSurface,
               fontStyle: FontStyle.italic,
@@ -612,20 +613,21 @@ class _AgePhonePageState extends State<AgePhonePage> {
   }
 
   Widget _buildReadyStep(ColorScheme cs, TextTheme tt) {
-    final name = widget.data.displayName;
+    final catName = widget.data.catName;
+    final userName = widget.data.displayName;
     return Column(
       key: const ValueKey('ready_step'),
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Spacer(flex: 1),
         Text(
-          "Are you ready for a deep reflection${name != null ? ", $name" : ""}?",
+          "Are you ready for a deep reflection${userName != null ? ", $userName" : ""}?",
           style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 12),
         Text(
-          "A moment of honest clarity can sometimes bring the most beautiful insights. Are you ready for a hard question${name != null ? ", $name" : ""}?",
+          "A moment of honest clarity can sometimes bring the most beautiful insights. Are you ready for a hard question${userName != null ? ", $userName" : ""}?",
           style: tt.bodyLarge?.copyWith(
             color: cs.onSurface.withValues(alpha: 0.8),
             height: 1.5,
@@ -647,7 +649,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
           height: 56,
           sfxType: DuoSfxType.positive,
           child: Text(
-            "Yeah, hit me!",
+            "I'm ready${catName != null ? ", $catName" : ""}",
             style: TextStyle(
               fontSize: 16,
               color: cs.onSurface,
@@ -858,6 +860,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
   }
 
   Widget _buildConclusionStep(ColorScheme cs, TextTheme tt) {
+    final name = widget.data.displayName ?? 'friend';
     return Column(
       key: const ValueKey('conclusion_step'),
       mainAxisAlignment: MainAxisAlignment.center,
@@ -870,18 +873,26 @@ class _AgePhonePageState extends State<AgePhonePage> {
         ),
         const SizedBox(height: 16),
         Text(
-          "That means waking up tomorrow is worth more than 10 million dollars for you, ${widget.data.displayName != null ? widget.data.displayName! : 'friend'}.\n\nWake up with a smile on your face every single day, do good, wish well towards others, and be kind to all — because you are worth a million bucks.\n\nAnd the time you spend towards Allah? He'll reward you in the Aakhirah with endless riches that make 10 million look like nothing.",
+          "Waking up tomorrow is worth more than 10 million dollars!\n\nStarting today $name, We'll try to make the most of every single day. Spend each one mindfully. Journal what's in your heart, here. Nurturing the good in you. Not letting the bitter in you grow, Reflecting on it before Allah.\n\nThis is your promise — to yourself and to Allah.",
           style: tt.bodyLarge?.copyWith(
             color: cs.onSurface.withValues(alpha: 0.8),
             height: 1.6,
           ),
           textAlign: TextAlign.center,
         ),
+        const SizedBox(height: 32),
+        CommitmentButton(
+          onCommit: () {
+            HapticFeedback.mediumImpact();
+            setState(() => _stepIndex = 4);
+          },
+          color: AppTheme.starGold,
+          size: 144,
+        ),
         const Spacer(flex: 1),
         Row(
           children: [
             Expanded(
-              flex: 1,
               child: DuoButton(
                 onPressed: _handleBack,
                 backgroundColor: cs.secondaryContainer,
@@ -895,39 +906,6 @@ class _AgePhonePageState extends State<AgePhonePage> {
                     color: cs.onSurface,
                     fontWeight: FontWeight.bold,
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              flex: 2,
-              child: DuoButton(
-                onPressed: () {
-                  HapticFeedback.mediumImpact();
-                  setState(() => _stepIndex = 4);
-                },
-                backgroundColor: cs.primary,
-                depthColor: cs.primary.withValues(alpha: 0.8),
-                radius: 16,
-                sfxType: DuoSfxType.positive,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Continue",
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 20,
-                      color: cs.onSurface,
-                    ),
-                  ],
                 ),
               ),
             ),
@@ -1562,7 +1540,7 @@ class BridgePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      "Most people just read the Quran without really connecting it to their day.\n Meowmin is different. You write a diary entry, and we find Quran verses that actually talk about what you're going through. \nIt makes the Quran feel personal—like it was written just for you and your life right now.",
+                      "Most people read the Quran without ever connecting it to their daily life. Meowmin builds you a custom plan — you journal what's on your heart, and we pair it with Quran verses and reflections that speak directly to your situation. It's a personal roadmap designed around your life, your struggles, and your growth.",
                       style: tt.bodyLarge?.copyWith(
                         color: cs.onSurface.withValues(alpha: 0.7),
                       ),

@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Meowmin uses speech recognition to let you dictate your journal entries hands-free.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Meowmin needs microphone access so you can speak your journal entries.</string>
 </dict>
 </plist>

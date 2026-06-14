@@ -1368,6 +1368,103 @@ Return ONLY the analogy text, nothing else.
   res.status(503).json({ error: 'AI models saturated, please try again.' });
 });
 
+app.post('/api/v2/generate-insights', verifyAuth, async (req, res) => {
+  const { journalEntry } = req.body;
+  if (!journalEntry) {
+    return res.status(400).json({ error: 'Missing journalEntry' });
+  }
+
+  if (!process.env.OPENROUTER_API_KEY && AI_PROVIDER !== 'lmstudio') {
+    return res.status(503).json({ error: 'AI service not configured' });
+  }
+
+  const sanitized = String(journalEntry).substring(0, 5000).trim();
+  if (!sanitized) {
+    return res.status(400).json({ error: 'Empty journal entry' });
+  }
+
+  // simple content hash for caching
+  const hash = sanitized.split('').reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0);
+  const cacheKey = `insights:${req.uid}:${hash}`;
+  const cached = getCache(cacheKey);
+  if (cached) return res.json({ insights: cached });
+
+  const prompt = `
+You are an Islamic spiritual guide and personal reflection assistant.
+
+Based on the user's journal entry below, generate EXACTLY 3 distinct insights.
+Return ONLY a raw JSON array of 3 strings — no markdown, no wrapping, no extra text.
+
+JOURNAL ENTRY:
+"""
+${sanitized}
+"""
+
+Follow these 3 distinct roles exactly, one per insight:
+
+INSIGHT 1 — "A Surah for You" (Spiritual Guide):
+Analyze the emotional theme of the journal. Recommend a specific Surah from the Quran that relates to what they're going through. Quote 1-2 real verses (with Surah name and ayah number). Explain why this Surah speaks to their state in 2-3 sentences.
+
+INSIGHT 2 — "An Ayah to Hold Onto" (Mystical Oracle):
+Write like a subtle horoscope reading grounded in Quranic truth. Use phrases like "The divine light upon your path today reveals..." or "What has been written for you..." — make it feel personally destined, but always anchor it to a real Quranic verse with citation. 2-3 sentences.
+
+INSIGHT 3 — "A Story to Remember" (Wise Storyteller):
+Connect their experience to a story of a Prophet, Companion, or righteous figure from Islamic tradition. Include a relevant Quranic verse or authentic hadith. End with a reflective takeaway. 2-3 sentences.
+
+CRITICAL RULES:
+- Every insight MUST cite a real Quranic verse with Surah name and ayah number (e.g. "— Quran 2:286")
+- Do NOT invent or fabricate verses
+- No markdown, no bold, no bullet points
+- No greetings like "Assalamu alaikum"
+- Each insight should be 2-4 sentences
+
+Return ONLY: ["insight one text...", "insight two text...", "insight three text..."]
+`;
+
+  let lastError = null;
+  for (const model of OPENROUTER_MODELS) {
+    try {
+      const aiRes = AI_PROVIDER === 'lmstudio'
+        ? await (async () => {
+            const r = await fetch(`${LM_STUDIO_BASE_URL}/api/v1/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: LM_STUDIO_MODEL, input: prompt, temperature: 0.3 }),
+            });
+            if (!r.ok) throw new Error(`LM Studio ${r.status}`);
+            const d = await r.json();
+            return d.output?.[0]?.content || d.text || '';
+          })()
+        : await (async () => {
+            const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
+            });
+            if (!r.ok) throw new Error(`OpenRouter ${model} ${r.status}`);
+            const d = await r.json();
+            return d.choices?.[0]?.message?.content || '';
+          })();
+
+      let raw = String(aiRes).trim();
+      if (raw.includes('```json')) raw = raw.split('```json')[1].split('```')[0].trim();
+      else if (raw.includes('```')) raw = raw.split('```')[1].split('```')[0].trim();
+      const insights = JSON.parse(raw);
+      if (!Array.isArray(insights) || insights.length !== 3) throw new Error('Expected array of 3');
+
+      setCache(cacheKey, insights);
+      return res.json({ insights });
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  res.status(503).json({ error: 'AI models saturated, please try again.' });
+});
+
 app.get('/api/v2/ayah', async (req, res) => {
   const { ref } = req.query;
   if (!ref) return res.status(400).json({ error: 'Missing ref' });

@@ -365,72 +365,25 @@ class PaywallPage3 extends StatefulWidget {
 }
 
 class _PaywallPage3State extends State<PaywallPage3> {
-  bool _loading = false;
-  int _slotNumber = 0;
+  void _showPaywall() {
+    HapticFeedback.mediumImpact();
 
-  @override
-  void initState() {
-    super.initState();
-    _loadSlot();
-  }
-
-  Future<void> _loadSlot() async {
-    final prefs = await SharedPreferences.getInstance();
-    final number = prefs.getInt('paywall_slot_number') ?? 213;
-    if (mounted) setState(() => _slotNumber = number);
-  }
-
-  Future<void> _showPaywall() async {
-    setState(() => _loading = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         Superwall.shared.identify(user.uid);
       }
-      HapticFeedback.mediumImpact();
-      Superwall.shared.registerPlacement('StartTrial', feature: () {
-        if (mounted) widget.onNext();
-      });
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
+    } catch (_) {}
 
-  Widget _buildStat(ColorScheme cs, TextTheme tt, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            margin: const EdgeInsets.only(top: 5),
-            width: 4,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppTheme.starGold,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: tt.bodyMedium?.copyWith(
-                color: cs.onSurface.withValues(alpha: 0.8),
-                height: 1.3,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    Superwall.shared.registerPlacement('campaign_trigger', feature: () {
+      if (mounted) widget.onNext();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final name = widget.data.displayName;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -456,20 +409,13 @@ class _PaywallPage3State extends State<PaywallPage3> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      "$name, if Meowmin has helped you think\nclearer, reflect deeper, or simply feel a little\nmore understood, this is your chance\nto keep it alive.\n\nJoin with a membership of your choice.",
+                      "For less than the price of a coffee, you can spend the next three days putting Meowmin to a real test. Journal each morning and night. Let the reflections surface. See if the Quran begins to read you as much as you read it.\n\nIf, after three days, you don't feel this was the best dollar you've ever spent on your aakhirah, we'll refund it. No questions asked.",
                       style: tt.bodyLarge?.copyWith(
                         color: cs.onSurface.withValues(alpha: 0.7),
                       ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
-                    _buildStat(cs, tt, "You wrote your first journal entry."),
-                    _buildStat(cs, tt, "You reflected on what's in your heart."),
-                    if (widget.data.commitmentLevel != null)
-                      _buildStat(cs, tt, "You committed to follow the Quran more closely."),
-                    if (widget.data.journalTags.isNotEmpty)
-                      _buildStat(cs, tt, "You chose ${widget.data.journalTags.length} spiritual ${widget.data.journalTags.length == 1 ? 'tag' : 'tags'} for your journey."),
-                    const SizedBox(height: 32),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     decoration: BoxDecoration(
@@ -516,24 +462,19 @@ class _PaywallPage3State extends State<PaywallPage3> {
                   SizedBox(
                     width: double.infinity,
                     child: DuoButton(
-                      onPressed: _loading ? null : _showPaywall,
+                      onPressed: _showPaywall,
                       backgroundColor: AppTheme.starGold,
                       depthColor: AppTheme.starGold.withValues(alpha: 0.6),
                       radius: 16,
                       height: 56,
-                      child: _loading
-                        ? const SizedBox(
-                            width: 24, height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                          )
-                        : const Text(
-                            'Start Your \$1 Trial',
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
+                      child: const Text(
+                        'Start Your \$1 Trial',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -553,7 +494,7 @@ class _PaywallPage3State extends State<PaywallPage3> {
               ),
             ],
           ),
-        );
+        ));
       },
     );
   }

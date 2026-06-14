@@ -13,7 +13,18 @@ class AuthService {
 
   /// Get current user stream
   static Stream<User?> get authStateChanges => _auth.authStateChanges();
+  static Stream<User?> get userChanges => _auth.userChanges();
   static User? get currentUser => _auth.currentUser;
+
+  static String? getPhotoUrl(User? user) {
+    if (user == null || user.isAnonymous) return null;
+    for (final p in user.providerData) {
+      if (p.providerId == 'google.com' && p.photoURL != null) {
+        return p.photoURL;
+      }
+    }
+    return user.photoURL;
+  }
 
   /// Sign in with Google, linking to anonymous account if present
   static Future<UserCredential?> signInWithGoogle() async {
@@ -75,6 +86,7 @@ class AuthService {
         );
         try {
           userCredential = await user.linkWithCredential(credential);
+          await _auth.currentUser?.reload();
           debug.logEvent('LINK_OK', 'Account linked successfully!',
             details: {'newUid': userCredential?.user?.uid ?? 'unknown'},
           );

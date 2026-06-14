@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
 import '../services/journal_service.dart';
-import 'journal_list_screen.dart';
 import '../core/app_background.dart';
 
 class JournalBottomSheet extends StatefulWidget {
-  const JournalBottomSheet({super.key});
+  final String? initialText;
+
+  const JournalBottomSheet({super.key, this.initialText});
 
   @override
   State<JournalBottomSheet> createState() => _JournalBottomSheetState();
@@ -15,6 +16,7 @@ class JournalBottomSheet extends StatefulWidget {
 class _JournalBottomSheetState extends State<JournalBottomSheet> {
   late TextEditingController _controller;
   late String _journalId;
+  bool _hasWrittenContent = false;
 
   final List<String> _suggestions = [
     "I had a good day today",
@@ -30,7 +32,10 @@ class _JournalBottomSheetState extends State<JournalBottomSheet> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController();
+    _controller = TextEditingController(text: widget.initialText ?? '');
+    if (widget.initialText != null && widget.initialText!.trim().isNotEmpty) {
+      _hasWrittenContent = true;
+    }
     _journalId = DateTime.now().toIso8601String();
   }
 
@@ -41,6 +46,7 @@ class _JournalBottomSheetState extends State<JournalBottomSheet> {
   }
 
   void _onTextChanged(String text) {
+    if (text.trim().isNotEmpty) _hasWrittenContent = true;
     JournalService.saveLocalJournalWithId(_journalId, text);
   }
 
@@ -95,13 +101,6 @@ class _JournalBottomSheetState extends State<JournalBottomSheet> {
     _selectSuggestion(index, suggestion);
   }
 
-  void _openHistory() {
-    Navigator.pop(context);
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const JournalListScreen()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -110,7 +109,13 @@ class _JournalBottomSheetState extends State<JournalBottomSheet> {
 
     return AppBackground(
       overlayOpacity: 0.6,
-      child: Padding(
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          Navigator.pop(context, _hasWrittenContent);
+        },
+        child: Padding(
         padding: EdgeInsets.only(bottom: bottomInset),
         child: SizedBox(
           height: MediaQuery.of(context).size.height * 0.85,
@@ -144,11 +149,11 @@ class _JournalBottomSheetState extends State<JournalBottomSheet> {
                     ),
                     const Spacer(),
                     IconButton(
-                      icon: Icon(
-                        Icons.history_rounded,
-                        color: const Color(0xFFF5F5F0),
+                      icon: const Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFFF5F5F0),
                       ),
-                      onPressed: _openHistory,
+                      onPressed: () => Navigator.pop(context, _hasWrittenContent),
                       style: IconButton.styleFrom(backgroundColor: Colors.transparent),
                     ),
                   ],
@@ -254,6 +259,7 @@ class _JournalBottomSheetState extends State<JournalBottomSheet> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

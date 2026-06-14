@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
@@ -7,11 +8,16 @@ import '../services/journal_service.dart';
 import '../services/audio_service.dart';
 import '../services/sfx_service.dart';
 import '../screens/manage_account_screen.dart';
+import '../services/user_service.dart';
 import '../theme/app_theme.dart';
 import '../screens/onboarding_screen.dart';
 import 'widgets/streak_graph.dart';
 import 'widgets/duo_button.dart';
+import 'action_prompt_card.dart';
+import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
+import 'package:home_widget/home_widget.dart';
 
 class ProfilePage1 extends StatefulWidget {
   const ProfilePage1({super.key});
@@ -29,7 +35,6 @@ class _ProfilePage1State extends State<ProfilePage1> {
   int _streak = 0;
   int _totalJournals = 0;
   int _quranDays = 0;
-  List<bool> _last7Days = List.filled(7, false);
 
   // Onboarding data
   String? _onboardingIntention;
@@ -50,7 +55,7 @@ class _ProfilePage1State extends State<ProfilePage1> {
     _checkNotificationStatus();
     _loadStats();
     _loadOnboardingData();
-    AuthService.authStateChanges.listen((user) {
+    AuthService.userChanges.listen((user) {
       if (mounted) {
         setState(() => _currentUser = user);
         _loadStats();
@@ -60,14 +65,12 @@ class _ProfilePage1State extends State<ProfilePage1> {
 
   Future<void> _loadStats() async {
     final streak = await StreakService.getStreak();
-    final last7 = await StreakService.getLast7Days();
     final journals = await JournalService.getAllLocalJournals();
     final prefs = await SharedPreferences.getInstance();
     final quranDays = prefs.getKeys().where((k) => k.startsWith('quran_revealed_')).length;
     if (mounted) {
       setState(() {
         _streak = streak;
-        _last7Days = last7;
         _totalJournals = journals.length;
         _quranDays = quranDays;
       });
@@ -101,19 +104,28 @@ class _ProfilePage1State extends State<ProfilePage1> {
     if (mounted) setState(() => _notificationsGranted = granted);
     if (granted && mounted) {
       NotificationService.scheduleDailyNotifications();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.star_rounded, color: AppTheme.starGold, size: 20),
-              SizedBox(width: 8),
-              Text('Notifications enabled! Barakallahu feekum 🌙'),
-            ],
+      await _incrementStars(100);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.star_rounded, color: AppTheme.starGold, size: 20),
+                SizedBox(width: 8),
+                Text('Notifications enabled! +100 ⭐'),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
           ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+        );
+      }
     }
+  }
+
+  Future<void> _incrementStars(int amount) async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getInt('total_stars') ?? 0;
+    await prefs.setInt('total_stars', current + amount);
   }
 
   String get _displayName {
@@ -170,21 +182,12 @@ class _ProfilePage1State extends State<ProfilePage1> {
             ),
             const SizedBox(height: 16),
 
-            // ── Activity Stats ──────────────────────────────────────────────
+            // ── Mood Calendar ────────────────────────────────────────────────
             _buildSectionCard(
-              title: 'YOUR STATS',
-              icon: Icons.bar_chart_rounded,
+              title: 'MOOD CALENDAR',
+              icon: Icons.grid_view_rounded,
               iconColor: const Color(0xFF58CC02),
-              child: _buildStatsRow(),
-            ),
-            const SizedBox(height: 16),
-
-            // ── Last 7 Days Activity ────────────────────────────────────────
-            _buildSectionCard(
-              title: 'LAST 7 DAYS',
-              icon: Icons.calendar_today_rounded,
-              iconColor: const Color(0xFF0052FF),
-              child: _buildLast7Days(),
+              child: _buildMoodCalendar(),
             ),
             const SizedBox(height: 16),
 
@@ -198,12 +201,132 @@ class _ProfilePage1State extends State<ProfilePage1> {
             _buildAudioCard(),
             const SizedBox(height: 16),
 
-            // ── Account & Sync ──────────────────────────────────────────────
-            _buildAccountCard(),
+            // ── Homescreen Widget ─────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 0),
+              child: ActionPromptCard(
+                title: 'Homescreen Widget',
+                subtitle:
+                    'Add a homescreen widget for one-tap access\nto your daily tasks and streak.',
+                buttonText: 'Add Widget',
+                onPressed: () async {
+                  final supported = await HomeWidget.isRequestPinWidgetSupported() ?? false;
+                  if (supported) {
+                    await HomeWidget.requestPinWidget(
+                      androidName: 'StreakWidgetProvider',
+                      name: 'StreakWidgetProvider',
+                    );
+                    if (mounted) {
+                      await _incrementStars(100);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Row(
+                            children: [
+                              Icon(Icons.star_rounded, color: AppTheme.starGold, size: 20),
+                              SizedBox(width: 8),
+                              Text('Widget added! +100 ⭐'),
+                            ],
+                          ),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  } else {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Long-press your home screen → Widgets → Meowmin Ai Diary to add it.'),
+                          backgroundColor: Color(0xFF311B92),
+                        ),
+                      );
+                    }
+                  }
+                },
+                backgroundColor: const Color(0xFFE1BEE7),
+                foregroundColor: const Color(0xFF311B92),
+                icon: const Icon(
+                  Icons.widgets_rounded,
+                  size: 64,
+                  color: Color(0xFFAB47BC),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Notification Prompt ────────────────────────────────────────
+            if (!_notificationsGranted)
+              ActionPromptCard(
+                title: 'Set the reminder',
+                subtitle:
+                    'Never miss your morning routine!\nSet a reminder to stay on track',
+                buttonText: 'Set Now',
+                onPressed: _toggleNotifications,
+                backgroundColor: const Color(0xFFFFE0B2),
+                foregroundColor: const Color(0xFF4E342E),
+                icon: const Icon(
+                  Icons.notifications_active_rounded,
+                  size: 64,
+                  color: Color(0xFFFF7043),
+                ),
+              ),
+            const SizedBox(height: 16),
+
+            // ── Share ──────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 0),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFFf09433),
+                      Color(0xFFe6683c),
+                      Color(0xFFdc2743),
+                      Color(0xFFcc2366),
+                      Color(0xFFbc1888),
+                    ],
+                    begin: Alignment.bottomLeft,
+                    end: Alignment.topRight,
+                  ),
+                  borderRadius: BorderRadius.circular(32),
+                ),
+                child: FilledButton(
+                  onPressed: () {
+                    // Trigger instagram share action here
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(32),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Text(
+                        'SHARE',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(Icons.ios_share_rounded, size: 22),
+                    ],
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
 
             // ── Replay Onboarding ───────────────────────────────────────────
             _replayOnboardingCard(),
+            const SizedBox(height: 12),
+            _subscribeCard(),
             const SizedBox(height: 16),
           ],
         ),
@@ -313,84 +436,8 @@ class _ProfilePage1State extends State<ProfilePage1> {
     );
   }
 
-  Widget _buildStatsRow() {
-    final activeDays = _last7Days.where((d) => d).length;
-    final consistencyPct = ((activeDays / 7) * 100).round();
-
-    return Row(
-      children: [
-        _buildStatItem(
-          icon: Icons.book_rounded,
-          iconColor: AppTheme.neonPurple,
-          label: 'Journals',
-          value: '$_totalJournals',
-        ),
-        _buildStatItem(
-          icon: Icons.local_fire_department_rounded,
-          iconColor: AppTheme.starGold,
-          label: 'Streak',
-          value: '${_streak}d',
-        ),
-        _buildStatItem(
-          icon: Icons.gps_fixed_rounded,
-          iconColor: const Color(0xFF58CC02),
-          label: 'Consistency',
-          value: '$consistencyPct%',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLast7Days() {
-    const dayLetters = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
-    final now = DateTime.now();
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: List.generate(7, (i) {
-        final day = now.subtract(Duration(days: 6 - i));
-        final isToday = i == 6;
-        final isActive = _last7Days[i];
-        final dayLetter = dayLetters[day.weekday - 1];
-
-        return Column(
-          children: [
-            Text(
-              dayLetter,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: isToday ? AppTheme.starWhite : AppTheme.ghostSilver,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isActive
-                    ? AppTheme.starGold.withValues(alpha: 0.2)
-                    : AppTheme.starWhite.withValues(alpha: 0.06),
-                border: Border.all(
-                  color: isActive
-                      ? AppTheme.starGold
-                      : (isToday
-                          ? AppTheme.neonPurple.withValues(alpha: 0.5)
-                          : AppTheme.starWhite.withValues(alpha: 0.1)),
-                  width: isActive || isToday ? 2 : 1,
-                ),
-              ),
-              child: isActive
-                  ? const Icon(Icons.check_rounded, color: AppTheme.starGold, size: 18)
-                  : isToday
-                      ? const Icon(Icons.circle, color: AppTheme.neonPurple, size: 10)
-                      : null,
-            ),
-          ],
-        );
-      }),
-    );
+  Widget _buildMoodCalendar() {
+    return _MoodCalendarGrid();
   }
 
   Widget _buildNotificationCard() {
@@ -602,22 +649,44 @@ class _ProfilePage1State extends State<ProfilePage1> {
                         shape: BoxShape.circle,
                         border: Border.all(color: AppTheme.neonPurple, width: 2),
                       ),
-                      child: _currentUser?.photoURL != null
-                          ? ClipOval(child: Image.network(_currentUser!.photoURL!, fit: BoxFit.cover))
-                          : Icon(Icons.person, size: 24, color: AppTheme.neonPurple),
+                      child: (() {
+                        final photoUrl = AuthService.getPhotoUrl(_currentUser);
+                        if (photoUrl != null && photoUrl.isNotEmpty) {
+                          return ClipOval(
+                            child: Image.network(photoUrl, fit: BoxFit.cover),
+                          );
+                        }
+                        return Icon(Icons.person, size: 24, color: AppTheme.neonPurple);
+                      }()),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            _currentUser?.displayName ?? 'User',
-                            style: const TextStyle(
-                              color: AppTheme.starWhite,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  _currentUser?.displayName ?? 'User',
+                                  style: const TextStyle(
+                                    color: AppTheme.starWhite,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              GestureDetector(
+                                onTap: _showEditNameDialog,
+                                child: Icon(
+                                  Icons.edit_rounded,
+                                  size: 14,
+                                  color: AppTheme.neonPurple.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ],
                           ),
                           Text(
                             _currentUser?.email ?? '',
@@ -638,6 +707,64 @@ class _ProfilePage1State extends State<ProfilePage1> {
         ],
       ),
     );
+  }
+
+  void _showEditNameDialog() {
+    final controller = TextEditingController(text: _currentUser?.displayName ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Edit Name', style: TextStyle(color: AppTheme.starWhite, fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 24,
+          maxLengthEnforcement: MaxLengthEnforcement.truncateAfterCompositionEnds,
+          textCapitalization: TextCapitalization.words,
+          style: const TextStyle(color: AppTheme.starWhite, fontSize: 16),
+          decoration: InputDecoration(
+            hintText: 'Enter your name',
+            hintStyle: TextStyle(color: AppTheme.ghostSilver.withValues(alpha: 0.5)),
+            filled: true,
+            fillColor: Colors.white.withValues(alpha: 0.08),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            counter: const SizedBox.shrink(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppTheme.ghostSilver)),
+          ),
+          TextButton(
+            onPressed: () async {
+              final name = controller.text.trim();
+              if (name.isEmpty) return;
+              Navigator.pop(ctx);
+              await _updateDisplayName(name);
+            },
+            child: const Text('Save', style: TextStyle(color: AppTheme.neonPurple, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _updateDisplayName(String name) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      await user.updateDisplayName(name);
+      await user.reload();
+      await UserService.syncUser(FirebaseAuth.instance.currentUser!);
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   // ── REPLAY ONBOARDING ──────────────────────────────────────────────────────
@@ -665,6 +792,57 @@ class _ProfilePage1State extends State<ProfilePage1> {
         ],
       ),
     );
+  }
+
+  Widget _subscribeCard() {
+    return DuoButton(
+      onPressed: _showPaywall,
+      backgroundColor: AppTheme.starGold,
+      depthColor: AppTheme.starGold.withValues(alpha: 0.6),
+      radius: 16,
+      height: 56,
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.workspace_premium, color: Colors.black, size: 20),
+          SizedBox(width: 10),
+          Text(
+            'Subscribe',
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPaywall() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Launching paywall...'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      debugPrint('[ProfilePaywall] User: ${user?.uid} anonymous: ${user?.isAnonymous}');
+      if (user != null) {
+        Superwall.shared.identify(user.uid);
+      }
+      Superwall.shared.registerPlacement('campaign_trigger', feature: () {
+        debugPrint('[ProfilePaywall] Feature callback fired');
+      });
+    } catch (e) {
+      debugPrint('[ProfilePaywall] Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _replayOnboarding() async {
@@ -739,51 +917,12 @@ class _ProfilePage1State extends State<ProfilePage1> {
               fontSize: 14,
               fontWeight: FontWeight.w700,
             ),
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _buildStatItem({
-    required IconData icon,
-    required Color iconColor,
-    required String label,
-    required String value,
-  }) {
-    return Expanded(
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: iconColor, size: 22),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppTheme.starWhite,
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppTheme.ghostSilver,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
             ),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
 
   BoxDecoration _cardDecoration({Color? borderColor}) => BoxDecoration(
     color: const Color(0xFF1A1A2E),
@@ -800,4 +939,205 @@ class _ProfilePage1State extends State<ProfilePage1> {
       ),
     ],
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mood Calendar Grid
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MoodCalendarGrid extends StatefulWidget {
+  @override
+  State<_MoodCalendarGrid> createState() => _MoodCalendarGridState();
+}
+
+class _MoodCalendarGridState extends State<_MoodCalendarGrid> {
+  late DateTime _currentMonth;
+  Map<String, double> _moodData = {};
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
+    _loadMoods();
+  }
+
+  Future<void> _loadMoods() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = <String, double>{};
+    for (final key in prefs.getKeys()) {
+      if (key.startsWith('mood_')) {
+        final dateStr = key.substring(5);
+        final val = double.tryParse(prefs.getString(key) ?? '');
+        if (val != null) data[dateStr] = val;
+      }
+    }
+    if (mounted) setState(() {
+      _moodData = data;
+      _loading = false;
+    });
+  }
+
+  void _prevMonth() => setState(() {
+    _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
+  });
+
+  void _nextMonth() => setState(() {
+    _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1);
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const SizedBox(
+        height: 200,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+
+    final tt = Theme.of(context).textTheme;
+    final now = DateTime.now();
+    final thisMonth = DateTime(now.year, now.month);
+    final isFuture = _currentMonth.isAfter(thisMonth);
+
+    final daysInMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 0).day;
+    final firstWeekday = DateTime(_currentMonth.year, _currentMonth.month, 1).weekday % 7;
+
+    const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    final monthLabel = DateFormat('MMMM yyyy').format(_currentMonth);
+
+    return Column(
+      children: [
+        // ── Month navigation ──────────────────────────────────
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.chevron_left_rounded),
+              color: Colors.white.withValues(alpha: 0.60),
+              onPressed: _prevMonth,
+            ),
+            Text(
+              monthLabel,
+              style: tt.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.85),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.chevron_right_rounded),
+              color: isFuture
+                  ? Colors.white.withValues(alpha: 0.15)
+                  : Colors.white.withValues(alpha: 0.60),
+              onPressed: isFuture ? null : _nextMonth,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // ── Day labels ─────────────────────────────────────────
+        Row(
+          children: dayLabels.map((l) => Expanded(
+            child: Center(
+              child: Text(
+                l,
+                style: tt.labelSmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.40),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          )).toList(),
+        ),
+        const SizedBox(height: 6),
+
+        // ── Day cells ──────────────────────────────────────────
+        ...List.generate(_weeksCount(daysInMonth, firstWeekday), (week) {
+          return Row(
+            children: List.generate(7, (weekday) {
+              final day = week * 7 + weekday - firstWeekday + 1;
+              final isValid = day >= 1 && day <= daysInMonth;
+              final dateStr = isValid
+                  ? '${_currentMonth.year}-${_currentMonth.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}'
+                  : '';
+
+              final moodVal = isValid ? _moodData[dateStr] : null;
+              final isToday = isValid && dateStr == now.toIso8601String().substring(0, 10);
+
+              return Expanded(
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Container(
+                    margin: const EdgeInsets.all(1.5),
+                    decoration: BoxDecoration(
+                      color: moodVal != null
+                          ? _moodColor(moodVal).withValues(alpha: 0.55)
+                          : (isToday
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : Colors.transparent),
+                      borderRadius: BorderRadius.circular(6),
+                      border: isToday && moodVal == null
+                          ? Border.all(color: AppTheme.neonPurple.withValues(alpha: 0.30), width: 1)
+                          : null,
+                    ),
+                    child: Center(
+                      child: Text(
+                        isValid ? '$day' : '',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: moodVal != null ? FontWeight.w700 : FontWeight.w400,
+                          color: moodVal != null
+                              ? Colors.white
+                              : (isToday
+                                  ? AppTheme.neonPurple.withValues(alpha: 0.60)
+                                  : Colors.white.withValues(alpha: 0.25)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          );
+        }),
+        const SizedBox(height: 8),
+
+        // ── Legend ──────────────────────────────────────────────
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _legendDot(const Color(0xFF5C6BC0)),
+            const SizedBox(width: 4),
+            Text('Low', style: tt.labelSmall?.copyWith(color: Colors.white.withValues(alpha: 0.40))),
+            const SizedBox(width: 12),
+            _legendDot(const Color(0xFFAB47BC)),
+            const SizedBox(width: 4),
+            Text('Med', style: tt.labelSmall?.copyWith(color: Colors.white.withValues(alpha: 0.40))),
+            const SizedBox(width: 12),
+            _legendDot(const Color(0xFF7CB342)),
+            const SizedBox(width: 4),
+            Text('High', style: tt.labelSmall?.copyWith(color: Colors.white.withValues(alpha: 0.40))),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _legendDot(Color c) => Container(
+    width: 10, height: 10,
+    decoration: BoxDecoration(
+      color: c.withValues(alpha: 0.55),
+      borderRadius: BorderRadius.circular(3),
+    ),
+  );
+
+  int _weeksCount(int days, int firstWeekday) =>
+      ((days + firstWeekday + 6) ~/ 7).clamp(4, 6);
+
+  Color _moodColor(double val) {
+    if (val < 0.35) return const Color(0xFF5C6BC0);
+    if (val < 0.65) return const Color(0xFFAB47BC);
+    return const Color(0xFF7CB342);
+  }
 }

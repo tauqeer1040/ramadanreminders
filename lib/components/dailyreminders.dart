@@ -21,12 +21,12 @@ class DailyReminder extends StatelessWidget {
   DailyReminder({super.key});
 
   final List<Reminder> reminders = [
-    Reminder(
-      id: "1",
-      type: "tesbiyat",
-      content: "Glory be to Allah",
-      arabic: "سُبْحَانَ اللّٰهِ",
-    ),
+    // Reminder(
+    //   id: "1",
+    //   type: "tesbiyat",
+    //   content: "Glory be to Allah",
+    //   arabic: "سُبْحَانَ اللّٰهِ",
+    // ),
     Reminder(
       id: "2",
       type: "verse",
@@ -43,8 +43,8 @@ class DailyReminder extends StatelessWidget {
 
   IconData _getIcon(String type) {
     switch (type) {
-      case 'tesbiyat':
-        return Icons.star;
+      // case 'tesbiyat':
+      //   return Icons.star;
       case 'verse':
         return Icons.menu_book;
       case 'dhikr':
@@ -56,8 +56,8 @@ class DailyReminder extends StatelessWidget {
 
   String _getLabel(String type) {
     switch (type) {
-      case 'tesbiyat':
-        return 'Tesbiyat';
+      // case 'tesbiyat':
+      //   return 'Tesbiyat';
       case 'verse':
         return 'Quran';
       case 'dhikr':
@@ -103,10 +103,8 @@ class DailyReminder extends StatelessWidget {
     return BouncingWidget(
       onPressed: () {
         HapticFeedback.lightImpact();
-        if (reminder.type == 'tesbiyat' || reminder.type == 'dhikr') {
-          Material3BottomNav.switchTab(context, 1); // Index 1 is Tasbih
-        } else if (reminder.type == 'verse') {
-          Material3BottomNav.switchTab(context, 2); // Index 2 is Quran
+        if (reminder.type == 'verse' || reminder.type == 'dhikr') {
+          Material3BottomNav.switchTab(context, 1); // Insights
         }
       },
       child: Container(

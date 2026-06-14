@@ -14,8 +14,6 @@ import 'onboarding_data.dart';
 import '../widgets/duo_button.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/streak_graph.dart';
-import '../../theme/app_theme.dart';
-import '../widgets/streak_graph.dart';
 
 class FirstJournalPage extends StatefulWidget {
   final OnboardingData data;
@@ -33,7 +31,8 @@ class FirstJournalPage extends StatefulWidget {
   State<FirstJournalPage> createState() => _FirstJournalPageState();
 }
 
-class _FirstJournalPageState extends State<FirstJournalPage> {
+class _FirstJournalPageState extends State<FirstJournalPage>
+    with SingleTickerProviderStateMixin {
   final _controller = TextEditingController();
   final _journalService = JournalService();
   final _focusNode = FocusNode();
@@ -42,10 +41,19 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
   final _suggestionsScrollController = ScrollController();
   final _mainScrollController = ScrollController();
   late List<String> _suggestions;
+  late final AnimationController _popController;
+  late final Animation<double> _popScale;
 
   @override
   void initState() {
     super.initState();
+    _popController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+    _popScale = Tween<double>(begin: 1.0, end: 1.03).animate(
+      CurvedAnimation(parent: _popController, curve: Curves.easeOutBack),
+    );
     _focusNode.addListener(_onFocusChange);
     _suggestions = [
       "I had a good day today",
@@ -66,6 +74,7 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
   void dispose() {
     _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
+    _popController.dispose();
     _controller.dispose();
     _suggestionsScrollController.dispose();
     _mainScrollController.dispose();
@@ -79,6 +88,7 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
         duration: const Duration(milliseconds: 600),
         curve: Curves.elasticOut,
       );
+      _popController.forward().then((_) => _popController.reverse());
     }
     setState(() {});
   }
@@ -227,8 +237,8 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 AnimatedSize(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOutBack,
                   clipBehavior: Clip.antiAlias,
                   child: AnimatedOpacity(
                     opacity: keyboardInset == 0 ? 1.0 : 0.0,
@@ -279,7 +289,10 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
                         : const SizedBox(width: double.infinity, height: 24),
                   ),
                 ),
-                textField,
+                ScaleTransition(
+                  scale: _popScale,
+                  child: textField,
+                ),
                 const SizedBox(height: 12),
                 Text(
                   'Prompt ideas',
@@ -304,8 +317,8 @@ class _FirstJournalPageState extends State<FirstJournalPage> {
           ),
         ),
         AnimatedSize(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutBack,
           clipBehavior: Clip.antiAlias,
           child: AnimatedOpacity(
             opacity: keyboardInset == 0 ? 1.0 : 0.0,
@@ -556,7 +569,7 @@ class _AiInsightPageState extends State<AiInsightPage>
     if (skipLoading) {
       result = widget.data.journalAnalogies;
     } else {
-      result = await AnalogyService.generateJournalAnalogies(entry);
+      result = await AnalogyService.generateJournalInsights(entry);
       widget.data.journalAnalogies = result;
       widget.data.lastGeneratedJournalEntry = entry;
     }
@@ -846,7 +859,19 @@ class _AiInsightPageState extends State<AiInsightPage>
                                           _scratchCardImages.length]
                                     : 'assets/photos/elements/app_bg2.webp';
 
+                                final shimmerPeriod = switch (index % 3) {
+                                  0 => 1500,
+                                  1 => 2000,
+                                  _ => 2500,
+                                };
+                                final shimmerAlpha = switch (index % 3) {
+                                  0 => 0.20,
+                                  1 => 0.30,
+                                  _ => 0.25,
+                                };
+
                                 return ClipRRect(
+                                  key: ValueKey('scratch_$index'),
                                   borderRadius: BorderRadius.circular(32),
                                   child: Stack(
                                     children: [
@@ -867,12 +892,13 @@ class _AiInsightPageState extends State<AiInsightPage>
                                         child: cardContent,
                                       ),
                                       IgnorePointer(
+                                        key: ValueKey('shimmer_$index'),
                                         child: Shimmer.fromColors(
                                           baseColor: Colors.transparent,
                                           highlightColor: Colors.white
-                                              .withOpacity(0.25),
-                                          period: const Duration(
-                                            milliseconds: 2000,
+                                              .withOpacity(shimmerAlpha),
+                                          period: Duration(
+                                            milliseconds: shimmerPeriod,
                                           ),
                                           child: Container(color: Colors.black),
                                         ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import '../theme/app_theme.dart';
 import '../components/widgets/duo_button.dart';
 
 class GoogleSignInPage extends StatefulWidget {
@@ -38,30 +37,29 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
     final tt = Theme.of(context).textTheme;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
         children: [
-          const SizedBox(height: 32),
+          const Spacer(flex: 1),
           Text(
             "Save your diaries and progress",
             textAlign: TextAlign.center,
-            style: tt.displaySmall?.copyWith(
+            style: tt.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
               color: cs.onSurface,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
             "Your data is private and safe.\nOnly you can see your reflections.",
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppTheme.ghostSilver.withValues(alpha: 0.75),
-              fontSize: 15,
+            style: tt.bodyLarge?.copyWith(
+              color: cs.onSurface.withValues(alpha: 0.7),
             ),
           ),
-          const Spacer(),
+          const SizedBox(height: 32),
 
-          // Google sign-in button (classic white style)
+          // Google sign-in button
           SizedBox(
             width: double.infinity,
             height: 56,
@@ -102,20 +100,8 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: widget.onFinish,
-            child: Text(
-              "Skip for now",
-              style: TextStyle(
-                color: AppTheme.ghostSilver.withValues(alpha: 0.8),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
 
-          const Spacer(),
+          const Spacer(flex: 1),
           Row(
             children: [
               Expanded(
@@ -147,13 +133,24 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
                   radius: 16,
                   height: 56,
                   sfxType: DuoSfxType.positive,
-                  child: Text(
-                    "Continue",
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Continue",
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 20,
+                        color: cs.onSurface,
+                      ),
+                    ],
                   ),
                 ),
               ),
