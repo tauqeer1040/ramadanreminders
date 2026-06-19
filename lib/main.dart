@@ -13,6 +13,7 @@ import 'components/profilepage.dart';
 import 'core/app_background.dart';
 import 'services/streak_service.dart';
 import 'services/audio_service.dart';
+import 'services/trial_service.dart';
 import 'services/sfx_service.dart';
 import 'services/notification_service.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -226,6 +227,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   }
 
   Future<void> _checkOnboarding() async {
+    await TrialService.initialize();
     StreakService.recordActivity();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       precacheImage(const AssetImage('assets/photos/elements/app_bg2.webp'), context);

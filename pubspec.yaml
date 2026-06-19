@@ -49,8 +49,8 @@ dependencies:
   share_plus: ^10.1.4
   superwallkit_flutter: ^2.4.12
   home_widget: ^0.9.2
-  speech_to_text: 7.0.0
   video_player: ^2.11.1
+  cached_network_image: ^3.4.1
 
 dev_dependencies:
   flutter_test:
@@ -58,12 +58,11 @@ dev_dependencies:
 
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/photos/images/
-    - assets/photos/images/scratchCards/
     - assets/photos/mascot/
     - assets/photos/elements/
     - assets/tunes/
@@ -72,6 +71,15 @@ flutter:
     - family: Amiri
       fonts:
         - asset: assets/fonts/Amiri-Regular.ttf
+
+flutter_native_splash:
+  color: "#000000"
+  image: assets/photos/mascot/splash_logo.png
+  android: true
+  ios: true
+  android_12:
+    image: assets/photos/mascot/splash_logo.png
+    color: "#000000"
 
 flutter_launcher_icons:
   android: true

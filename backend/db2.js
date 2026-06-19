@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 const { createClient } = require('@libsql/client');
 const admin = require('firebase-admin');
 
@@ -48,7 +49,7 @@ async function verifyAuth(req, res, next) {
 }
 
 app.use('/api/v2', (req, res, next) => {
-  if (req.path === '/ayah') return next();
+  if (req.path === '/ayah' || req.path === '/shop/items') return next();
   return verifyAuth(req, res, next);
 });
 
@@ -1501,6 +1502,64 @@ app.get('/api/v2/ayah', async (req, res) => {
       ayahNumber: arabicAyah.numberInSurah,
       audioUrl: audioJson.data.audio,
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ── Shop ──────────────────────────────────────────────────────────────────────
+
+const SHOP_ASSETS_DIR = path.join(__dirname, 'public', 'assets');
+app.use('/assets', express.static(SHOP_ASSETS_DIR));
+
+const shopItems = [
+  { id: 'shop_1',  name: 'Delicate Translucent Flower', cost: 100 },
+  { id: 'shop_2',  name: 'Orange Bloom',                 cost: 100 },
+  { id: 'shop_3',  name: 'Ethereal Flower in Motion',    cost: 100 },
+  { id: 'shop_4',  name: 'Ethereal Flower',              cost: 100 },
+  { id: 'shop_5',  name: 'Ethereal Flower V2',           cost: 100 },
+  { id: 'shop_6',  name: 'Glowing Flower',               cost: 100 },
+  { id: 'shop_7',  name: 'Translucent Flower',           cost: 100 },
+  { id: 'shop_8',  name: 'Ethereal Bloom',               cost: 100 },
+  { id: 'shop_9',  name: 'Ethereal Bloom V2',            cost: 100 },
+  { id: 'shop_10', name: 'Ethreial Bloom',               cost: 100 },
+  { id: 'shop_11', name: 'Radiant Flower Glow',          cost: 100 },
+  { id: 'shop_12', name: 'Ethereal Bloom V3',            cost: 100 },
+  { id: 'shop_13', name: 'Scratch Card 1',               cost: 100 },
+  { id: 'shop_14', name: 'Scratch Card 2',               cost: 100 },
+  { id: 'shop_15', name: 'Scratch Card 3',               cost: 100 },
+  { id: 'shop_16', name: 'Scratch Card 4',               cost: 100 },
+  { id: 'shop_17', name: 'Scratch Card 5',               cost: 100 },
+  { id: 'shop_18', name: 'Scratch Card 6',               cost: 100 },
+  { id: 'shop_19', name: 'Scratch Card 7',               cost: 100 },
+  { id: 'shop_20', name: 'Scratch Card 8',               cost: 100 },
+  { id: 'shop_21', name: 'Scratch Card 9',               cost: 100 },
+];
+
+const baseAssetUrl = (id) => ({
+  thumbnailUrl: `/assets/shop/thumbs/${id}.webp`,
+  imageUrl: `/assets/shop/full/${id}.webp`,
+});
+
+app.get('/api/v2/shop/items', (req, res) => {
+  const items = shopItems.map((item) => ({
+    ...item,
+    ...baseAssetUrl(item.id),
+  }));
+  res.json({ items });
+});
+
+app.post('/api/v2/shop/purchase', async (req, res) => {
+  try {
+    const { itemId } = req.body;
+    if (!itemId) return res.status(400).json({ error: 'itemId required' });
+
+    const uid = req.uid;
+    await admin.firestore().collection('users').doc(uid).set({
+      [`purchases.${itemId}`]: true,
+    }, { merge: true });
+
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

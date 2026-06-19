@@ -15,6 +15,7 @@ class BackgroundMusicService with WidgetsBindingObserver {
 
   static const String _prefKeyEnabled = 'background_music_enabled';
   static const String _prefKeyTrack = 'background_music_track';
+  static const String _defaultTrack = 'tunes/app_audio_5min.m4a';
 
   bool get isMusicEnabled => _musicEnabled;
   String? get currentTrackPath => _currentTrackPath;
@@ -28,13 +29,14 @@ class BackgroundMusicService with WidgetsBindingObserver {
 
     _player.setPlayerMode(PlayerMode.mediaPlayer);
     _player.setReleaseMode(ReleaseMode.loop);
-    _player.setVolume(0.5);
+    _player.setVolume(1.0);
 
     WidgetsBinding.instance.addObserver(this);
     _isInitialized = true;
 
-    if (_musicEnabled && _currentTrackPath != null) {
-      await _playTrack(_currentTrackPath!);
+    if (_musicEnabled) {
+      final track = _currentTrackPath ?? _defaultTrack;
+      await _playTrack(track);
     }
   }
 

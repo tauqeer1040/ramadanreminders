@@ -8,6 +8,7 @@ import '../core/api_client.dart';
 import '../models/bullet_item.dart';
 import 'insight_service.dart';
 import 'streak_service.dart';
+import 'trial_service.dart';
 
 class JournalService {
   static const String _keyPrefix = 'journal_';
@@ -129,17 +130,12 @@ class JournalService {
     }
   }
 
-  /// Checks if the user is anonymous and has already used all 3 free trial journals
+  /// Checks if the anonymous user's 3-day free trial has expired.
   static Future<bool> isGuestLimitReached() async {
     final user = _auth.currentUser;
     if (user == null || !user.isAnonymous) return false;
 
-    final existing = await getAllLocalJournals();
-    final today = _formatDate(DateTime.now());
-    final hasToday = existing.any((j) => j['date'] == today);
-    
-    // Limits the user to strictly 3 days of journaling before requiring an account
-    return !hasToday && existing.length >= 3;
+    return await TrialService.isTrialExpired();
   }
 
   /// Saves a journal locally to SharedPreferences for immediate persistence over a unique ID.
@@ -149,6 +145,26 @@ class JournalService {
     
     // Explicitly flag this precise ID as fundamentally modified allowing the sync engine to identify it
     await prefs.setBool('$_keyPrefix${id}_needs_sync', true);
+  }
+
+  /// Loads today's existing journal entry (if any). Returns {id, text} or null.
+  static Future<Map<String, String>?> loadTodayJournal() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys();
+    final today = _formatDate(DateTime.now());
+
+    for (var key in keys) {
+      if (key.startsWith(_keyPrefix) && key.endsWith('_text')) {
+        final id = key.replaceFirst(_keyPrefix, '').replaceFirst('_text', '');
+        if (id.startsWith(today)) {
+          final text = prefs.getString(key);
+          if (text != null && text.trim().isNotEmpty) {
+            return {'id': id, 'text': text};
+          }
+        }
+      }
+    }
+    return null;
   }
 
   /// Retrieves all locally saved journals as a list of maps {date, text}

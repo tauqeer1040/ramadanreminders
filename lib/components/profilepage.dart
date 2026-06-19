@@ -7,6 +7,8 @@ import '../services/streak_service.dart';
 import '../services/journal_service.dart';
 import '../services/audio_service.dart';
 import '../services/sfx_service.dart';
+import '../services/trial_service.dart';
+import '../core/constants.dart';
 import '../screens/manage_account_screen.dart';
 import '../services/user_service.dart';
 import '../theme/app_theme.dart';
@@ -35,6 +37,10 @@ class _ProfilePage1State extends State<ProfilePage1> {
   int _streak = 0;
   int _totalJournals = 0;
   int _quranDays = 0;
+  String _debugTrial = '';
+  String _debugBackend = '';
+  String _debugAuth = '';
+  String _debugShopCache = '';
 
   // Onboarding data
   String? _onboardingIntention;
@@ -68,11 +74,23 @@ class _ProfilePage1State extends State<ProfilePage1> {
     final journals = await JournalService.getAllLocalJournals();
     final prefs = await SharedPreferences.getInstance();
     final quranDays = prefs.getKeys().where((k) => k.startsWith('quran_revealed_')).length;
+
+    // Debug info
+    final user = AuthService.currentUser;
+    final isAnon = user?.isAnonymous ?? true;
+    final trialActive = await TrialService.isTrialActive();
+    final trialDays = await TrialService.daysRemaining();
+    final shopCache = prefs.getString('shop_items_cache');
+    final shopSize = shopCache != null ? '${(shopCache.length / 1024).toStringAsFixed(1)} KB' : '—';
     if (mounted) {
       setState(() {
         _streak = streak;
         _totalJournals = journals.length;
         _quranDays = quranDays;
+        _debugAuth = '${user?.uid ?? "—"} (${isAnon ? "anonymous" : "signed-in"})';
+        _debugTrial = trialActive ? 'active ($trialDays days left)' : 'expired';
+        _debugBackend = AppConstants.backendUrl;
+        _debugShopCache = shopSize;
       });
     }
   }
@@ -327,6 +345,8 @@ class _ProfilePage1State extends State<ProfilePage1> {
             _replayOnboardingCard(),
             const SizedBox(height: 12),
             _subscribeCard(),
+            const SizedBox(height: 16),
+            _debugCard(),
             const SizedBox(height: 16),
           ],
         ),
@@ -857,6 +877,24 @@ class _ProfilePage1State extends State<ProfilePage1> {
     );
   }
 
+  // ── DEBUG ───────────────────────────────────────────────────────────────────
+
+  Widget _debugCard() {
+    return _buildSectionCard(
+      title: 'DEBUG',
+      icon: Icons.bug_report_rounded,
+      iconColor: Colors.redAccent,
+      child: Column(
+        children: [
+          _buildProfileRow('Auth', _debugAuth),
+          _buildProfileRow('Trial', _debugTrial),
+          _buildProfileRow('Backend', _debugBackend),
+          _buildProfileRow('Shop cache', _debugShopCache),
+        ],
+      ),
+    );
+  }
+
   // ── HELPERS ────────────────────────────────────────────────────────────────
 
   Widget _buildSectionCard({
@@ -893,36 +931,24 @@ class _ProfilePage1State extends State<ProfilePage1> {
     );
   }
 
-  Widget _buildProfileRow(String label, String value) => Padding(
-    padding: const EdgeInsets.only(bottom: 14),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppTheme.ghostSilver,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.end,
-            style: const TextStyle(
-              color: AppTheme.starWhite,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-            ),
-          ),
+  Widget _buildProfileRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(
+            color: AppTheme.ghostSilver, fontSize: 14, fontWeight: FontWeight.w500,
+          )),
+          const SizedBox(width: 12),
+          Flexible(child: Text(value, textAlign: TextAlign.end, style: const TextStyle(
+            color: AppTheme.starWhite, fontSize: 14, fontWeight: FontWeight.w700,
+          ))),
         ],
       ),
-    ),
-  );
+    );
+  }
 
   BoxDecoration _cardDecoration({Color? borderColor}) => BoxDecoration(
     color: const Color(0xFF1A1A2E),
@@ -953,7 +979,6 @@ class _MoodCalendarGrid extends StatefulWidget {
 class _MoodCalendarGridState extends State<_MoodCalendarGrid> {
   late DateTime _currentMonth;
   Map<String, double> _moodData = {};
-  bool _loading = true;
 
   @override
   void initState() {
@@ -963,19 +988,18 @@ class _MoodCalendarGridState extends State<_MoodCalendarGrid> {
   }
 
   Future<void> _loadMoods() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = <String, double>{};
-    for (final key in prefs.getKeys()) {
-      if (key.startsWith('mood_')) {
-        final dateStr = key.substring(5);
-        final val = double.tryParse(prefs.getString(key) ?? '');
-        if (val != null) data[dateStr] = val;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = <String, double>{};
+      for (final key in prefs.getKeys()) {
+        if (key.startsWith('mood_')) {
+          final dateStr = key.substring(5);
+          final val = double.tryParse(prefs.getString(key) ?? '');
+          if (val != null) data[dateStr] = val;
+        }
       }
-    }
-    if (mounted) setState(() {
-      _moodData = data;
-      _loading = false;
-    });
+      if (mounted) setState(() => _moodData = data);
+    } catch (_) {}
   }
 
   void _prevMonth() => setState(() {
@@ -988,13 +1012,6 @@ class _MoodCalendarGridState extends State<_MoodCalendarGrid> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const SizedBox(
-        height: 200,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      );
-    }
-
     final tt = Theme.of(context).textTheme;
     final now = DateTime.now();
     final thisMonth = DateTime(now.year, now.month);

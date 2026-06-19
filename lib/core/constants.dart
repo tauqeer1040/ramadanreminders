@@ -4,10 +4,9 @@ class AppConstants {
   // flutter run --dart-define=BACKEND_HOST=192.168.1.100
   //
   // Notes:
-  // - Physical Android device with `adb reverse`: localhost works.
-  // - Physical Android device without reverse: use your computer's LAN IP.
-  // - Android emulator without reverse: pass BACKEND_HOST=10.0.2.2.
-  // - iOS simulator: localhost works.
+  // - Android emulator: run `adb reverse tcp:3007 tcp:3007` for localhost to work.
+  // - iOS simulator: localhost works by default.
+  // - Physical device: use your computer's LAN IP as BACKEND_HOST.
   static const String _backendBaseUrlDefine = String.fromEnvironment(
     'BACKEND_BASE_URL',
     defaultValue: '',

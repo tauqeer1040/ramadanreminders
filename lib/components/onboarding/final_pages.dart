@@ -11,6 +11,7 @@ import '../../services/analogy_service.dart';
 import '../../services/journal_service.dart';
 import '../../services/notification_service.dart';
 import 'onboarding_data.dart';
+import '../../utils/image_urls.dart';
 import '../widgets/duo_button.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/streak_graph.dart';
@@ -480,19 +481,7 @@ class _AiInsightPageState extends State<AiInsightPage>
   }
 
   void _initScratchImages() {
-    final images = [
-      'assets/photos/images/scratchCards/scratch.jpg',
-      'assets/photos/images/scratchCards/scratch (2).jpg',
-      'assets/photos/images/scratchCards/scratch (3).jpg',
-      'assets/photos/images/scratchCards/scratch (4).jpg',
-      'assets/photos/images/scratchCards/scratch (5).jpg',
-      'assets/photos/images/scratchCards/scratch (6).jpg',
-      'assets/photos/images/scratchCards/scratch (7).jpg',
-      'assets/photos/images/scratchCards/scratch (8).jpg',
-      'assets/photos/images/scratchCards/scratch (9).jpg',
-    ];
-    images.shuffle();
-    _scratchCardImages = images;
+    _scratchCardImages = scratchCardUrls()..shuffle();
   }
 
   @override
@@ -878,10 +867,9 @@ class _AiInsightPageState extends State<AiInsightPage>
                                       Scratcher(
                                         brushSize: 30,
                                         threshold: 35,
-                                        image: Image.asset(
-                                          scratchImage,
-                                          fit: BoxFit.cover,
-                                        ),
+                                        image: scratchImage.startsWith('http')
+                                            ? Image.network(scratchImage, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink())
+                                            : Image.asset(scratchImage, fit: BoxFit.cover),
                                         onThreshold: () {
                                           setState(
                                             () => _revealedCards.add(index),

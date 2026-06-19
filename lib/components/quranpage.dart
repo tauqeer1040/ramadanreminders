@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,11 +14,13 @@ import 'package:flutter_confetti/flutter_confetti.dart';
 
 import '../services/insight_service.dart';
 import '../services/favorites_service.dart';
+import '../services/shop_service.dart';
 import '../core/app_background.dart';
 import '../core/constants.dart';
 import './reflect_card.dart';
 import './insight_card_shimmer.dart';
 import './favorites_page.dart';
+import '../utils/image_urls.dart';
 
 class QuranPage extends StatefulWidget {
   const QuranPage({super.key});
@@ -81,6 +84,7 @@ class _QuranPageState extends State<QuranPage> {
 
     _revealedKey = 'quran_revealed_${DateTime.now().toIso8601String().substring(0, 10)}';
     _initScratchImages();
+    _loadPurchasedScratchImages();
     _loadRevealedCards();
     _initData();
 
@@ -259,19 +263,25 @@ class _QuranPageState extends State<QuranPage> {
   }
 
   void _initScratchImages() {
-    final images = [
-      'assets/photos/images/scratchCards/scratch.jpg',
-      'assets/photos/images/scratchCards/scratch (2).jpg',
-      'assets/photos/images/scratchCards/scratch (3).jpg',
-      'assets/photos/images/scratchCards/scratch (4).jpg',
-      'assets/photos/images/scratchCards/scratch (5).jpg',
-      'assets/photos/images/scratchCards/scratch (6).jpg',
-      'assets/photos/images/scratchCards/scratch (7).jpg',
-      'assets/photos/images/scratchCards/scratch (8).jpg',
-      'assets/photos/images/scratchCards/scratch (9).jpg',
-    ];
-    images.shuffle();
-    _scratchCardImages = images;
+    _scratchCardImages = scratchCardUrls()..shuffle();
+  }
+
+  Future<void> _loadPurchasedScratchImages() async {
+    try {
+      final unlocked = await ShopService.getUnlockedIds();
+      final purchased = unlocked
+          .where((id) {
+            final n = int.tryParse(id.split('_').last) ?? 0;
+            return n >= 13 && n <= 21;
+          })
+          .map((id) => shopFullUrl(int.parse(id.split('_').last)))
+          .take(3)
+          .toList();
+      if (purchased.isEmpty || !mounted) return;
+
+      final remaining = scratchCardUrls().where((u) => !purchased.contains(u)).toList();
+      setState(() => _scratchCardImages = [...purchased, ...remaining]..shuffle());
+    } catch (_) {}
   }
 
   Future<void> _loadRevealedCards() async {
@@ -640,10 +650,16 @@ class _QuranPageState extends State<QuranPage> {
                                         Scratcher(
                                           brushSize: 30,
                                           threshold: 35,
-                                          image: Image.asset(
-                                            _scratchCardImages[index % _scratchCardImages.length],
-                                            fit: BoxFit.cover,
-                                          ),
+                                          image: (_scratchCardImages[index % _scratchCardImages.length]).startsWith('http')
+                                              ? Image.network(
+                                                  _scratchCardImages[index % _scratchCardImages.length],
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                                                )
+                                              : Image.asset(
+                                                  _scratchCardImages[index % _scratchCardImages.length],
+                                                  fit: BoxFit.cover,
+                                                ),
                                           onThreshold: () {
                                             setState(() => _revealedCards.add(index));
                                             _saveRevealedCards();

@@ -1,40 +1,12 @@
-import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:scratcher/scratcher.dart';
+import 'package:flutter_confetti/flutter_confetti.dart';
+import '../models/shop_item.dart';
+import '../services/shop_service.dart';
 import '../theme/app_theme.dart';
-
-class _ShopItem {
-  final String id;
-  final String name;
-  final String asset;
-  final int cost;
-  const _ShopItem({required this.id, required this.name, required this.asset, required this.cost});
-}
-
-const _shopItems = [
-  _ShopItem(id: 'shop_1', name: 'Delicate Translucent Flower', asset: 'assets/photos/images/Delicate Translucent Flower.png', cost: 100),
-  _ShopItem(id: 'shop_2', name: 'Orange Bloom', asset: 'assets/photos/images/DelicateOrangeFlowerinBloom.jpeg', cost: 100),
-  _ShopItem(id: 'shop_3', name: 'Ethereal Flower in Motion', asset: 'assets/photos/images/Ethereal Flower in Motion.png', cost: 100),
-  _ShopItem(id: 'shop_4', name: 'Ethereal Flower', asset: 'assets/photos/images/Ethereal Flower.png', cost: 100),
-  _ShopItem(id: 'shop_5', name: 'Ethereal Flower V2', asset: 'assets/photos/images/Ethereal Flower(1).png', cost: 100),
-  _ShopItem(id: 'shop_6', name: 'Glowing Flower', asset: 'assets/photos/images/Ethereal Glowing Flower.png', cost: 100),
-  _ShopItem(id: 'shop_7', name: 'Translucent Flower', asset: 'assets/photos/images/Ethereal Translucent Flower.png', cost: 100),
-  _ShopItem(id: 'shop_8', name: 'Ethereal Bloom', asset: 'assets/photos/images/EtherealFlower.jpeg', cost: 100),
-  _ShopItem(id: 'shop_9', name: 'Ethereal Bloom V2', asset: 'assets/photos/images/EtherealFlower-1-.jpeg', cost: 100),
-  _ShopItem(id: 'shop_10', name: 'Ethreial Bloom', asset: 'assets/photos/images/ethreialbloom1.jpeg', cost: 100),
-  _ShopItem(id: 'shop_11', name: 'Radiant Flower Glow', asset: 'assets/photos/images/Radiant Flower Glow.png', cost: 100),
-  _ShopItem(id: 'shop_12', name: 'Ethereal Bloom V3', asset: 'assets/photos/images/Z5u14ZbqstJ9-Dkw_EtherealFlower-1-.jpeg', cost: 100),
-  _ShopItem(id: 'shop_13', name: 'Scratch Card 1', asset: 'assets/photos/images/scratchCards/scratch.jpg', cost: 100),
-  _ShopItem(id: 'shop_14', name: 'Scratch Card 2', asset: 'assets/photos/images/scratchCards/scratch (2).jpg', cost: 100),
-  _ShopItem(id: 'shop_15', name: 'Scratch Card 3', asset: 'assets/photos/images/scratchCards/scratch (3).jpg', cost: 100),
-  _ShopItem(id: 'shop_16', name: 'Scratch Card 4', asset: 'assets/photos/images/scratchCards/scratch (4).jpg', cost: 100),
-  _ShopItem(id: 'shop_17', name: 'Scratch Card 5', asset: 'assets/photos/images/scratchCards/scratch (5).jpg', cost: 100),
-  _ShopItem(id: 'shop_18', name: 'Scratch Card 6', asset: 'assets/photos/images/scratchCards/scratch (6).jpg', cost: 100),
-  _ShopItem(id: 'shop_19', name: 'Scratch Card 7', asset: 'assets/photos/images/scratchCards/scratch (7).jpg', cost: 100),
-  _ShopItem(id: 'shop_20', name: 'Scratch Card 8', asset: 'assets/photos/images/scratchCards/scratch (8).jpg', cost: 100),
-  _ShopItem(id: 'shop_21', name: 'Scratch Card 9', asset: 'assets/photos/images/scratchCards/scratch (9).jpg', cost: 100),
-];
+import '../utils/image_urls.dart';
 
 class ShopScreen extends StatefulWidget {
   const ShopScreen({super.key});
@@ -43,9 +15,11 @@ class ShopScreen extends StatefulWidget {
 }
 
 class _ShopScreenState extends State<ShopScreen> {
+  List<ShopItem> _items = [];
   int _stars = 0;
   Set<String> _unlocked = {};
   bool _loaded = false;
+  bool _loadError = false;
 
   @override
   void initState() {
@@ -54,20 +28,41 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stars = prefs.getInt('total_stars') ?? 0;
-    final raw = prefs.getString('shop_unlocked');
-    final unlocked = raw != null ? Set<String>.from(jsonDecode(raw) as List) : <String>{};
-    if (mounted) {
-      setState(() {
-        _stars = stars;
-        _unlocked = unlocked;
-        _loaded = true;
-      });
+    try {
+      final results = await Future.wait([
+        ShopService.fetchItems(),
+        ShopService.getStarBalance(),
+        ShopService.getUnlockedIds(),
+      ]);
+      if (mounted) {
+        final sorted = List<ShopItem>.from(results[0] as List<ShopItem>);
+        sorted.sort((a, b) {
+          final aOwned = (results[2] as Set<String>).contains(a.id);
+          final bOwned = (results[2] as Set<String>).contains(b.id);
+          if (aOwned && !bOwned) return -1;
+          if (!aOwned && bOwned) return 1;
+          return 0;
+        });
+        setState(() {
+          _items = sorted;
+          _stars = results[1] as int;
+          _unlocked = results[2] as Set<String>;
+          _loaded = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadError = true);
     }
   }
 
-  Future<void> _purchase(_ShopItem item) async {
+  bool _isScratchCard(String id) {
+    final num = int.tryParse(id.split('_').last) ?? 0;
+    return num >= 13 && num <= 21;
+  }
+
+  int _randomFlowerId() => Random().nextInt(12) + 1;
+
+  Future<void> _purchase(ShopItem item) async {
     if (_unlocked.contains(item.id)) return;
     if (_stars < item.cost) {
       if (mounted) {
@@ -81,30 +76,116 @@ class _ShopScreenState extends State<ShopScreen> {
       return;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('total_stars', _stars - item.cost);
-    _unlocked.add(item.id);
-    await prefs.setString('shop_unlocked', jsonEncode(_unlocked.toList()));
+    final remaining = _stars - item.cost;
+    await ShopService.purchaseItem(item.id, remaining);
 
     if (mounted) {
-      setState(() => _stars -= item.cost);
+      setState(() {
+        _stars = remaining;
+        _unlocked.add(item.id);
+      });
       HapticFeedback.heavyImpact();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.star_rounded, color: AppTheme.starGold, size: 20),
-              const SizedBox(width: 8),
-              Text('${item.name} unlocked! ⭐'),
-            ],
+
+      if (_isScratchCard(item.id)) {
+        await _showScratchReveal(item);
+      } else {
+        Confetti.launch(
+          context,
+          options: const ConfettiOptions(
+            particleCount: 60,
+            spread: 360,
+            startVelocity: 25,
+            gravity: 0.3,
+            scalar: 1.2,
+            colors: [Colors.amber, Colors.pink, Colors.cyan],
           ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.star_rounded, color: AppTheme.starGold, size: 20),
+                const SizedBox(width: 8),
+                Text('${item.name} unlocked! ⭐'),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
-  void _showPreview(_ShopItem item) {
+  Future<void> _showScratchReveal(ShopItem item) async {
+    final flowerId = _randomFlowerId();
+    final flowerUrl = shopFullUrl(flowerId);
+    final overlayUrl = item.imageUrl;
+    final ctrl = ConfettiController();
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: SizedBox(
+            width: 280,
+            height: 380,
+            child: Stack(
+              children: [
+                // Revealed content underneath
+                Image.network(flowerUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: Colors.grey[900])),
+                // Confetti
+                IgnorePointer(
+                  child: Confetti(controller: ctrl, options: const ConfettiOptions(
+                    particleCount: 120,
+                    spread: 360,
+                    startVelocity: 30,
+                    gravity: 0.4,
+                    colors: [Colors.amber, Colors.pink, Colors.cyan, Colors.white],
+                  )),
+                ),
+                // Scratcher overlay
+                Scratcher(
+                  brushSize: 35,
+                  threshold: 40,
+                  onThreshold: () {
+                    ctrl.launch();
+                    HapticFeedback.heavyImpact();
+                  },
+                  image: Image.network(overlayUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                  child: Container(color: Colors.transparent),
+                ),
+                // Close button
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: () {
+                      ctrl.kill();
+                      Navigator.pop(ctx);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    ctrl.kill();
+  }
+
+  void _showPreview(ShopItem item) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -114,13 +195,40 @@ class _ShopScreenState extends State<ShopScreen> {
           child: Center(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(20),
-              child: Image.asset(item.asset, fit: BoxFit.contain),
+              child: _buildImage(item.imageUrl, fit: BoxFit.contain),
             ),
           ),
         ),
       ),
     );
   }
+
+  Widget _buildImage(String networkUrl, {BoxFit fit = BoxFit.cover}) {
+    if (networkUrl.isNotEmpty) {
+      debugPrint('[ShopImage] loading: $networkUrl');
+      return Image.network(
+        networkUrl,
+        fit: fit,
+        loadingBuilder: (_, child, progress) {
+          if (progress == null) return child;
+          return Container(
+            color: Colors.white.withValues(alpha: 0.05),
+            child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white24)),
+          );
+        },
+        errorBuilder: (_, __, ___) {
+          debugPrint('[ShopImage] FAILED: $networkUrl');
+          return _imageFallback();
+        },
+      );
+    }
+    return _imageFallback();
+  }
+
+  Widget _imageFallback() => Container(
+    color: Colors.white.withValues(alpha: 0.05),
+    child: const Icon(Icons.broken_image_rounded, color: Colors.white24, size: 32),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -169,37 +277,71 @@ class _ShopScreenState extends State<ShopScreen> {
         ),
         const SizedBox(height: 8),
         Expanded(
-          child: !_loaded
-              ? const Center(child: CircularProgressIndicator(color: AppTheme.neonPurple))
-              : GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.78,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
-                  itemCount: _shopItems.length,
-                  itemBuilder: (context, i) => _ShopCard(
-                    item: _shopItems[i],
-                    owned: _unlocked.contains(_shopItems[i].id),
-                    canAfford: _stars >= _shopItems[i].cost,
-                    onPurchase: () => _purchase(_shopItems[i]),
-                    onPreview: () => _showPreview(_shopItems[i]),
-                  ),
-                ),
+          child: _buildBody(),
         ),
       ],
+    );
+  }
+
+  Widget _buildBody() {
+    if (!_loaded) {
+      return const Center(child: CircularProgressIndicator(color: AppTheme.neonPurple));
+    }
+
+    if (_loadError && _items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded, color: Colors.white24, size: 48),
+            const SizedBox(height: 12),
+            Text('Could not load shop', style: TextStyle(color: Colors.white.withValues(alpha: 0.50))),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () {
+                setState(() => _loadError = false);
+                _load();
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: AppTheme.neonPurple,
+      backgroundColor: const Color(0xFF1A1A2E),
+      child: GridView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.78,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+        ),
+        itemCount: _items.length,
+        itemBuilder: (context, i) => _ShopCard(
+          item: _items[i],
+          owned: _unlocked.contains(_items[i].id),
+          canAfford: _stars >= _items[i].cost,
+          onPurchase: () => _purchase(_items[i]),
+          onPreview: () => _showPreview(_items[i]),
+          buildImage: _buildImage,
+        ),
+      ),
     );
   }
 }
 
 class _ShopCard extends StatelessWidget {
-  final _ShopItem item;
+  final ShopItem item;
   final bool owned;
   final bool canAfford;
   final VoidCallback onPurchase;
   final VoidCallback onPreview;
+  final Widget Function(String url, {BoxFit fit}) buildImage;
 
   const _ShopCard({
     required this.item,
@@ -207,6 +349,7 @@ class _ShopCard extends StatelessWidget {
     required this.canAfford,
     required this.onPurchase,
     required this.onPreview,
+    required this.buildImage,
   });
 
   @override
@@ -232,7 +375,7 @@ class _ShopCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.asset(item.asset, fit: BoxFit.cover),
+                  buildImage(item.thumbnailUrl.isNotEmpty ? item.thumbnailUrl : item.imageUrl),
                   if (!owned)
                     Container(
                       color: Colors.black.withValues(alpha: 0.55),

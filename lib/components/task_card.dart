@@ -69,7 +69,9 @@ class _TaskCardState extends State<TaskCard> {
             child: Container(
               decoration: BoxDecoration(
                 image: DecorationImage(
-                  image: AssetImage(widget.bgImage),
+                  image: widget.bgImage.startsWith('http')
+                      ? NetworkImage(widget.bgImage) as ImageProvider
+                      : AssetImage(widget.bgImage),
                   fit: BoxFit.cover,
                   colorFilter: ColorFilter.mode(
                     Colors.black.withValues(alpha: 0.25),

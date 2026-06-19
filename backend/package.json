@@ -18,5 +18,8 @@
     "firebase-admin": "^13.7.0",
     "ioredis": "^5.10.1",
     "xss": "^1.0.15"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.1"
   }
 }

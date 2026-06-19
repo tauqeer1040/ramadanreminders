@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/user_service.dart';
+import '../services/shop_service.dart';
 import '../components/onboarding/onboarding_data.dart';
 import '../components/onboarding/intro_pages.dart';
 import '../components/onboarding/final_pages.dart';
@@ -127,6 +128,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     }
 
     await prefs.setInt('total_stars', _stars);
+
+    // Unlock first scratch card as a welcome gift
+    await ShopService.unlockItem('shop_13');
 
     if (mounted) {
       Navigator.of(context).pop();

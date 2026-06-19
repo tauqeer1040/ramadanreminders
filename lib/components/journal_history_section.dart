@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -18,109 +17,6 @@ import 'journal_list_screen.dart';
   return (title: lines[0], body: lines.skip(1).join(' '));
 }
 
-/// Returns a deterministic accent colour for a journal entry based on its text.
-Color _entryAccent(String text) {
-  const palette = [
-    Color(0xFF9D50FF), // neon purple
-    Color(0xFF26C6DA), // cyan
-    Color(0xFF66BB6A), // green
-    Color(0xFFFFB300), // amber
-    Color(0xFFFF6B35), // orange
-    Color(0xFF5C6BC0), // indigo
-    Color(0xFFAB47BC), // purple
-    Color(0xFF26A69A), // teal
-  ];
-  final idx = text.hashCode.abs() % palette.length;
-  return palette[idx];
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Coloured swatch thumbnail (stands in for a photo)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SwatchThumb extends StatelessWidget {
-  final Color color;
-  final String text;
-
-  const _SwatchThumb({required this.color, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    // We paint a mini "word cloud" look with 3–4 words in the accent colour.
-    final words = text.trim().split(RegExp(r'\s+')).take(4).toList();
-    final rng = Random(text.hashCode);
-
-    return Container(
-      width: 72,
-      height: 72,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        gradient: LinearGradient(
-          colors: [
-            color.withValues(alpha: 0.22),
-            color.withValues(alpha: 0.10),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(color: color.withValues(alpha: 0.20), width: 1),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          // Decorative background circles
-          Positioned(
-            right: -8,
-            top: -8,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color.withValues(alpha: 0.18),
-              ),
-            ),
-          ),
-          Positioned(
-            left: -4,
-            bottom: -4,
-            child: Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color.withValues(alpha: 0.12),
-              ),
-            ),
-          ),
-          // Word snippets
-          ...List.generate(min(words.length, 3), (i) {
-            final angle = (rng.nextDouble() - 0.5) * 0.35;
-            final tx = 6.0 + rng.nextDouble() * 24;
-            final ty = 10.0 + i * 18.0;
-            return Positioned(
-              left: tx,
-              top: ty,
-              child: Transform.rotate(
-                angle: angle,
-                child: Text(
-                  words[i],
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: color.withValues(alpha: 0.75),
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Single entry row
 // ─────────────────────────────────────────────────────────────────────────────
@@ -137,8 +33,6 @@ class _JournalEntryRow extends StatelessWidget {
     final text = journal['text'] ?? '';
     final dateStr = journal['date'] ?? '';
     final parts = _splitEntry(text);
-    final accent = _entryAccent(text);
-
     DateTime? date;
     try {
       date = DateTime.parse(dateStr);
@@ -249,10 +143,6 @@ class _JournalEntryRow extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(width: 12),
-
-            // ── Colour swatch thumbnail ───────────────────────────────
-            _SwatchThumb(color: accent, text: parts.title.isNotEmpty ? parts.title : text),
           ],
         ),
       ),

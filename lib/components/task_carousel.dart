@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import '../models/bullet_item.dart';
 import '../services/journal_service.dart';
+import '../utils/image_urls.dart';
 import 'task_card.dart';
 
 /// Horizontal carousel of daily tasks, shown on the homepage.
@@ -49,36 +49,7 @@ class _TaskCarouselState extends State<TaskCarousel> {
   }
 
   Future<void> _load() async {
-    // 1. Pre-load available images for immediate rendering
-    try {
-      final manifestJson = await rootBundle.loadString('AssetManifest.json');
-      final Map<String, dynamic> manifestMap = json.decode(manifestJson);
-      _availableImages = manifestMap.keys
-          .where(
-            (key) =>
-                key.startsWith('assets/photos/images/') &&
-                (key.toLowerCase().endsWith('.jpeg') ||
-                    key.toLowerCase().endsWith('.jpg') ||
-                    key.toLowerCase().endsWith('.png')),
-          )
-          .toList()
-        ..sort();
-    } catch (_) {
-      _availableImages = [
-        'assets/photos/images/Delicate Translucent Flower.png',
-        'assets/photos/images/ethreialbloom1.jpeg',
-        'assets/photos/images/EtherealFlower.jpeg',
-        'assets/photos/images/DelicateOrangeFlowerinBloom.jpeg',
-        'assets/photos/images/EtherealFlower-1-.jpeg',
-        'assets/photos/images/Ethereal Flower in Motion.png',
-        'assets/photos/images/Ethereal Flower(1).png',
-        'assets/photos/images/Ethereal Flower.png',
-        'assets/photos/images/Ethereal Glowing Flower.png',
-        'assets/photos/images/Ethereal Translucent Flower.png',
-        'assets/photos/images/Radiant Flower Glow.png',
-        'assets/photos/images/Z5u14ZbqstJ9-Dkw_EtherealFlower-1-.jpeg',
-      ];
-    }
+    _availableImages = taskBackgroundUrls();
 
     // 2. Instant Load from Cache
     var cachedTasks = await _service.loadJournalTasks(_todayKey);

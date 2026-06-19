@@ -1,22 +1,22 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../services/streak_service.dart';
 import '../services/journal_service.dart';
-// import './task_carousel.dart';  // kept for later use
 import 'package:lottie/lottie.dart';
+import 'package:confetti/confetti.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import 'about_bottom_sheet.dart';
 import 'widgets/duo_button.dart';
 import 'journal_bottom_sheet.dart';
-import 'mood_check_in_bottom_sheet.dart';
 import 'journal_history_section.dart';
 import 'stats_card.dart';
 import '../theme/app_theme.dart';
-import 'package:flutter_confetti/flutter_confetti.dart';
 
 
 class Homepage extends StatefulWidget {
@@ -39,6 +39,9 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
   bool _showStarTrail = false;
   Offset? _trailStart, _trailEnd;
   late AnimationController _trailController;
+  late AnimationController _wobbleCtrl;
+  late CurvedAnimation _wobbleAnim;
+  Timer? _wobbleTimer;
 
   @override
   void initState() {
@@ -46,7 +49,19 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
     _loadStreak();
     loadStars();
 
-    _confettiController = ConfettiController();
+    _wobbleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    );
+    _wobbleAnim = CurvedAnimation(
+      parent: _wobbleCtrl,
+      curve: Curves.easeInOutSine,
+    );
+    _wobbleTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _wobbleCtrl.forward(from: 0),
+    );
+    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
     _trailController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -85,7 +100,10 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
   void dispose() {
     _alternateTimer?.cancel();
     _starAnimController.dispose();
-    _confettiController.kill();
+    _wobbleCtrl.dispose();
+    _wobbleAnim.dispose();
+    _wobbleTimer?.cancel();
+    _confettiController.dispose();
     _trailController.dispose();
     super.dispose();
   }
@@ -113,6 +131,7 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
   }
 
   Future<void> _onJournalSaved() async {
+    HapticFeedback.mediumImpact();
     // Capture positions for star trail
     final startCtx = _writeBtnKey.currentContext;
     final endCtx = _starBadgeKey.currentContext;
@@ -126,62 +145,40 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
     }
 
     _tryIncrementStars(10, 'last_journal_star_time');
-    _confettiController.launch();
+    _confettiController.play();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Journal saved ✨'),
+        SnackBar(
+          elevation: 0,
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
+          margin: const EdgeInsets.symmetric(horizontal: 60),
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(100),
+          ),
+          backgroundColor: Colors.transparent,
+          duration: const Duration(seconds: 2),
+          content: ClipRRect(
+            borderRadius: BorderRadius.circular(100),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: const Center(
+                  child: Text('Journal saved ✨'),
+                ),
+              ),
+            ),
+          ),
         ),
       );
-    }
-  }
-
-  Future<void> _startVoiceInput() async {
-    final limit = await JournalService.isGuestLimitReached();
-    if (limit && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Free Trial limit reached! Tap your Profile to sign up securely and unlock unlimited journals."),
-          duration: Duration(seconds: 4),
-        ),
-      );
-      return;
-    }
-
-    final speech = SpeechToText();
-    final available = await speech.initialize();
-    if (!available || !mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Speech recognition is not available on this device.'),
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-
-    final text = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _VoiceRecordingSheet(speech: speech),
-    );
-
-    if (text != null && text.trim().isNotEmpty && mounted) {
-      final wrote = await showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.transparent,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (_) => JournalBottomSheet(initialText: text),
-      );
-      if (wrote == true) _onJournalSaved();
     }
   }
 
@@ -202,10 +199,12 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
             builder: (context, constraints) {
               final vh = constraints.maxHeight;
               return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // ── Top Bar: Profile Avatar · App Title · Streak/Score ─────────
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: vh),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ── Top Bar: Profile Avatar · App Title · Streak/Score ─────────
                 SizedBox(
                   height: 128,
                   child: Padding(
@@ -245,10 +244,33 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
                       // App title
                       Expanded(
                         child: Center(
-                          child: Image.asset(
-                            'assets/photos/elements/meowmin.png',
-                            height: 96,
-                            fit: BoxFit.contain,
+                          child: GestureDetector(
+                            onTap: () {
+                              Superwall.shared.registerPlacement(
+                                'campaign_trigger',
+                              );
+                            },
+                            child: AnimatedBuilder(
+                              animation: _wobbleAnim,
+                              builder: (context, child) {
+                                return Transform.rotate(
+                                  angle: sin(
+                                        _wobbleAnim.value * 4.5 * 2 * pi,
+                                      ) *
+                                      0.08,
+                                  child: child,
+                                );
+                              },
+                              child: Image.asset(
+                                'assets/photos/elements/meowmin.png',
+                                width: 120,
+                                height: 80,
+                                fit: BoxFit.contain,
+                              ).animate().shimmer(
+                                duration: 2500.ms,
+                                color: Colors.white.withValues(alpha: 0.45),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -340,148 +362,56 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
 
                 const SizedBox(height: 8),
 
-                // ── Write / Voice Buttons ─────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        key: _writeBtnKey,
-                        child: DuoButton(
-                          onPressed: () async {
-                            final limit = await JournalService.isGuestLimitReached();
-                            if (limit && context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Free Trial limit reached! Tap your Profile to sign up securely and unlock unlimited journals."),
-                                  duration: Duration(seconds: 4),
-                                ),
-                              );
-                              return;
-                            }
-                            if (context.mounted) {
-                              final wrote = await showModalBottomSheet<bool>(
-                                context: context,
-                                isScrollControlled: true,
-                                useSafeArea: true,
-                                backgroundColor: Colors.transparent,
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                                ),
-                                builder: (_) => const JournalBottomSheet(),
-                              );
-                              if (wrote == true) _onJournalSaved();
-                            }
-                          },
-                          backgroundColor: AppTheme.neonPurple,
-                          depthColor: AppTheme.neonPurple.withValues(alpha: 0.7),
-                          radius: 20,
-                          height: 72,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.edit_rounded, color: AppTheme.starWhite, size: 22),
-                              const SizedBox(width: 10),
-                              Text(
-                                'Write',
-                                style: TextStyle(
-                                  color: AppTheme.starWhite,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: DuoButton(
-                          onPressed: _startVoiceInput,
-                          backgroundColor: AppTheme.neonPurple,
-                          depthColor: AppTheme.neonPurple.withValues(alpha: 0.7),
-                          radius: 20,
-                          height: 72,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.mic_rounded, color: AppTheme.starWhite, size: 22),
-                              const SizedBox(width: 10),
-                              Text(
-                                'Voice',
-                                style: TextStyle(
-                                  color: AppTheme.starWhite,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // ── Mood Check-in Button ──────────────────────────────────
+                // ── Write Button ───────────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
                   child: DuoButton(
+                    key: _writeBtnKey,
                     onPressed: () async {
-                      final entry = await showModalBottomSheet<MoodEntry>(
-                        context: context,
-                        isScrollControlled: true,
-                        useSafeArea: true,
-                        backgroundColor: Colors.transparent,
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(28),
+                      final limit = await JournalService.isGuestLimitReached();
+                      if (limit && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Free Trial limit reached! Tap your Profile to sign up securely and unlock unlimited journals."),
+                            duration: Duration(seconds: 4),
                           ),
-                        ),
-                        builder: (_) => const MoodCheckInBottomSheet(),
-                      );
-                      if (entry != null && context.mounted) {
-                        // Persist the mood check-in count
-                        final prefs = await SharedPreferences.getInstance();
-                        final prev = prefs.getInt('mood_checkin_count') ?? 0;
-                        await prefs.setInt('mood_checkin_count', prev + 1);
-                        final key = 'mood_${entry.timestamp.toIso8601String().substring(0, 10)}';
-                        await prefs.setString(key, entry.value.toStringAsFixed(2));
-
-                        _tryIncrementStars(5, 'last_mood_star_time');
-                        _confettiController.launch();
-
-                        final label = moodLabel(entry.value);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Mood logged: $label ✨'),
-                              behavior: SnackBarBehavior.floating,
-                              backgroundColor: moodColors(entry.value)[1],
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        }
+                        );
+                        return;
+                      }
+                      if (context.mounted) {
+                        final scrollCtrl = ScrollController();
+                        final wrote = await showModalBottomSheet<bool>(
+                          context: context,
+                          isScrollControlled: true,
+                          useSafeArea: true,
+                          backgroundColor: Colors.transparent,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                          ),
+                          builder: (_) => JournalBottomSheet(
+                            scrollController: scrollCtrl,
+                          ),
+                        );
+                        scrollCtrl.dispose();
+                        if (wrote == true) _onJournalSaved();
                       }
                     },
-                    backgroundColor: const Color(0xFF2D2040),
-                    depthColor: const Color(0xFF1A1228),
+                    backgroundColor: AppTheme.neonPurple,
+                    depthColor: AppTheme.neonPurple.withValues(alpha: 0.7),
                     radius: 20,
-                    height: 60,
+                    height: 72,
+                    sfxType: DuoSfxType.positive,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.sentiment_satisfied_alt_rounded,
-                            color: AppTheme.starWhite, size: 22),
+                        Icon(Icons.edit_rounded, color: AppTheme.starWhite, size: 22),
                         const SizedBox(width: 10),
                         Text(
-                          'Mood Check-in',
+                          'Write',
                           style: TextStyle(
                             color: AppTheme.starWhite,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ],
@@ -489,7 +419,7 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
                   ),
                 ),
 
-                const SizedBox(height: 48),
+                const SizedBox(height: 28),
 
                 // ── Journal History ───────────────────────────────────────
                 const JournalHistorySection(maxEntries: 3),
@@ -536,20 +466,27 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
                 // const SizedBox(height: 32),
               ],
             ),
+          ),
           );
         },
       ),
     ),
-        IgnorePointer(
-          child: Confetti(
-            controller: _confettiController,
-            options: const ConfettiOptions(
-              particleCount: 80,
-              spread: 360,
-              startVelocity: 25,
-              decay: 0.95,
-              gravity: 0.3,
-              scalar: 1.5,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirectionality: BlastDirectionality.explosive,
+              numberOfParticles: 24,
+              emissionFrequency: 0.06,
+              maxBlastForce: 35,
+              minBlastForce: 10,
+              colors: const [
+                Colors.blue,
+                Colors.pink,
+                Colors.yellow,
+                Colors.green,
+                Colors.purple,
+              ],
             ),
           ),
         ),
@@ -639,215 +576,6 @@ class _StarParticle {
   final Offset lateral;
 
   const _StarParticle({required this.delay, required this.lateral});
-}
-
-class _VoiceRecordingSheet extends StatefulWidget {
-  final SpeechToText speech;
-
-  const _VoiceRecordingSheet({required this.speech});
-
-  @override
-  State<_VoiceRecordingSheet> createState() => _VoiceRecordingSheetState();
-}
-
-class _VoiceRecordingSheetState extends State<_VoiceRecordingSheet>
-    with SingleTickerProviderStateMixin {
-  String _text = '';
-  bool _isListening = true;
-  bool _hasResult = false;
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-    _startListening();
-  }
-
-  void _startListening() {
-    widget.speech.listen(
-      onResult: (result) {
-        if (mounted) {
-          setState(() {
-            _text = result.recognizedWords;
-            _hasResult = result.hasConfidenceRating && result.confidence > 0;
-            _isListening = true;
-          });
-        }
-      },
-      onStatus: (status) {
-        if (mounted) {
-          setState(() {
-            if (status == 'done' || status == 'notListening') {
-              _isListening = false;
-            } else if (status == 'error') {
-              _isListening = false;
-            }
-          });
-        }
-      },
-      listenFor: const Duration(seconds: 120),
-      pauseFor: const Duration(seconds: 6),
-      listenOptions: SpeechListenOptions(
-        listenMode: ListenMode.continuousDictation,
-        partialResults: true,
-      ),
-      localeId: 'en_US',
-    );
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    widget.speech.stop();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-
-    return Container(
-      height: 340,
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1028),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Drag handle
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.20),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            // Mic icon with pulse
-            AnimatedBuilder(
-              animation: _pulseAnim,
-              builder: (context, child) {
-                return Transform.scale(
-                  scale: _isListening ? _pulseAnim.value : 1.0,
-                  child: child,
-                );
-              },
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _isListening
-                      ? AppTheme.neonPurple.withValues(alpha: 0.20)
-                      : Colors.white.withValues(alpha: 0.06),
-                ),
-                child: Icon(
-                  _isListening ? Icons.mic : Icons.mic_off,
-                  size: 40,
-                  color: _isListening
-                      ? AppTheme.neonPurple
-                      : Colors.white.withValues(alpha: 0.40),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              _isListening ? 'Listening...' : 'Tap done when finished',
-              style: tt.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: Colors.white.withValues(alpha: 0.80),
-              ),
-            ),
-            if (_hasResult) ...[
-              const SizedBox(height: 6),
-              Text(
-                'Confidence: high',
-                style: tt.labelSmall?.copyWith(
-                  color: AppTheme.neonGreen.withValues(alpha: 0.60),
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-            // Transcription preview
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                _text.isEmpty ? '(speak now)' : _text,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: tt.bodyMedium?.copyWith(
-                  color: _text.isEmpty
-                      ? Colors.white.withValues(alpha: 0.30)
-                      : Colors.white.withValues(alpha: 0.85),
-                  height: 1.4,
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            // Buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                OutlinedButton(
-                  onPressed: () {
-                    widget.speech.cancel();
-                    Navigator.pop(context);
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white.withValues(alpha: 0.60),
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.15),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32, vertical: 14,
-                    ),
-                  ),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    widget.speech.stop();
-                    Navigator.pop(context, _text);
-                  },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.neonPurple,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32, vertical: 14,
-                    ),
-                  ),
-                  child: const Text('Done'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _MascotGreeting extends StatefulWidget {
