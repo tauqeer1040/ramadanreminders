@@ -665,6 +665,7 @@ class _QuranPageState extends State<QuranPage> {
                                             _saveRevealedCards();
                                             HapticFeedback.heavyImpact();
                                             _triggerConfetti();
+                                            ShopService.addStars(3);
                                           },
                                           child: card,
                                         ),

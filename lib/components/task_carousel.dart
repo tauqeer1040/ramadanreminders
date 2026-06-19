@@ -95,7 +95,7 @@ class _TaskCarouselState extends State<TaskCarousel> {
 
   void _resetImageRotation() {
     if (_availableImages.isEmpty) {
-      _imageRotation = ['assets/photos/images/ethreialbloom1.jpeg'];
+      _imageRotation = ['assets/shop/full/shop_1.webp'];
       _imageRotationIndex = 0;
       return;
     }
@@ -124,19 +124,19 @@ class _TaskCarouselState extends State<TaskCarousel> {
     BulletItem(
       id: 'default_1',
       content: 'Compliment a friend',
-      bgImage: 'assets/photos/images/ethreialbloom1.jpeg',
+      bgImage: 'assets/shop/full/shop_1.webp',
       difficulty: 'easy',
     ),
     BulletItem(
       id: 'default_2',
       content: 'Read an Aayah of the Quran ',
-      bgImage: 'assets/photos/images/EtherealFlower.jpeg',
+      bgImage: 'assets/shop/full/shop_2.webp',
       difficulty: 'mid',
     ),
     BulletItem(
       id: 'default_3',
       content: 'Give Charity',
-      bgImage: 'assets/photos/images/DelicateOrangeFlowerinBloom.jpeg',
+      bgImage: 'assets/shop/full/shop_3.webp',
       difficulty: 'hard',
     ),
   ];
@@ -312,7 +312,7 @@ class _TaskCarouselState extends State<TaskCarousel> {
                  text: 'Loading AI suggested task content...',
                  completed: false,
                  isFocused: i == 0,
-                 bgImage: 'assets/photos/images/ethreialbloom1.jpeg',
+                  bgImage: 'assets/shop/full/shop_1.webp',
                  onDelete: () {},
                  index: i,
                ),

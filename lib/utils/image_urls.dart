@@ -1,6 +1,8 @@
 import '../core/constants.dart';
 
-String get _baseRoot {
+const _bundledItems = 21;
+
+String _networkRoot() {
   final apiUrl = AppConstants.backendUrl;
   if (apiUrl.endsWith('/api/v2')) {
     return apiUrl.substring(0, apiUrl.length - '/api/v2'.length);
@@ -9,10 +11,17 @@ String get _baseRoot {
 }
 
 String assetUrl(String path) =>
-    path.startsWith('http://') || path.startsWith('https://') ? path : '$_baseRoot$path';
+    path.startsWith('http://') || path.startsWith('https://') ? path : '$_networkRoot()$path';
 
-String shopThumbnailUrl(int id) => assetUrl('/assets/shop/thumbs/shop_$id.webp');
-String shopFullUrl(int id) => assetUrl('/assets/shop/full/shop_$id.webp');
+String shopThumbnailUrl(int id) =>
+    id <= _bundledItems
+        ? 'assets/shop/thumbs/shop_$id.webp'
+        : assetUrl('/assets/shop/thumbs/shop_$id.webp');
+
+String shopFullUrl(int id) =>
+    id <= _bundledItems
+        ? 'assets/shop/full/shop_$id.webp'
+        : assetUrl('/assets/shop/full/shop_$id.webp');
 
 List<String> taskBackgroundUrls() =>
     List.generate(12, (i) => shopFullUrl(i + 1));

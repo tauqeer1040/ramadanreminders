@@ -76,12 +76,23 @@ class _ShopScreenState extends State<ShopScreen> {
       return;
     }
 
-    final remaining = _stars - item.cost;
-    await ShopService.purchaseItem(item.id, remaining);
+    final ok = await ShopService.purchaseItem(item.id);
+    if (!ok) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Purchase failed. Try again.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
 
+    final stars = await ShopService.getStarBalance();
     if (mounted) {
       setState(() {
-        _stars = remaining;
+        _stars = stars;
         _unlocked.add(item.id);
       });
       HapticFeedback.heavyImpact();

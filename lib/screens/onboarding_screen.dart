@@ -129,6 +129,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
     await prefs.setInt('total_stars', _stars);
 
+    // Sync initial star balance to server
+    ShopService.setStars(_stars);
+
     // Unlock first scratch card as a welcome gift
     await ShopService.unlockItem('shop_13');
 

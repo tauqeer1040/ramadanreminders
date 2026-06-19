@@ -67,6 +67,8 @@ flutter:
     - assets/photos/elements/
     - assets/tunes/
     - assets/chatbubbles/
+    - assets/shop/thumbs/
+    - assets/shop/full/
   fonts:
     - family: Amiri
       fonts:

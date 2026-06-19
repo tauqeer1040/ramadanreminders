@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:intl/intl.dart';
 import '../services/journal_service.dart';
+import '../services/shop_service.dart';
 import '../features/mood/emotion_screen.dart';
 import '../features/mood/emotion_theme.dart';
 
@@ -243,6 +244,7 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
 
   void _onMoodDone() {
     HapticFeedback.heavyImpact();
+    ShopService.addStars(5);
     Navigator.of(context).pop(
       EmotionEntry(value: _moodSliderValue, timestamp: DateTime.now()),
     );
