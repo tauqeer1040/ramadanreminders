@@ -4,41 +4,64 @@ import 'package:in_app_review/in_app_review.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
-import '../screens/onboarding_screen.dart';
-import 'widgets/duo_button.dart';
+import 'onboarding_screen.dart';
+import '../components/widgets/duo_button.dart';
 
-class AboutBottomSheet extends StatelessWidget {
-  const AboutBottomSheet({super.key});
+class AboutScreen extends StatelessWidget {
+  const AboutScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 8),
-          const _AppHeader(),
-          const SizedBox(height: 24),
-          const _ActionButtons(),
-          const SizedBox(height: 32),
-          const _OtherAppsSection(),
-          const SizedBox(height: 24),
-          const Text(
-            'Made with ❤️ — tauqeer ahmed (solo dev)',
-            style: TextStyle(
-              color: AppTheme.ghostSilver,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+    return Scaffold(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 32),
+              child: Align(
+                alignment: Alignment.topRight,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(Icons.close_rounded, color: AppTheme.starWhite, size: 28),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _PrivacyPolicyLink(),
-          const SizedBox(height: 24),
-          _ReplayButton(),
-          const SizedBox(height: 24),
-        ],
+            const SizedBox(height: 16),
+            const _AppHeader(),
+            const SizedBox(height: 24),
+            const _ActionButtons(),
+            const SizedBox(height: 32),
+            const _OtherAppsSection(),
+            const SizedBox(height: 24),
+            const _Footer(),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _Footer extends StatelessWidget {
+  const _Footer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const Text(
+          'Made with ❤️ — tauqeer ahmed (solo dev)',
+          style: TextStyle(
+            color: AppTheme.ghostSilver,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _PrivacyPolicyLink(),
+        const SizedBox(height: 24),
+        _ReplayButton(),
+      ],
     );
   }
 }
@@ -50,6 +73,7 @@ class _AppHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        const SizedBox(height: 8),
         Container(
           width: 100,
           height: 100,
@@ -302,84 +326,84 @@ class _OtherAppsSection extends StatelessWidget {
                             ),
                           ],
                         ),
-                ),
-                const SizedBox(height: 12),
-                GestureDetector(
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Meowstian — coming soon!'),
-                        backgroundColor: AppTheme.neonPurple,
                       ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A1A2E),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.15)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Meowstian — coming soon!'),
+                      backgroundColor: AppTheme.neonPurple,
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.asset(
-                              'assets/photos/elements/meowstian.webp',
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
-                                child: const Icon(Icons.auto_stories_rounded, color: Color(0xFF8B5CF6), size: 22),
-                              ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A2E),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.15)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.asset(
+                            'assets/photos/elements/meowstian.webp',
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                              child: const Icon(Icons.auto_stories_rounded, color: Color(0xFF8B5CF6), size: 22),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Meowstian',
-                                style: TextStyle(
-                                  color: AppTheme.starWhite,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                ),
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Meowstian',
+                              style: TextStyle(
+                                color: AppTheme.starWhite,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
                               ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Christian AI diary that relates your day with Bible verses.',
-                                style: TextStyle(
-                                  color: AppTheme.ghostSilver,
-                                  fontSize: 11,
-                                  height: 1.3,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Same as this app, but for Christians about the Bible.',
+                              style: TextStyle(
+                                color: AppTheme.ghostSilver,
+                                fontSize: 11,
+                                height: 1.3,
                               ),
-                            ],
-                          ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+                      ),
+                    ],
                   ),
                 ),
               ),

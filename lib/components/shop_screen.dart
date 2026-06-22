@@ -1,12 +1,17 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scratcher/scratcher.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import '../models/shop_item.dart';
 import '../services/shop_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/image_urls.dart';
+import '../screens/about_screen.dart';
+import 'favorites_page.dart';
 
 class ShopScreen extends StatefulWidget {
   const ShopScreen({super.key});
@@ -14,44 +19,67 @@ class ShopScreen extends StatefulWidget {
   State<ShopScreen> createState() => _ShopScreenState();
 }
 
-class _ShopScreenState extends State<ShopScreen> {
+class _ShopScreenState extends State<ShopScreen>
+    with SingleTickerProviderStateMixin {
   List<ShopItem> _items = [];
   int _stars = 0;
   Set<String> _unlocked = {};
   bool _loaded = false;
   bool _loadError = false;
 
+  late AnimationController _wobbleCtrl;
+  late CurvedAnimation _wobbleAnim;
+  Timer? _wobbleTimer;
+
   @override
   void initState() {
     super.initState();
     _load();
+
+    _wobbleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    );
+    _wobbleAnim = CurvedAnimation(
+      parent: _wobbleCtrl,
+      curve: Curves.easeInOutSine,
+    );
+    _wobbleTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _wobbleCtrl.forward(from: 0),
+    );
+  }
+
+  @override
+  void dispose() {
+    _wobbleCtrl.dispose();
+    _wobbleTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
-    try {
-      final results = await Future.wait([
-        ShopService.fetchItems(),
-        ShopService.getStarBalance(),
-        ShopService.getUnlockedIds(),
-      ]);
-      if (mounted) {
-        final sorted = List<ShopItem>.from(results[0] as List<ShopItem>);
-        sorted.sort((a, b) {
-          final aOwned = (results[2] as Set<String>).contains(a.id);
-          final bOwned = (results[2] as Set<String>).contains(b.id);
-          if (aOwned && !bOwned) return -1;
-          if (!aOwned && bOwned) return 1;
-          return 0;
-        });
-        setState(() {
-          _items = sorted;
-          _stars = results[1] as int;
-          _unlocked = results[2] as Set<String>;
-          _loaded = true;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loadError = true);
+    final results = await Future.wait([
+      ShopService.fetchItems(),
+      ShopService.getUnlockedIds(),
+      ShopService.getStarBalance(),
+    ]);
+    if (mounted) {
+      final items = results[0] as List<ShopItem>;
+      final unlocked = results[1] as Set<String>;
+      final sorted = List<ShopItem>.from(items);
+      sorted.sort((a, b) {
+        final aOwned = unlocked.contains(a.id);
+        final bOwned = unlocked.contains(b.id);
+        if (aOwned && !bOwned) return -1;
+        if (!aOwned && bOwned) return 1;
+        return 0;
+      });
+      setState(() {
+        _items = sorted;
+        _unlocked = unlocked;
+        _stars = results[2] as int;
+        _loaded = true;
+      });
     }
   }
 
@@ -146,7 +174,7 @@ class _ShopScreenState extends State<ShopScreen> {
             child: Stack(
               children: [
                 // Revealed content underneath
-                Image.network(flowerUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: Colors.grey[900])),
+                _buildImage(flowerUrl, fit: BoxFit.cover),
                 // Confetti
                 IgnorePointer(
                   child: Confetti(controller: ctrl, options: const ConfettiOptions(
@@ -165,7 +193,9 @@ class _ShopScreenState extends State<ShopScreen> {
                     ctrl.launch();
                     HapticFeedback.heavyImpact();
                   },
-                  image: Image.network(overlayUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                  image: overlayUrl.startsWith('assets/')
+                    ? Image.asset(overlayUrl, fit: BoxFit.cover)
+                    : Image.network(overlayUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
                   child: Container(color: Colors.transparent),
                 ),
                 // Close button
@@ -214,26 +244,26 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
-  Widget _buildImage(String networkUrl, {BoxFit fit = BoxFit.cover}) {
-    if (networkUrl.isNotEmpty) {
-      debugPrint('[ShopImage] loading: $networkUrl');
-      return Image.network(
-        networkUrl,
-        fit: fit,
-        loadingBuilder: (_, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            color: Colors.white.withValues(alpha: 0.05),
-            child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white24)),
-          );
-        },
-        errorBuilder: (_, __, ___) {
-          debugPrint('[ShopImage] FAILED: $networkUrl');
-          return _imageFallback();
-        },
-      );
+  Widget _buildImage(String url, {BoxFit fit = BoxFit.cover}) {
+    if (url.isEmpty) return _imageFallback();
+    if (url.startsWith('assets/')) {
+      return Image.asset(url, fit: fit, errorBuilder: (_, __, ___) => _imageFallback());
     }
-    return _imageFallback();
+    return Image.network(
+      url,
+      fit: fit,
+      loadingBuilder: (_, child, progress) {
+        if (progress == null) return child;
+        return Container(
+          color: Colors.white.withValues(alpha: 0.05),
+          child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white24)),
+        );
+      },
+      errorBuilder: (_, __, ___) {
+        debugPrint('[ShopImage] FAILED: $url');
+        return _imageFallback();
+      },
+    );
   }
 
   Widget _imageFallback() => Container(
@@ -245,10 +275,93 @@ class _ShopScreenState extends State<ShopScreen> {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
 
-    return Column(
-      children: [
+    return SafeArea(
+      child: Column(
+        children: [
+          // ── Top Bar: Avatar · Logo · Favorites ──────────────────────────
+        SizedBox(
+          height: 128,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AboutScreen()),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(20),
+                  child: CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/photos/mascot/hi.webp',
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: Theme.of(context).colorScheme.onSurface, size: 28),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: () {
+                        Superwall.shared.registerPlacement('campaign_trigger');
+                      },
+                      child: AnimatedBuilder(
+                        animation: _wobbleAnim,
+                        builder: (context, child) {
+                          return Transform.rotate(
+                            angle: sin(_wobbleAnim.value * 4.5 * 2 * pi) * 0.08,
+                            child: child,
+                          );
+                        },
+                        child: Image.asset(
+                          'assets/photos/elements/meowmin.png',
+                          width: 120,
+                          height: 80,
+                          fit: BoxFit.contain,
+                        ).animate().shimmer(
+                          duration: 2500.ms,
+                          color: Colors.white.withValues(alpha: 0.45),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const FavoritesPage()),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppTheme.starGold.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.favorite_rounded,
+                      color: AppTheme.starGold,
+                      size: 28,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ── Shop Header ─────────────────────────────────────────────────
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 56, 24, 0),
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
           child: Row(
             children: [
               Column(
@@ -291,6 +404,7 @@ class _ShopScreenState extends State<ShopScreen> {
           child: _buildBody(),
         ),
       ],
+      ),
     );
   }
 

@@ -482,6 +482,10 @@ class _AiInsightPageState extends State<AiInsightPage>
 
   void _initScratchImages() {
     _scratchCardImages = scratchCardUrls()..shuffle();
+    widget.data.scratchCardIds = _scratchCardImages.take(3).map((url) {
+      final m = RegExp(r'shop_(\d+)').firstMatch(url);
+      return 'shop_${m!.group(1)}';
+    }).toList();
   }
 
   @override

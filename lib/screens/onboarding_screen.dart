@@ -132,8 +132,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     // Sync initial star balance to server
     ShopService.setStars(_stars);
 
-    // Unlock first scratch card as a welcome gift
-    await ShopService.unlockItem('shop_13');
+    // Unlock the 3 scratch cards shown during onboarding
+    for (final id in _data.scratchCardIds) {
+      await ShopService.unlockItem(id);
+    }
 
     if (mounted) {
       Navigator.of(context).pop();

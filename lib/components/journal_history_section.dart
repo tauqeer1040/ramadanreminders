@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -48,12 +49,19 @@ class _JournalEntryRow extends StatelessWidget {
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.20),
+        child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
-        ),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.12),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  width: 1,
+                ),
+              ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -143,8 +151,11 @@ class _JournalEntryRow extends StatelessWidget {
               ),
             ),
 
-          ],
+            ],
+          ),
         ),
+      ),
+    ),
       ),
     );
   }
@@ -195,8 +206,11 @@ class _JournalHistorySectionState extends State<JournalHistorySection> {
         // Take most recent N entries
         final shown = all.take(widget.maxEntries).toList();
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+        return Container(
+          width: double.infinity,
+          color: Colors.black.withValues(alpha: 0.3),
+          child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -204,7 +218,7 @@ class _JournalHistorySectionState extends State<JournalHistorySection> {
               Row(
                 children: [
                   Text(
-                    'Journal',
+                    'History',
                     style: tt.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
                       color: Colors.white.withValues(alpha: 0.85),
@@ -232,35 +246,27 @@ class _JournalHistorySectionState extends State<JournalHistorySection> {
               if (all.length > widget.maxEntries)
                 GestureDetector(
                   onTap: _openList,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.neonPurple.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: AppTheme.neonPurple.withValues(alpha: 0.25),
-                        width: 1,
-                      ),
-                    ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           'View all ${all.length} entries',
                           style: tt.bodyMedium?.copyWith(
-                            color: AppTheme.neonPurple,
-                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withValues(alpha: 0.4),
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 4),
                         Icon(Icons.arrow_forward_rounded,
-                            size: 16, color: AppTheme.neonPurple),
+                            size: 14, color: Colors.white.withValues(alpha: 0.4)),
                       ],
                     ),
                   ),
                 ),
             ],
+          ),
           ),
         );
       },

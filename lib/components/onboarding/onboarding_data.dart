@@ -24,4 +24,5 @@ class OnboardingData {
 
   bool notificationsEnabled = false;
   bool locationEnabled = false;
+  List<String> scratchCardIds = [];
 }

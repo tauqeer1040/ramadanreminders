@@ -1,6 +1,9 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/streak_service.dart';
@@ -18,8 +21,9 @@ import 'widgets/duo_button.dart';
 import 'action_prompt_card.dart';
 import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../screens/about_screen.dart';
 
 class ProfilePage1 extends StatefulWidget {
   const ProfilePage1({super.key});
@@ -28,7 +32,8 @@ class ProfilePage1 extends StatefulWidget {
   State<ProfilePage1> createState() => _ProfilePage1State();
 }
 
-class _ProfilePage1State extends State<ProfilePage1> {
+class _ProfilePage1State extends State<ProfilePage1>
+    with SingleTickerProviderStateMixin {
   User? _currentUser;
   bool _isLoading = false;
   bool _notificationsGranted = false;
@@ -41,6 +46,8 @@ class _ProfilePage1State extends State<ProfilePage1> {
   String _debugBackend = '';
   String _debugAuth = '';
   String _debugShopCache = '';
+  String _serverStatus = 'yellow';
+  String _dbStatus = 'yellow';
 
   // Onboarding data
   String? _onboardingIntention;
@@ -51,6 +58,10 @@ class _ProfilePage1State extends State<ProfilePage1> {
   int? _onboardingAge;
   int? _onboardingPhoneHours;
   String? _onboardingCatName;
+
+  late AnimationController _wobbleCtrl;
+  late CurvedAnimation _wobbleAnim;
+  Timer? _wobbleTimer;
 
   @override
   void initState() {
@@ -67,6 +78,26 @@ class _ProfilePage1State extends State<ProfilePage1> {
         _loadStats();
       }
     });
+
+    _wobbleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    );
+    _wobbleAnim = CurvedAnimation(
+      parent: _wobbleCtrl,
+      curve: Curves.easeInOutSine,
+    );
+    _wobbleTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _wobbleCtrl.forward(from: 0),
+    );
+  }
+
+  @override
+  void dispose() {
+    _wobbleCtrl.dispose();
+    _wobbleTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadStats() async {
@@ -82,11 +113,34 @@ class _ProfilePage1State extends State<ProfilePage1> {
     final trialDays = await TrialService.daysRemaining();
     final shopCache = prefs.getString('shop_items_cache');
     final shopSize = shopCache != null ? '${(shopCache.length / 1024).toStringAsFixed(1)} KB' : '—';
+
+    // Health check
+    String serverStatus = 'yellow';
+    String dbStatus = 'yellow';
+    try {
+      final serverRes = await http
+          .get(Uri.parse(AppConstants.backendUrl.replaceAll('/api/v2', '')))
+          .timeout(const Duration(seconds: 5));
+      serverStatus = serverRes.statusCode == 200 ? 'green' : 'red';
+    } catch (_) {
+      serverStatus = 'red';
+    }
+    try {
+      final dbRes = await http
+          .get(Uri.parse('${AppConstants.backendUrl}/tags'))
+          .timeout(const Duration(seconds: 5));
+      dbStatus = dbRes.statusCode == 200 ? 'green' : 'red';
+    } catch (_) {
+      dbStatus = 'red';
+    }
+
     if (mounted) {
       setState(() {
         _streak = streak;
         _totalJournals = journals.length;
         _quranDays = quranDays;
+        _serverStatus = serverStatus;
+        _dbStatus = dbStatus;
         _debugAuth = '${user?.uid ?? "—"} (${isAnon ? "anonymous" : "signed-in"})';
         _debugTrial = trialActive ? 'active ($trialDays days left)' : 'expired';
         _debugBackend = AppConstants.backendUrl;
@@ -171,9 +225,11 @@ class _ProfilePage1State extends State<ProfilePage1> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: RefreshIndicator(
+      body: SafeArea(
+        child: RefreshIndicator(
         onRefresh: _loadStats,
         color: AppTheme.neonPurple,
         backgroundColor: const Color(0xFF1A1A2E),
@@ -181,7 +237,82 @@ class _ProfilePage1State extends State<ProfilePage1> {
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
           children: [
-            const SizedBox(height: 32),
+            // ── Top Bar: Avatar · Logo · Favorites ──────────────────────────
+            SizedBox(
+              height: 128,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Row(
+                  children: [
+                    InkWell(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AboutScreen()),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      child: CircleAvatar(
+                        radius: 28,
+                        backgroundColor: cs.primaryContainer,
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/photos/mascot/hi.webp',
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: GestureDetector(
+                          onTap: () {
+                            Superwall.shared.registerPlacement('campaign_trigger');
+                          },
+                          child: AnimatedBuilder(
+                            animation: _wobbleAnim,
+                            builder: (context, child) {
+                              return Transform.rotate(
+                                angle: sin(_wobbleAnim.value * 4.5 * 2 * pi) * 0.08,
+                                child: child,
+                              );
+                            },
+                            child: Image.asset(
+                              'assets/photos/elements/meowmin.png',
+                              width: 120,
+                              height: 80,
+                              fit: BoxFit.contain,
+                            ).animate().shimmer(
+                              duration: 2500.ms,
+                              color: Colors.white.withValues(alpha: 0.45),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                InkWell(
+                  onTap: _showPaywall,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppTheme.starGold.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.workspace_premium,
+                      color: AppTheme.starGold,
+                      size: 28,
+                    ),
+                  ),
+                ),
+                  ],
+                ),
+              ),
+            ),
 
             // ── Account & Sync ──────────────────────────────────────────────
             _buildAccountCard(),
@@ -197,15 +328,6 @@ class _ProfilePage1State extends State<ProfilePage1> {
               icon: Icons.auto_awesome_rounded,
               iconColor: AppTheme.neonPurple,
               child: _buildSpiritualProfile(),
-            ),
-            const SizedBox(height: 16),
-
-            // ── Mood Calendar ────────────────────────────────────────────────
-            _buildSectionCard(
-              title: 'MOOD CALENDAR',
-              icon: Icons.grid_view_rounded,
-              iconColor: const Color(0xFF58CC02),
-              child: _buildMoodCalendar(),
             ),
             const SizedBox(height: 16),
 
@@ -226,7 +348,7 @@ class _ProfilePage1State extends State<ProfilePage1> {
                 title: 'Homescreen Widget',
                 subtitle:
                     'Add a homescreen widget for one-tap access\nto your daily tasks and streak.',
-                buttonText: 'Add Widget',
+                buttonText: 'Add Widget +100 ⭐',
                 onPressed: () async {
                   final supported = await HomeWidget.isRequestPinWidgetSupported() ?? false;
                   if (supported) {
@@ -277,7 +399,7 @@ class _ProfilePage1State extends State<ProfilePage1> {
                 title: 'Set the reminder',
                 subtitle:
                     'Never miss your morning routine!\nSet a reminder to stay on track',
-                buttonText: 'Set Now',
+                buttonText: 'Set Now +100 ⭐',
                 onPressed: _toggleNotifications,
                 backgroundColor: const Color(0xFFFFE0B2),
                 foregroundColor: const Color(0xFF4E342E),
@@ -290,66 +412,39 @@ class _ProfilePage1State extends State<ProfilePage1> {
             const SizedBox(height: 16),
 
             // ── Share ──────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 0),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFFf09433),
-                      Color(0xFFe6683c),
-                      Color(0xFFdc2743),
-                      Color(0xFFcc2366),
-                      Color(0xFFbc1888),
-                    ],
-                    begin: Alignment.bottomLeft,
-                    end: Alignment.topRight,
-                  ),
-                  borderRadius: BorderRadius.circular(32),
-                ),
-                child: FilledButton(
-                  onPressed: () {
-                    // Trigger instagram share action here
-                  },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(32),
+            DuoButton(
+              onPressed: () async {
+                await _incrementStars(100);
+              },
+              backgroundColor: const Color(0xFFE91E63),
+              depthColor: const Color(0xFFAD1457),
+              radius: 16,
+              height: 56,
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.share_rounded, size: 20, color: AppTheme.starWhite),
+                  SizedBox(width: 10),
+                  Text(
+                    'Share with Friends +100 ⭐',
+                    style: TextStyle(
+                      color: AppTheme.starWhite,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Text(
-                        'SHARE',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(Icons.ios_share_rounded, size: 22),
-                    ],
-                  ),
-                ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
 
-            // ── Replay Onboarding ───────────────────────────────────────────
-            _replayOnboardingCard(),
-            const SizedBox(height: 12),
             _subscribeCard(),
             const SizedBox(height: 16),
             _debugCard(),
             const SizedBox(height: 16),
           ],
         ),
+      ),
       ),
     );
   }
@@ -454,10 +549,6 @@ class _ProfilePage1State extends State<ProfilePage1> {
         _buildProfileRow('Streak Status', _streakLabel),
       ],
     );
-  }
-
-  Widget _buildMoodCalendar() {
-    return _MoodCalendarGrid();
   }
 
   Widget _buildNotificationCard() {
@@ -601,12 +692,7 @@ class _ProfilePage1State extends State<ProfilePage1> {
   Widget _buildAccountCard() {
     final isAnonymous = _currentUser == null || _currentUser!.isAnonymous;
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: _cardDecoration().copyWith(
-        color: Colors.transparent,
-      ),
-      child: Column(
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (isAnonymous) ...[
@@ -725,8 +811,7 @@ class _ProfilePage1State extends State<ProfilePage1> {
             ),
           ],
         ],
-      ),
-    );
+      );
   }
 
   void _showEditNameDialog() {
@@ -787,32 +872,7 @@ class _ProfilePage1State extends State<ProfilePage1> {
     } catch (_) {}
   }
 
-  // ── REPLAY ONBOARDING ──────────────────────────────────────────────────────
-
-  Widget _replayOnboardingCard() {
-    return DuoButton(
-      onPressed: _replayOnboarding,
-      backgroundColor: AppTheme.neonPurple.withValues(alpha: 0.15),
-      depthColor: AppTheme.neonPurple.withValues(alpha: 0.08),
-      radius: 16,
-      height: 56,
-      child: const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.replay, color: AppTheme.neonPurple, size: 20),
-          SizedBox(width: 10),
-          Text(
-            'Replay Onboarding',
-            style: TextStyle(
-              color: AppTheme.neonPurple,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // ── SUBSCRIPTION CARD ──────────────────────────────────────────────────────
 
   Widget _subscribeCard() {
     return DuoButton(
@@ -865,18 +925,6 @@ class _ProfilePage1State extends State<ProfilePage1> {
     }
   }
 
-  Future<void> _replayOnboarding() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('onboarding_complete', false);
-    if (!mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const OnboardingScreen(),
-        fullscreenDialog: true,
-      ),
-    );
-  }
-
   // ── DEBUG ───────────────────────────────────────────────────────────────────
 
   Widget _debugCard() {
@@ -886,10 +934,46 @@ class _ProfilePage1State extends State<ProfilePage1> {
       iconColor: Colors.redAccent,
       child: Column(
         children: [
+          _buildStatusDot('Server', _serverStatus),
+          _buildStatusDot('Database', _dbStatus),
           _buildProfileRow('Auth', _debugAuth),
           _buildProfileRow('Trial', _debugTrial),
           _buildProfileRow('Backend', _debugBackend),
           _buildProfileRow('Shop cache', _debugShopCache),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusDot(String label, String status) {
+    final dotColor = status == 'green'
+        ? const Color(0xFF4CAF50)
+        : status == 'red'
+            ? const Color(0xFFE53935)
+            : const Color(0xFFFFC107);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(
+            color: AppTheme.ghostSilver, fontSize: 14, fontWeight: FontWeight.w500,
+          )),
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: dotColor,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: dotColor.withValues(alpha: 0.4),
+                  blurRadius: 6,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -965,196 +1049,4 @@ class _ProfilePage1State extends State<ProfilePage1> {
       ),
     ],
   );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Mood Calendar Grid
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MoodCalendarGrid extends StatefulWidget {
-  @override
-  State<_MoodCalendarGrid> createState() => _MoodCalendarGridState();
-}
-
-class _MoodCalendarGridState extends State<_MoodCalendarGrid> {
-  late DateTime _currentMonth;
-  Map<String, double> _moodData = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
-    _loadMoods();
-  }
-
-  Future<void> _loadMoods() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final data = <String, double>{};
-      for (final key in prefs.getKeys()) {
-        if (key.startsWith('mood_')) {
-          final dateStr = key.substring(5);
-          final val = double.tryParse(prefs.getString(key) ?? '');
-          if (val != null) data[dateStr] = val;
-        }
-      }
-      if (mounted) setState(() => _moodData = data);
-    } catch (_) {}
-  }
-
-  void _prevMonth() => setState(() {
-    _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
-  });
-
-  void _nextMonth() => setState(() {
-    _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1);
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final now = DateTime.now();
-    final thisMonth = DateTime(now.year, now.month);
-    final isFuture = _currentMonth.isAfter(thisMonth);
-
-    final daysInMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 0).day;
-    final firstWeekday = DateTime(_currentMonth.year, _currentMonth.month, 1).weekday % 7;
-
-    const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-    final monthLabel = DateFormat('MMMM yyyy').format(_currentMonth);
-
-    return Column(
-      children: [
-        // ── Month navigation ──────────────────────────────────
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.chevron_left_rounded),
-              color: Colors.white.withValues(alpha: 0.60),
-              onPressed: _prevMonth,
-            ),
-            Text(
-              monthLabel,
-              style: tt.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: Colors.white.withValues(alpha: 0.85),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.chevron_right_rounded),
-              color: isFuture
-                  ? Colors.white.withValues(alpha: 0.15)
-                  : Colors.white.withValues(alpha: 0.60),
-              onPressed: isFuture ? null : _nextMonth,
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-
-        // ── Day labels ─────────────────────────────────────────
-        Row(
-          children: dayLabels.map((l) => Expanded(
-            child: Center(
-              child: Text(
-                l,
-                style: tt.labelSmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.40),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 11,
-                ),
-              ),
-            ),
-          )).toList(),
-        ),
-        const SizedBox(height: 6),
-
-        // ── Day cells ──────────────────────────────────────────
-        ...List.generate(_weeksCount(daysInMonth, firstWeekday), (week) {
-          return Row(
-            children: List.generate(7, (weekday) {
-              final day = week * 7 + weekday - firstWeekday + 1;
-              final isValid = day >= 1 && day <= daysInMonth;
-              final dateStr = isValid
-                  ? '${_currentMonth.year}-${_currentMonth.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}'
-                  : '';
-
-              final moodVal = isValid ? _moodData[dateStr] : null;
-              final isToday = isValid && dateStr == now.toIso8601String().substring(0, 10);
-
-              return Expanded(
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: Container(
-                    margin: const EdgeInsets.all(1.5),
-                    decoration: BoxDecoration(
-                      color: moodVal != null
-                          ? _moodColor(moodVal).withValues(alpha: 0.55)
-                          : (isToday
-                              ? Colors.white.withValues(alpha: 0.06)
-                              : Colors.transparent),
-                      borderRadius: BorderRadius.circular(6),
-                      border: isToday && moodVal == null
-                          ? Border.all(color: AppTheme.neonPurple.withValues(alpha: 0.30), width: 1)
-                          : null,
-                    ),
-                    child: Center(
-                      child: Text(
-                        isValid ? '$day' : '',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: moodVal != null ? FontWeight.w700 : FontWeight.w400,
-                          color: moodVal != null
-                              ? Colors.white
-                              : (isToday
-                                  ? AppTheme.neonPurple.withValues(alpha: 0.60)
-                                  : Colors.white.withValues(alpha: 0.25)),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-          );
-        }),
-        const SizedBox(height: 8),
-
-        // ── Legend ──────────────────────────────────────────────
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _legendDot(const Color(0xFF5C6BC0)),
-            const SizedBox(width: 4),
-            Text('Low', style: tt.labelSmall?.copyWith(color: Colors.white.withValues(alpha: 0.40))),
-            const SizedBox(width: 12),
-            _legendDot(const Color(0xFFAB47BC)),
-            const SizedBox(width: 4),
-            Text('Med', style: tt.labelSmall?.copyWith(color: Colors.white.withValues(alpha: 0.40))),
-            const SizedBox(width: 12),
-            _legendDot(const Color(0xFF7CB342)),
-            const SizedBox(width: 4),
-            Text('High', style: tt.labelSmall?.copyWith(color: Colors.white.withValues(alpha: 0.40))),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _legendDot(Color c) => Container(
-    width: 10, height: 10,
-    decoration: BoxDecoration(
-      color: c.withValues(alpha: 0.55),
-      borderRadius: BorderRadius.circular(3),
-    ),
-  );
-
-  int _weeksCount(int days, int firstWeekday) =>
-      ((days + firstWeekday + 6) ~/ 7).clamp(4, 6);
-
-  Color _moodColor(double val) {
-    if (val < 0.35) return const Color(0xFF5C6BC0);
-    if (val < 0.65) return const Color(0xFFAB47BC);
-    return const Color(0xFF7CB342);
-  }
 }

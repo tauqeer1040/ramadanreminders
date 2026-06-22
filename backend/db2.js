@@ -27,7 +27,7 @@ const db = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-if (!admin.apps.length) {
+if (!admin.apps?.length) {
   admin.initializeApp({
     credential: admin.credential.cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
@@ -965,7 +965,7 @@ const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 20 });
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
-  keyGenerator: (req) => req.uid || req.ip,
+  keyGenerator: (req) => req.uid || req.socket.remoteAddress,
 });
 
 const generalLimiter = rateLimit({ windowMs: 60 * 1000, max: 60 });

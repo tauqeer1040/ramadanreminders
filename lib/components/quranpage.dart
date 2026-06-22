@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -11,6 +12,7 @@ import 'package:text_scroll/text_scroll.dart';
 import 'package:scratcher/scratcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 import '../services/insight_service.dart';
 import '../services/favorites_service.dart';
@@ -21,6 +23,9 @@ import './reflect_card.dart';
 import './insight_card_shimmer.dart';
 import './favorites_page.dart';
 import '../utils/image_urls.dart';
+import '../screens/about_screen.dart';
+import '../theme/app_theme.dart';
+import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 
 class QuranPage extends StatefulWidget {
   const QuranPage({super.key});
@@ -29,7 +34,8 @@ class QuranPage extends StatefulWidget {
   State<QuranPage> createState() => _QuranPageState();
 }
 
-class _QuranPageState extends State<QuranPage> {
+class _QuranPageState extends State<QuranPage>
+    with SingleTickerProviderStateMixin {
   static const List<_CardColorTheme> _cardColorSchemes = [
     _CardColorTheme(
       bg: Color(0xFFD6DF7E),
@@ -77,6 +83,10 @@ class _QuranPageState extends State<QuranPage> {
   final List<_HeartBurst> _hearts = [];
   late String _revealedKey;
 
+  late AnimationController _wobbleCtrl;
+  late CurvedAnimation _wobbleAnim;
+  Timer? _wobbleTimer;
+
   @override
   void initState() {
     super.initState();
@@ -105,10 +115,25 @@ class _QuranPageState extends State<QuranPage> {
         });
       }
     });
+
+    _wobbleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    );
+    _wobbleAnim = CurvedAnimation(
+      parent: _wobbleCtrl,
+      curve: Curves.easeInOutSine,
+    );
+    _wobbleTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _wobbleCtrl.forward(from: 0),
+    );
   }
 
   @override
   void dispose() {
+    _wobbleCtrl.dispose();
+    _wobbleTimer?.cancel();
     _swiperController.dispose();
     _player.dispose();
     super.dispose();
@@ -589,36 +614,90 @@ class _QuranPageState extends State<QuranPage> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: _revealedCards.length >= _deck.length
-            ? null
-            : TextScroll(
-          'scratch for your personalized insights',
-          velocity: const Velocity(pixelsPerSecond: Offset(40, 0)),
-          mode: TextScrollMode.endless,
-          delayBefore: const Duration(milliseconds: 500),
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: cs.onSurface,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.favorite_rounded),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const FavoritesPage()),
-              );
-            },
-          ),
-        ],
-      ),
       body: SafeArea(
         child: Column(
           children: [
+            // ── Top Bar: Avatar · Logo · Favorites ──────────────────────────
+            SizedBox(
+              height: 128,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Row(
+                  children: [
+                    InkWell(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AboutScreen()),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      child: CircleAvatar(
+                        radius: 28,
+                        backgroundColor: cs.primaryContainer,
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/photos/mascot/hi.webp',
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: GestureDetector(
+                          onTap: () {
+                            Superwall.shared.registerPlacement('campaign_trigger');
+                          },
+                          child: AnimatedBuilder(
+                            animation: _wobbleAnim,
+                            builder: (context, child) {
+                              return Transform.rotate(
+                                angle: sin(_wobbleAnim.value * 4.5 * 2 * pi) * 0.08,
+                                child: child,
+                              );
+                            },
+                            child: Image.asset(
+                              'assets/photos/elements/meowmin.png',
+                              width: 120,
+                              height: 80,
+                              fit: BoxFit.contain,
+                            ).animate().shimmer(
+                              duration: 2500.ms,
+                              color: Colors.white.withValues(alpha: 0.45),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const FavoritesPage()),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: AppTheme.starGold.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.favorite_rounded,
+                          color: AppTheme.starGold,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             Expanded(
               child: Center(
                 child: SizedBox(

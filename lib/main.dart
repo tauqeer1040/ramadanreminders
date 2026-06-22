@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:superwallkit_flutter/superwallkit_flutter.dart';
@@ -24,6 +25,7 @@ import 'services/auth_service.dart';
 import 'services/user_service.dart';
 import 'services/auth_debug_service.dart';
 import 'theme/app_theme.dart';
+import 'screens/paywall_gate_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -196,12 +198,15 @@ class Material3BottomNav extends StatefulWidget {
   State<Material3BottomNav> createState() => _Material3BottomNavState();
 }
 
-class _Material3BottomNavState extends State<Material3BottomNav> {
+class _Material3BottomNavState extends State<Material3BottomNav> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   int _shopRefresh = 0;
   final _homepageKey = GlobalKey<HomepageState>();
   late final PageController _pageController;
   StreamSubscription? _authSubscription;
+  bool _isSubscribed = false;
+  DateTime? _sessionStart;
+  Timer? _sessionTimer;
 
   List<Widget> get _pages => [
     Homepage(key: _homepageKey),
@@ -213,6 +218,7 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pageController = PageController(initialPage: _selectedIndex);
     _authSubscription = AuthService.userChanges.listen((user) {
       if (mounted) setState(() {});
@@ -228,12 +234,47 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
 
   Future<void> _checkOnboarding() async {
     await TrialService.initialize();
+    await TrialService.initializeGrace();
     StreakService.recordActivity();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       precacheImage(const AssetImage('assets/photos/elements/app_bg2.webp'), context);
     });
     final prefs = await SharedPreferences.getInstance();
     final complete = prefs.getBool('onboarding_complete') ?? false;
+
+    // First-ever launch: request notification permission immediately
+    if (!complete) {
+      final asked = prefs.getBool('notification_permission_asked') ?? false;
+      if (!asked) {
+        await prefs.setBool('notification_permission_asked', true);
+        NotificationService.requestPermissions();
+      }
+    }
+
+    // One-time migration for existing users: ensure 3 scratch cards unlocked
+    if (complete) {
+      final migrated = prefs.getBool('scratch_migrated') ?? false;
+      if (!migrated) {
+        final raw = prefs.getString('shop_unlocked');
+        final unlocked = raw != null ? (jsonDecode(raw) as List).cast<String>().toSet() : <String>{};
+        final scratchCount = unlocked.where((id) {
+          final n = int.tryParse(id.split('_').last) ?? 0;
+          return n >= 13 && n <= 21;
+        }).length;
+        if (scratchCount < 3) {
+          for (int i = 13; i <= 15; i++) {
+            final id = 'shop_$i';
+            if (!unlocked.contains(id)) {
+              unlocked.add(id);
+            }
+          }
+          await prefs.setString('shop_unlocked', jsonEncode(unlocked.toList()));
+          setState(() => _shopRefresh++);
+        }
+        await prefs.setBool('scratch_migrated', true);
+      }
+    }
+
     if (!complete && mounted) {
       await Navigator.of(context).push(
         MaterialPageRoute(
@@ -244,13 +285,128 @@ class _Material3BottomNavState extends State<Material3BottomNav> {
       setState(() => _shopRefresh++);
       await _homepageKey.currentState?.loadStars();
     }
+
+    // Subscription gate check (always, after onboarding or on app start)
+    if (mounted) {
+      await _checkSubscriptionStatus();
+      if (!_isSubscribed) {
+        await _showPaywallGate();
+      }
+    }
+  }
+
+  Future<void> _checkSubscriptionStatus() async {
+    try {
+      final status = await Superwall.shared.getSubscriptionStatus();
+      if (mounted) {
+        _isSubscribed = status.isActive;
+      }
+    } catch (_) {
+      // Silently fail — treat as not subscribed
+      _isSubscribed = false;
+    }
+  }
+
+  Future<void> _showPaywallGate() async {
+    // Deduct 1 minute for this launch
+    final remaining = await TrialService.deductLaunchCost();
+    final hasGrace = remaining > 0;
+    _sessionTimer?.cancel();
+
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => PaywallGateScreen(
+          isDismissable: hasGrace,
+          onSubscribe: () {
+            _isSubscribed = true;
+            _sessionTimer?.cancel();
+            Navigator.of(context).pop();
+          },
+          onDismiss: () {
+            Navigator.of(context).pop();
+            _startSessionTracking();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _startSessionTracking() {
+    _sessionStart = DateTime.now();
+    _sessionTimer?.cancel();
+    _sessionTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      if (!mounted) {
+        _sessionTimer?.cancel();
+        return;
+      }
+      final elapsed = DateTime.now().difference(_sessionStart!).inMilliseconds;
+      final remaining = await TrialService.getRemainingMs();
+      if (remaining <= 0 || elapsed >= remaining) {
+        // Consume the elapsed time
+        await TrialService.consumeSessionMs(elapsed);
+        _sessionTimer?.cancel();
+        if (mounted) {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (_) => PaywallGateScreen(
+                isDismissable: false,
+                onSubscribe: () {
+                  _isSubscribed = true;
+                  _sessionTimer?.cancel();
+                  Navigator.of(context).pop();
+                },
+                onDismiss: () {},
+              ),
+            ),
+          );
+        }
+      }
+    });
+  }
+
+  Future<void> _checkGate() async {
+    if (_isSubscribed) return;
+    await _checkSubscriptionStatus();
+    if (_isSubscribed) return;
+    final remaining = await TrialService.getRemainingMs();
+    if (remaining <= 0) {
+      if (mounted) {
+        _sessionTimer?.cancel();
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => PaywallGateScreen(
+              isDismissable: false,
+              onSubscribe: () {
+                _isSubscribed = true;
+                _sessionTimer?.cancel();
+                Navigator.of(context).pop();
+              },
+              onDismiss: () {},
+            ),
+          ),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
     _pageController.dispose();
+    _sessionTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkGate();
+    }
   }
 
   void navigateToTab(int index) {
@@ -399,8 +555,8 @@ class _ProfileTabIconState extends State<_ProfileTabIcon> {
 List<NavigationDestination> _buildNavBarItems(ColorScheme cs) {
   return [
     const NavigationDestination(
-      icon: Icon(Icons.home_filled),
-      selectedIcon: Icon(Icons.home_filled),
+      icon: Icon(Icons.home_outlined, weight: 200),
+      selectedIcon: Icon(Icons.home_outlined, weight: 200),
       label: "home",
     ),
     NavigationDestination(
@@ -409,8 +565,8 @@ List<NavigationDestination> _buildNavBarItems(ColorScheme cs) {
       label: 'Insights',
     ),
     const NavigationDestination(
-      icon: Icon(Icons.store_rounded),
-      selectedIcon: Icon(Icons.store_rounded),
+      icon: Icon(Icons.store_outlined, weight: 200),
+      selectedIcon: Icon(Icons.store_outlined, weight: 200),
       label: "shop",
     ),
     NavigationDestination(

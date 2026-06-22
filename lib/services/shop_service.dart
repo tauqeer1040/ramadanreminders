@@ -13,36 +13,10 @@ class ShopService {
   static const _cacheKey = 'shop_items_cache';
   static const _unlockedKey = 'shop_unlocked';
 
-  /// Fetch shop items from API. Falls back to SharedPrefs cache, then static list.
+  /// Returns the static local shop items list. No network call — items 1–21
+  /// are bundled in the APK with fixed names/costs. Kept async for future
+  /// dynamic items from the server.
   static Future<List<ShopItem>> fetchItems() async {
-    try {
-      final headers = await ApiClient.authHeaders();
-      final res = await http
-          .get(Uri.parse('${AppConstants.backendUrl}/shop/items'), headers: headers)
-          .timeout(const Duration(seconds: 5));
-      if (res.statusCode == 200) {
-        final body = jsonDecode(res.body) as Map<String, dynamic>;
-        final items = (body['items'] as List).map((e) {
-          final item = e as Map<String, dynamic>;
-          return ShopItem(
-            id: item['id'] as String,
-            name: item['name'] as String,
-            thumbnailUrl: assetUrl(item['thumbnailUrl'] as String? ?? ''),
-            imageUrl: assetUrl(item['imageUrl'] as String? ?? ''),
-            cost: item['cost'] as int? ?? 100,
-            localAsset: item['localAsset'] as String? ?? '',
-          );
-        }).toList();
-        await _cacheItems(items);
-        return items;
-      }
-    } catch (e) {
-      debugPrint('[ShopService] fetchItems error: $e');
-    }
-
-    final cached = await _loadCachedItems();
-    if (cached.isNotEmpty) return cached;
-
     final fallback = _fallbackItems();
     await _cacheItems(fallback);
     return fallback;
@@ -56,11 +30,13 @@ class ShopService {
       final list = jsonDecode(raw) as List;
       return list.map((e) {
         final item = e as Map<String, dynamic>;
+        final id = item['id'] as String;
+        final idNum = int.tryParse(id.replaceAll(RegExp(r'[^0-9]'), ''));
         return ShopItem(
-          id: item['id'] as String,
+          id: id,
           name: item['name'] as String,
-          thumbnailUrl: assetUrl(item['thumbnailUrl'] as String? ?? ''),
-          imageUrl: assetUrl(item['imageUrl'] as String? ?? ''),
+          thumbnailUrl: idNum != null ? shopThumbnailUrl(idNum) : assetUrl(item['thumbnailUrl'] as String? ?? ''),
+          imageUrl: idNum != null ? shopFullUrl(idNum) : assetUrl(item['imageUrl'] as String? ?? ''),
           cost: item['cost'] as int? ?? 100,
           localAsset: item['localAsset'] as String? ?? '',
         );
@@ -155,24 +131,6 @@ class ShopService {
 
   static Future<int> getStarBalance() async {
     final prefs = await SharedPreferences.getInstance();
-    try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null) {
-        final headers = await ApiClient.authHeaders();
-        final res = await http.get(
-          Uri.parse('${AppConstants.backendUrl}/user/$uid'),
-          headers: headers,
-        ).timeout(const Duration(seconds: 5));
-        if (res.statusCode == 200) {
-          final body = jsonDecode(res.body) as Map<String, dynamic>;
-          final serverStars = body['stars'] as int?;
-          if (serverStars != null) {
-            await prefs.setInt('total_stars', serverStars);
-            return serverStars;
-          }
-        }
-      }
-    } catch (_) {}
     return prefs.getInt('total_stars') ?? 0;
   }
 

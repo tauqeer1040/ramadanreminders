@@ -11,7 +11,7 @@ import 'package:lottie/lottie.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:superwallkit_flutter/superwallkit_flutter.dart';
-import 'about_bottom_sheet.dart';
+import '../screens/about_screen.dart';
 import 'widgets/duo_button.dart';
 import 'journal_bottom_sheet.dart';
 import 'journal_history_section.dart';
@@ -36,6 +36,8 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
   late ConfettiController _confettiController;
   final _starBadgeKey = GlobalKey();
   final _writeBtnKey = GlobalKey();
+  final _journalKey = GlobalKey();
+  final _scrollCtrl = ScrollController();
   bool _showStarTrail = false;
   Offset? _trailStart, _trailEnd;
   late AnimationController _trailController;
@@ -187,6 +189,13 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
     return user?.displayName ?? user?.email?.split('@').first ?? 'friend';
   }
 
+  void _scrollToJournalHistory() {
+    final ctx = _journalKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx, alignment: 0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOutCubic);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -198,7 +207,12 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final vh = constraints.maxHeight;
+              const appbarH = 128.0;
+              const writeBtnH = 72.0;
+              const writeBtnBottom = 48.0;
+              final hoverH = max(100.0, vh - appbarH - writeBtnH - writeBtnBottom);
               return SingleChildScrollView(
+              controller: _scrollCtrl,
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: vh),
               child: Column(
@@ -218,14 +232,9 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
                       InkWell(
                         onTap: () {
                           HapticFeedback.lightImpact();
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            showDragHandle: true,
-                            shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-                            ),
-                            builder: (context) => const AboutBottomSheet(),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const AboutScreen()),
                           );
                         },
                         borderRadius: BorderRadius.circular(20),
@@ -352,19 +361,18 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
                 ),
                 ),
 
-                const SizedBox(height: 16),
-
                 // ── Mascot Greeting ────────────────────────────────────────────
-                _MascotGreeting(
-                  displayName: _getDisplayName(),
-                  streakCount: _streakCount,
+                SizedBox(
+                  height: hoverH,
+                  child: _MascotGreeting(
+                    displayName: _getDisplayName(),
+                    streakCount: _streakCount,
+                  ),
                 ),
-
-                const SizedBox(height: 8),
 
                 // ── Write Button ───────────────────────────────────────────────
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  padding: EdgeInsets.only(left: 24, right: 24, bottom: writeBtnBottom),
                   child: DuoButton(
                     key: _writeBtnKey,
                     onPressed: () async {
@@ -419,15 +427,15 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
                   ),
                 ),
 
-                const SizedBox(height: 28),
+                const SizedBox(height: 24),
 
                 // ── Journal History ───────────────────────────────────────
-                const JournalHistorySection(maxEntries: 3),
+                JournalHistorySection(key: _journalKey, maxEntries: 3),
 
-                const SizedBox(height: 28),
+                const SizedBox(height: 24),
 
                 // ── Stats Card ────────────────────────────────────────────
-                const StatsCard(),
+                StatsCard(onTapEntries: _scrollToJournalHistory),
 
                 const SizedBox(height: 28),
 
