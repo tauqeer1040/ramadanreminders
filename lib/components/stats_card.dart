@@ -1331,13 +1331,18 @@ class _StatStorySheetState extends State<_StatStorySheet> {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
 
-    return Container(
-      height: screenHeight * 0.30,
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A2E),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          height: screenHeight * 0.45,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+          ),
+          child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 10, bottom: 4),
@@ -1387,11 +1392,13 @@ class _StatStorySheetState extends State<_StatStorySheet> {
           ),
         ],
       ),
+        ),
+      ),
     );
   }
 }
 
-class _TweetPage extends StatelessWidget {
+class _TweetPage extends StatefulWidget {
   final int index;
   final _StatsData data;
 
@@ -1399,6 +1406,27 @@ class _TweetPage extends StatelessWidget {
     required this.index,
     required this.data,
   });
+
+  @override
+  State<_TweetPage> createState() => _TweetPageState();
+}
+
+class _TweetPageState extends State<_TweetPage> {
+  String _catName = 'Meowmin';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCatName();
+  }
+
+  Future<void> _loadCatName() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString('onboarding_catName');
+    if (name != null && name.isNotEmpty && mounted) {
+      setState(() => _catName = name);
+    }
+  }
 
   static const _colors = [
     Color(0xFFFF6B35),
@@ -1420,16 +1448,6 @@ class _TweetPage extends StatelessWidget {
     'Quran Read',
   ];
 
-  static const _handles = [
-    '@streakmaster',
-    '@journaler',
-    '@wordweaver',
-    '@curator',
-    '@stargazer',
-    '@moodwise',
-    '@quranseek',
-  ];
-
   static const _avatars = [
     '🔥',
     '📝',
@@ -1441,15 +1459,17 @@ class _TweetPage extends StatelessWidget {
   ];
 
   String _valueText() {
-    final quranPct = data.streakDays > 0 ? (data.quranDays * 100 ~/ data.streakDays) : 0;
-    switch (index) {
-      case 0: return '${data.streakDays} days';
-      case 1: return '${data.totalEntries} entries';
-      case 2: return '${_fmtNum(data.totalWords)} words';
-      case 3: return '${data.savedFavorites} saved';
-      case 4: return '${data.totalStars} stars';
-      case 5: return '${data.moodCheckIns} moods';
-      case 6: return '$quranPct% · ${data.quranDays} days';
+    final d = widget.data;
+    final i = widget.index;
+    final quranPct = d.streakDays > 0 ? (d.quranDays * 100 ~/ d.streakDays) : 0;
+    switch (i) {
+      case 0: return '${d.streakDays} days';
+      case 1: return '${d.totalEntries} entries';
+      case 2: return '${_fmtNum(d.totalWords)} words';
+      case 3: return '${d.savedFavorites} saved';
+      case 4: return '${d.totalStars} stars';
+      case 5: return '${d.moodCheckIns} moods';
+      case 6: return '$quranPct% · ${d.quranDays} days';
       default: return '';
     }
   }
@@ -1457,8 +1477,8 @@ class _TweetPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final color = _colors[index];
-    final body = _tweetFor(index, data);
+    final color = _colors[widget.index];
+    final body = _tweetFor(widget.index, widget.data);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
@@ -1482,7 +1502,7 @@ class _TweetPage extends StatelessWidget {
                     width: 44,
                     height: 44,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Text(_avatars[index], style: const TextStyle(fontSize: 20)),
+                    errorBuilder: (_, __, ___) => Text(_avatars[widget.index], style: const TextStyle(fontSize: 20)),
                   ),
                 ),
               ),
@@ -1495,7 +1515,7 @@ class _TweetPage extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            _labels[index],
+                            _labels[widget.index],
                             style: tt.titleSmall?.copyWith(
                               fontWeight: FontWeight.w800,
                               color: AppTheme.starWhite,
@@ -1524,7 +1544,7 @@ class _TweetPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 1),
                     Text(
-                      '${_handles[index]} · 2m',
+                      '$_catName · 2m',
                       style: tt.labelSmall?.copyWith(
                         color: AppTheme.ghostSilver.withValues(alpha: 0.7),
                         fontSize: 12,
@@ -1551,13 +1571,13 @@ class _TweetPage extends StatelessWidget {
               ),
             ),
           ),
-          if (index == 1) ...[
+          if (widget.index == 1) ...[
             const SizedBox(height: 14),
             Container(
               height: 52,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: _MonthlyBarChartSmall(
-                counts: data.monthlyEntries,
+                counts: widget.data.monthlyEntries,
                 barColor: _colors[1],
                 currentMonth: DateTime.now().month - 1,
               ),
