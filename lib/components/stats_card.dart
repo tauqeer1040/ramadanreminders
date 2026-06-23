@@ -25,6 +25,7 @@ class _StatsData {
   final int totalStars;
   final int moodCheckIns;
   final int quranDays;
+  final int quranChaptersRead;
   final List<int> monthlyEntries;
   final List<int> weeklyActivity; // last 7 days entry counts
   final List<Map<String, String>> journals;
@@ -37,6 +38,7 @@ class _StatsData {
     required this.totalStars,
     required this.moodCheckIns,
     required this.quranDays,
+    required this.quranChaptersRead,
     required this.monthlyEntries,
     required this.weeklyActivity,
     required this.journals,
@@ -84,6 +86,15 @@ Future<_StatsData> _loadStats() async {
   final quranDays =
       prefs.getKeys().where((k) => k.startsWith('quran_revealed_')).length;
 
+  // Count total chapters read across all days
+  int quranChaptersRead = 0;
+  for (final key in prefs.getKeys()) {
+    if (key.startsWith('quran_revealed_')) {
+      final list = prefs.getStringList(key);
+      if (list != null) quranChaptersRead += list.length;
+    }
+  }
+
   return _StatsData(
     totalEntries: journals.length,
     streakDays: streak,
@@ -92,6 +103,7 @@ Future<_StatsData> _loadStats() async {
     totalStars: prefs.getInt('total_stars') ?? 0,
     moodCheckIns: prefs.getInt('mood_checkin_count') ?? 0,
     quranDays: quranDays,
+    quranChaptersRead: quranChaptersRead,
     monthlyEntries: monthly,
     weeklyActivity: weekly,
     journals: journals,
@@ -799,12 +811,11 @@ class _StatsCardState extends State<StatsCard>
   Widget _quranGaugeCard(_StatsData data) {
     const bg = Color(0xFFF5E6A3);
     const fg = Color(0xFF1A1A1A);
+    const totalChapters = 114;
 
-    final quranPct =
-        data.streakDays > 0 ? (data.quranDays * 100 / data.streakDays) : 0.0;
+    final chaptersRead = data.quranChaptersRead.clamp(0, totalChapters);
+    final quranPct = (chaptersRead / totalChapters) * 100;
     final pctDisplay = quranPct.round();
-    final activeDays = data.quranDays;
-    final totalDays = data.streakDays > 0 ? data.streakDays : 1;
 
     return GestureDetector(
       onTap: () => _showStatDetail(context, data, 6),
@@ -845,29 +856,7 @@ class _StatsCardState extends State<StatsCard>
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Active · $activeDays days',
-                          style: TextStyle(
-                            color: fg.withValues(alpha: 0.6),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Container(
-                          width: 7,
-                          height: 7,
-                          decoration: BoxDecoration(
-                            color: fg.withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Total · $totalDays days',
+                          '$chaptersRead / $totalChapters chapters',
                           style: TextStyle(
                             color: fg.withValues(alpha: 0.6),
                             fontSize: 10,
@@ -889,16 +878,13 @@ class _StatsCardState extends State<StatsCard>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'This Month',
+                        '$chaptersRead / $totalChapters',
                         style: TextStyle(
                           color: fg.withValues(alpha: 0.7),
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(width: 2),
-                      Icon(Icons.keyboard_arrow_down_rounded,
-                          color: fg.withValues(alpha: 0.5), size: 14),
                     ],
                   ),
                 ),
@@ -1285,12 +1271,15 @@ String _tweetFor(int index, _StatsData data) {
       if (m >= 30) return "You've logged $m moods! Rich emotional data — you're deeply in tune with yourself. Your self-awareness is a superpower. 🎭💜";
       if (m >= 10) return "You've logged $m moods! Patterns are emerging — you can see the rhythm of your heart. 🎭";
       return "You've logged $m mood${m == 1 ? '' : 's'}. Awareness grows with every check-in — you're learning what lifts you. 🎭";
-    case 6:
+    case 6: {
+      final chapters = data.quranChaptersRead;
       if (q == 0) return "You haven't explored the Quran page yet. Open an ayah card and let the words of Allah illuminate your heart. 📖🌙";
-      if (q >= 30) return "You've engaged with the Quran on $q different days! Over a month of divine reflection. The words of Allah are becoming part of your daily life. 📖🤲";
-      if (q >= 14) return "You've engaged with the Quran on $q days! Two weeks of ayahs and insights. Your connection to the Book of Allah is deepening beautifully. 📖🌙";
-      if (q >= 7) return "You've engaged with the Quran on $q days! A full week of divine wisdom. Your heart is opening to the words of the Most Merciful. 📖✨";
-      return "You've engaged with the Quran on $q day${q == 1 ? '' : 's'}. Each ayah you read brings you closer to the wisdom of the Qur'an. 📖🤲";
+      if (chapters >= 114) return "You've completed all $chapters chapters of the Quran! Masha'Allah — your journey through the Book of Allah is an inspiration. 📖🤲✨";
+      if (chapters >= 50) return "You've read $chapters chapters of the Qur'an! More than halfway to 114. The words of Allah fill your days with barakah. 📖🌙";
+      if (chapters >= 20) return "You've read $chapters chapters of the Qur'an. Your devotion shines through each surah you uncover. 📖✨";
+      if (chapters >= 5) return "You've read $chapters chapters across $q day${q == 1 ? '' : 's'}. Every ayah you reveal is a step closer to the full Quran. Keep going! 📖🤲";
+      return "You've read $chapters chapter${chapters == 1 ? '' : 's'} of the Qur'an. Each card you reveal brings you closer to completing the Book of Allah. 📖🤲";
+    }
     default:
       return "";
   }
@@ -1445,7 +1434,7 @@ class _TweetPageState extends State<_TweetPage> {
     'Saved',
     'Stars',
     'Moods',
-    'Quran Read',
+    'Quran Chapters',
   ];
 
   static const _avatars = [
@@ -1461,7 +1450,6 @@ class _TweetPageState extends State<_TweetPage> {
   String _valueText() {
     final d = widget.data;
     final i = widget.index;
-    final quranPct = d.streakDays > 0 ? (d.quranDays * 100 ~/ d.streakDays) : 0;
     switch (i) {
       case 0: return '${d.streakDays} days';
       case 1: return '${d.totalEntries} entries';
@@ -1469,7 +1457,7 @@ class _TweetPageState extends State<_TweetPage> {
       case 3: return '${d.savedFavorites} saved';
       case 4: return '${d.totalStars} stars';
       case 5: return '${d.moodCheckIns} moods';
-      case 6: return '$quranPct% · ${d.quranDays} days';
+      case 6: return '${d.quranChaptersRead}/114 · ${d.quranDays} days';
       default: return '';
     }
   }
