@@ -62,6 +62,10 @@ const AI_PROVIDER = process.env.AI_PROVIDER || 'lmstudio';
 const AI_INITIAL_DELAY_HOURS = Math.max(0, Number(process.env.AI_INITIAL_DELAY_HOURS || 12));
 const AI_POLL_INTERVAL_MS = Math.max(5000, Number(process.env.AI_POLL_INTERVAL_MS || 60000));
 
+const FANAR_BASE_URL = process.env.FANAR_BASE_URL || 'https://playground.fanar.qa';
+const FANAR_API_KEY = process.env.FANAR_API_KEY;
+const FANAR_MODEL = process.env.FANAR_MODEL || 'Fanar';
+
 const cache = new Map();
 const CACHE_TTL = 3600 * 1000;
 
@@ -690,6 +694,38 @@ async function callLmStudio(prompt) {
   return parseAiJson(data.output?.[0]?.content || data.text || '');
 }
 
+async function callFanarRaw(prompt, temperature = 0.2) {
+  if (!FANAR_API_KEY) {
+    throw new Error('FANAR_API_KEY is missing');
+  }
+
+  const res = await fetch(`${FANAR_BASE_URL}/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${FANAR_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: FANAR_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Fanar AI request failed (${res.status}): ${body.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+async function callFanar(prompt) {
+  const raw = await callFanarRaw(prompt);
+  return parseAiJson(raw);
+}
+
 async function callOpenRouter(prompt) {
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error('OPENROUTER_API_KEY is missing');
@@ -726,10 +762,23 @@ async function callOpenRouter(prompt) {
 }
 
 async function callAI(prompt) {
-  if (AI_PROVIDER === 'openrouter') {
-    return callOpenRouter(prompt);
+  // Try Fanar AI first, fallback to OpenRouter
+  try {
+    return await callFanar(prompt);
+  } catch (fanarError) {
+    console.warn('[Fanar] Failed, falling back to OpenRouter:', fanarError.message);
   }
-  return callLmStudio(prompt);
+
+  try {
+    return await callOpenRouter(prompt);
+  } catch (openrouterError) {
+    console.error('[OpenRouter] Failed:', openrouterError.message);
+    if (AI_PROVIDER === 'lmstudio') {
+      console.warn('[LM Studio] Attempting local fallback...');
+      return callLmStudio(prompt);
+    }
+    throw openrouterError;
+  }
 }
 
 async function generateFullInsight(journalText, previousJournalText) {
@@ -1386,6 +1435,21 @@ Rules:
 Return ONLY the analogy text, nothing else.
 `;
 
+  // Try Fanar AI first
+  try {
+    const fanarRaw = await callFanarRaw(prompt, 0.3);
+    let clean = fanarRaw.replace(/```/g, '').trim();
+    if (clean.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(clean);
+        clean = parsed.analogy || parsed.response || parsed.text || clean;
+      } catch (_) {}
+    }
+    return res.json({ analogy: clean });
+  } catch (fanarErr) {
+    console.warn('[Fanar] generate-analogy failed, falling back to OpenRouter:', fanarErr.message);
+  }
+
   let lastError = null;
   for (const model of OPENROUTER_MODELS) {
     try {
@@ -1479,6 +1543,20 @@ CRITICAL RULES:
 
 Return ONLY: ["insight one text...", "insight two text...", "insight three text..."]
 `;
+
+  // Try Fanar AI first
+  try {
+    const fanarRaw = await callFanarRaw(prompt, 0.3);
+    let raw = fanarRaw.trim();
+    if (raw.includes('```json')) raw = raw.split('```json')[1].split('```')[0].trim();
+    else if (raw.includes('```')) raw = raw.split('```')[1].split('```')[0].trim();
+    const insights = JSON.parse(raw);
+    if (!Array.isArray(insights) || insights.length !== 3) throw new Error('Expected array of 3');
+    setCache(cacheKey, insights);
+    return res.json({ insights });
+  } catch (fanarErr) {
+    console.warn('[Fanar] generate-insights failed, falling back:', fanarErr.message);
+  }
 
   let lastError = null;
   for (const model of OPENROUTER_MODELS) {

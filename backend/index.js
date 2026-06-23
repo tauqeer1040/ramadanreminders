@@ -39,8 +39,12 @@ async function triggerBackgroundInsight(uid, date, journalText) {
   try {
     const sanitizedText = xss(journalText);
 
-    if (!process.env.OPENROUTER_API_KEY) {
-      console.error('OpenRouter API Key is missing on the server.');
+    const FANAR_BASE_URL = process.env.FANAR_BASE_URL || 'https://playground.fanar.qa';
+    const FANAR_API_KEY = process.env.FANAR_API_KEY;
+    const FANAR_MODEL = process.env.FANAR_MODEL || 'Fanar';
+
+    if (!FANAR_API_KEY && !process.env.OPENROUTER_API_KEY) {
+      console.error('No AI API key configured (Fanar or OpenRouter).');
       return;
     }
 
@@ -85,7 +89,37 @@ Ensure your response is valid JSON and nothing else. Do not wrap it in markdown.
 
     let responseText = null;
 
-    for (const model of FREE_MODELS) {
+    // Try Fanar AI first
+    if (FANAR_API_KEY) {
+      try {
+        const fanarRes = await fetch(`${FANAR_BASE_URL}/v1/chat/completions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${FANAR_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: FANAR_MODEL,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.2,
+          }),
+        });
+        if (fanarRes.ok) {
+          const fanarData = await fanarRes.json();
+          responseText = fanarData.choices?.[0]?.message?.content || null;
+          if (responseText) {
+            console.log('[AI SUCCESS] Fanar AI generated insight');
+          }
+        } else {
+          console.log(`[AI FALLBACK] Fanar AI failed (${fanarRes.status}), falling back to OpenRouter...`);
+        }
+      } catch (fanarErr) {
+        console.log('[AI FALLBACK] Fanar AI error:', fanarErr.message);
+      }
+    }
+
+    if (!responseText) {
+      for (const model of FREE_MODELS) {
       try {
         const openRouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
@@ -114,6 +148,7 @@ Ensure your response is valid JSON and nothing else. Do not wrap it in markdown.
       } catch (err) {
         console.log(`[AI FALLBACK] Hard network intercept on ${model}. Cascading natively to next...`);
       }
+    }
     }
 
     if (!responseText) {
