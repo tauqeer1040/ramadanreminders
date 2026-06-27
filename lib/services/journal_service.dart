@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -145,6 +146,9 @@ class JournalService {
     
     // Explicitly flag this precise ID as fundamentally modified allowing the sync engine to identify it
     await prefs.setBool('$_keyPrefix${id}_needs_sync', true);
+
+    // Fire-and-forget sync — will retry with exponential backoff on failure
+    triggerSync();
   }
 
   /// Loads today's existing journal entry (if any). Returns {id, text} or null.
@@ -191,34 +195,89 @@ class JournalService {
     return journals;
   }
 
+  /// Key for stored favorite journal dates.
+  static const String _favoritesKey = 'favorite_journals';
+
+  /// Delete a journal entry locally by its date/id.
+  static Future<void> deleteLocalJournal(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('$_keyPrefix${id}_text');
+    await prefs.remove('$_keyPrefix${id}_needs_sync');
+    await prefs.remove('$_keyPrefix${id}_gratitude');
+    await prefs.remove('$_keyPrefix${id}_tasks');
+  }
+
+  /// Toggle favorite status for a journal date.
+  static Future<void> toggleFavorite(String date) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_favoritesKey) ?? [];
+    if (raw.contains(date)) {
+      raw.remove(date);
+    } else {
+      raw.add(date);
+    }
+    await prefs.setStringList(_favoritesKey, raw);
+  }
+
+  /// Check if a journal date is favorited.
+  static Future<bool> isFavorited(String date) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_favoritesKey) ?? [];
+    return raw.contains(date);
+  }
+
+  /// Get all favorited journal dates.
+  static Future<List<String>> getFavoriteDates() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_favoritesKey) ?? [];
+  }
+
   static Timer? _syncTimer;
+  static int _retryAttempt = 0;
+  static const int _maxRetries = 3;
 
   static void initAutoSync() {
-    // Non-blocking fire-and-forget sync on launch
-    Future.microtask(() async {
-      await syncAllLocalJournalsToCloud();
-      await InsightService.fetchDailyContent(forceRefresh: true);
-    });
     _scheduleNextMidnightSync();
+    // Sync dirty journals immediately on app start (fire-and-forget)
+    triggerSync();
+  }
+
+  /// Public entry point: fire-and-forget sync with exponential backoff retry.
+  /// Safe to call from anywhere (save, resume, timer).
+  static void triggerSync() {
+    _syncWithRetry();
+  }
+
+  static void _syncWithRetry() {
+    _syncAllLocalJournalsToCloud().then((_) {
+      _retryAttempt = 0;
+    }).catchError((e) {
+      _retryAttempt++;
+      if (_retryAttempt <= _maxRetries) {
+        final delay = Duration(seconds: 2 * _retryAttempt * _retryAttempt);
+        debugPrint('[Sync] retry $_retryAttempt/$_maxRetries in ${delay.inSeconds}s: $e');
+        Future.delayed(delay, _syncWithRetry);
+      } else {
+        debugPrint('[Sync] failed after $_maxRetries attempts: $e');
+        _retryAttempt = 0;
+      }
+    });
   }
 
   static void _scheduleNextMidnightSync() {
     final now = DateTime.now();
-    // Midnight tonight
     final nextMidnight = DateTime(now.year, now.month, now.day + 1);
     final durationToMidnight = nextMidnight.difference(now);
 
     _syncTimer?.cancel();
     _syncTimer = Timer(durationToMidnight, () {
-      // Execute the sync exactly at midnight
-      syncAllLocalJournalsToCloud();
-      // Schedule the next midnight sync recursively
+      triggerSync();
       _scheduleNextMidnightSync();
     });
   }
 
   /// Syncs exclusively modified local journals purely over HTTP POST to the V2 backend
-  static Future<void> syncAllLocalJournalsToCloud() async {
+  static Future<void> _syncAllLocalJournalsToCloud() async {
     final user = _auth.currentUser;
     if (user == null) return;
 

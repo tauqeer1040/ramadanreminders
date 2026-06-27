@@ -9,6 +9,7 @@ import '../services/journal_service.dart';
 import '../services/streak_service.dart';
 import '../services/favorites_service.dart';
 import '../services/trial_service.dart';
+import '../services/auth_service.dart';
 import '../main.dart';
 import '../theme/app_theme.dart';
 import '../components/profilepage.dart';
@@ -1401,19 +1402,24 @@ class _TweetPage extends StatefulWidget {
 }
 
 class _TweetPageState extends State<_TweetPage> {
-  String _catName = 'Meowmin';
+  String _userName = 'Meowmin';
 
   @override
   void initState() {
     super.initState();
-    _loadCatName();
+    _loadUserName();
   }
 
-  Future<void> _loadCatName() async {
+  Future<void> _loadUserName() async {
     final prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString('onboarding_catName');
+    final name = prefs.getString('onboarding_displayName');
     if (name != null && name.isNotEmpty && mounted) {
-      setState(() => _catName = name);
+      setState(() => _userName = name);
+      return;
+    }
+    final authName = AuthService.currentUser?.displayName;
+    if (authName != null && authName.isNotEmpty && mounted) {
+      setState(() => _userName = authName);
     }
   }
 
@@ -1462,11 +1468,28 @@ class _TweetPageState extends State<_TweetPage> {
     }
   }
 
+  String _sprinkleName(String text) {
+    if (_userName == 'Meowmin') return text;
+    final rng = Random(widget.index + text.hashCode);
+    if (rng.nextDouble() < 0.5) return text;
+    final n = _userName;
+    final ops = <String Function()>[
+      () => text.replaceFirst("You've", "$n, you've"),
+      () => text.replaceFirst("You're", "$n, you're"),
+      () => text.replaceFirst("You ", "$n, you "),
+      () => text.replaceFirst(". ", ". $n, "),
+      () => text.replaceFirst("! ", "! $n, "),
+      () => text.replaceFirst('.', ", $n."),
+      () => '$text Go $n!',
+    ];
+    return ops[rng.nextInt(ops.length)]();
+  }
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final color = _colors[widget.index];
-    final body = _tweetFor(widget.index, widget.data);
+    final body = _sprinkleName(_tweetFor(widget.index, widget.data));
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
@@ -1532,7 +1555,7 @@ class _TweetPageState extends State<_TweetPage> {
                     ),
                     const SizedBox(height: 1),
                     Text(
-                      '$_catName · 2m',
+                      '$_userName · 2m',
                       style: tt.labelSmall?.copyWith(
                         color: AppTheme.ghostSilver.withValues(alpha: 0.7),
                         fontSize: 12,

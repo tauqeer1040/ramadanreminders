@@ -5,6 +5,7 @@ class StreakService {
   static const _streakKey = 'streak';
   static const _lastActivityDateKey = 'last_activity_date';
   static const _activityDatesKey = 'streak_activity_dates';
+  static const _claimedPrimesKey = 'claimed_prime_rewards';
 
   static Future<int> getStreak() async {
     final prefs = await SharedPreferences.getInstance();
@@ -70,5 +71,27 @@ class StreakService {
 
   static Future<void> recordActivity() async {
     await checkAndUpdateStreak();
+  }
+
+  static bool isPrime(int n) {
+    if (n < 2) return false;
+    for (int i = 2; i * i <= n; i++) {
+      if (n % i == 0) return false;
+    }
+    return true;
+  }
+
+  static Future<bool> checkAndClaimPrimeReward() async {
+    final prefs = await SharedPreferences.getInstance();
+    final streak = prefs.getInt(_streakKey) ?? 1;
+    if (!isPrime(streak)) return false;
+
+    final claimed = prefs.getStringList(_claimedPrimesKey) ?? [];
+    final key = streak.toString();
+    if (claimed.contains(key)) return false;
+
+    claimed.add(key);
+    await prefs.setStringList(_claimedPrimesKey, claimed);
+    return true;
   }
 }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,7 +14,8 @@ import '../screens/about_screen.dart';
 import 'widgets/duo_button.dart';
 import 'journal_bottom_sheet.dart';
 import 'journal_history_section.dart';
-import 'stats_card.dart';
+import 'widgets/streak_graph.dart';
+import 'streak_reward_dialog.dart';
 import '../theme/app_theme.dart';
 
 
@@ -96,6 +96,10 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
   Future<void> _loadStreak() async {
     final streak = await StreakService.getStreak();
     if (mounted) setState(() => _streakCount = streak);
+    final hasReward = await StreakService.checkAndClaimPrimeReward();
+    if (hasReward && mounted) {
+      showStreakRewardDialog(context);
+    }
   }
 
   @override
@@ -154,29 +158,16 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
           elevation: 0,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.symmetric(horizontal: 60),
-          padding: EdgeInsets.zero,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(100),
           ),
-          backgroundColor: Colors.transparent,
+          backgroundColor: const Color(0xFFD4EDDA),
           duration: const Duration(seconds: 2),
-          content: ClipRRect(
-            borderRadius: BorderRadius.circular(100),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: const Center(
-                  child: Text('Journal saved ✨'),
-                ),
-              ),
+          content: const Center(
+            child: Text(
+              'Journal saved ✨',
+              style: TextStyle(color: Colors.black),
             ),
           ),
         ),
@@ -187,13 +178,6 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
   String _getDisplayName() {
     final user = AuthService.currentUser;
     return user?.displayName ?? user?.email?.split('@').first ?? 'friend';
-  }
-
-  void _scrollToJournalHistory() {
-    final ctx = _journalKey.currentContext;
-    if (ctx != null) {
-      Scrollable.ensureVisible(ctx, alignment: 0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInOutCubic);
-    }
   }
 
   @override
@@ -387,7 +371,6 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
                         return;
                       }
                       if (context.mounted) {
-                        final scrollCtrl = ScrollController();
                         final wrote = await showModalBottomSheet<bool>(
                           context: context,
                           isScrollControlled: true,
@@ -396,11 +379,16 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                           ),
-                          builder: (_) => JournalBottomSheet(
-                            scrollController: scrollCtrl,
+                          builder: (_) => DraggableScrollableSheet(
+                            initialChildSize: 0.85,
+                            minChildSize: 0.4,
+                            maxChildSize: 0.95,
+                            expand: false,
+                            builder: (ctx, scrollCtrl) => JournalBottomSheet(
+                              scrollController: scrollCtrl,
+                            ),
                           ),
                         );
-                        scrollCtrl.dispose();
                         if (wrote == true) _onJournalSaved();
                       }
                     },
@@ -434,36 +422,8 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
 
                 const SizedBox(height: 24),
 
-                // ── Stats Card ────────────────────────────────────────────
-                StatsCard(onTapEntries: _scrollToJournalHistory),
-
-                const SizedBox(height: 28),
-
-                SizedBox(height: max(0, vh - 400)),
-
-                // ── Title ─────────────────────────────────────────────────────────────
-                //     '3 tasks for you',
-                //     textAlign: TextAlign.center,
-                //     style: tt.headlineLarge?.copyWith(
-                //       fontWeight: FontWeight.w900,
-                //       color: cs.onSurface,
-                //       height: 1.2,
-                //       fontSize: 28,
-                //     ),
-                //   ),
-                // ),
-
-                // const SizedBox(height: 24),
-
-                // // ── Bounded Task Carousel ─────────────────────────────────────────────
-                // SizedBox(
-                //   height: 380,
-                //   child: const TaskCarousel(),
-                // ),
-
-                // const SizedBox(height: 24),
-
-                const SizedBox(height: 32),
+                // ── Streak Graph ──────────────────────────────────────────
+                StreakGraph(streak: _streakCount, size: 220),
 
                 // ── Footer Mascot ──────────────────────
                 Image.asset(

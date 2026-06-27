@@ -6,23 +6,22 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
-import '../services/streak_service.dart';
-import '../services/journal_service.dart';
 import '../services/audio_service.dart';
 import '../services/sfx_service.dart';
 import '../services/trial_service.dart';
+import '../services/widget_service.dart';
 import '../core/constants.dart';
 import '../screens/manage_account_screen.dart';
 import '../services/user_service.dart';
 import '../theme/app_theme.dart';
-import '../screens/onboarding_screen.dart';
-import 'widgets/streak_graph.dart';
+import 'stats_card.dart';
 import 'widgets/duo_button.dart';
 import 'action_prompt_card.dart';
 import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../screens/about_screen.dart';
 
 class ProfilePage1 extends StatefulWidget {
@@ -37,27 +36,15 @@ class _ProfilePage1State extends State<ProfilePage1>
   User? _currentUser;
   bool _isLoading = false;
   bool _notificationsGranted = false;
+  bool _hasWidget = false;
   bool _musicEnabled = true;
   bool _sfxEnabled = true;
-  int _streak = 0;
-  int _totalJournals = 0;
-  int _quranDays = 0;
   String _debugTrial = '';
-  String _debugBackend = '';
   String _debugAuth = '';
   String _debugShopCache = '';
   String _serverStatus = 'yellow';
   String _dbStatus = 'yellow';
-
-  // Onboarding data
-  String? _onboardingIntention;
-  String? _onboardingHeart;
-  String? _onboardingChallenge;
-  String? _onboardingJourney;
-  String? _onboardingCommitment;
-  int? _onboardingAge;
-  int? _onboardingPhoneHours;
-  String? _onboardingCatName;
+  bool _debugExpanded = false;
 
   late AnimationController _wobbleCtrl;
   late CurvedAnimation _wobbleAnim;
@@ -71,7 +58,6 @@ class _ProfilePage1State extends State<ProfilePage1>
     _sfxEnabled = SfxService().isSfxEnabled;
     _checkNotificationStatus();
     _loadStats();
-    _loadOnboardingData();
     AuthService.userChanges.listen((user) {
       if (mounted) {
         setState(() => _currentUser = user);
@@ -101,16 +87,13 @@ class _ProfilePage1State extends State<ProfilePage1>
   }
 
   Future<void> _loadStats() async {
-    final streak = await StreakService.getStreak();
-    final journals = await JournalService.getAllLocalJournals();
     final prefs = await SharedPreferences.getInstance();
-    final quranDays = prefs.getKeys().where((k) => k.startsWith('quran_revealed_')).length;
 
     // Debug info
     final user = AuthService.currentUser;
     final isAnon = user?.isAnonymous ?? true;
     final trialActive = await TrialService.isTrialActive();
-    final trialDays = await TrialService.daysRemaining();
+    final trialRemainingMs = await TrialService.getRemainingMs();
     final shopCache = prefs.getString('shop_items_cache');
     final shopSize = shopCache != null ? '${(shopCache.length / 1024).toStringAsFixed(1)} KB' : '—';
 
@@ -134,33 +117,18 @@ class _ProfilePage1State extends State<ProfilePage1>
       dbStatus = 'red';
     }
 
+    final widgetExists = await WidgetService.hasWidget();
+
     if (mounted) {
       setState(() {
-        _streak = streak;
-        _totalJournals = journals.length;
-        _quranDays = quranDays;
+        _hasWidget = widgetExists;
         _serverStatus = serverStatus;
         _dbStatus = dbStatus;
         _debugAuth = '${user?.uid ?? "—"} (${isAnon ? "anonymous" : "signed-in"})';
-        _debugTrial = trialActive ? 'active ($trialDays days left)' : 'expired';
-        _debugBackend = AppConstants.backendUrl;
+        _debugTrial = trialActive ? _fmtTrial(trialRemainingMs) : 'expired';
         _debugShopCache = shopSize;
       });
     }
-  }
-
-  Future<void> _loadOnboardingData() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _onboardingIntention = prefs.getString('onboarding_intention');
-      _onboardingHeart = prefs.getString('onboarding_heart');
-      _onboardingChallenge = prefs.getString('onboarding_challenge');
-      _onboardingJourney = prefs.getString('onboarding_journey');
-      _onboardingCommitment = prefs.getString('onboarding_commitment');
-      _onboardingAge = prefs.getInt('onboarding_age');
-      _onboardingPhoneHours = prefs.getInt('onboarding_phoneHours');
-      _onboardingCatName = prefs.getString('onboarding_catName');
-    });
   }
 
   Future<void> _checkNotificationStatus() async {
@@ -200,27 +168,18 @@ class _ProfilePage1State extends State<ProfilePage1>
     await prefs.setInt('total_stars', current + amount);
   }
 
-  String get _displayName {
-    if (_currentUser == null || _currentUser!.isAnonymous) return 'Guest User';
-    return _currentUser!.displayName ??
-        _currentUser!.email?.split('@')[0] ??
-        'Believer';
-  }
-
-  String get _archetype {
-    if (_totalJournals >= 20) return 'The Devoted 🌟';
-    if (_totalJournals >= 10) return 'The Reflective 📖';
-    if (_totalJournals >= 5) return 'The Seeker 🌙';
-    if (_totalJournals >= 1) return 'The Beginner 🌱';
-    return 'The Newcomer ✨';
-  }
-
-  String get _streakLabel {
-    if (_streak >= 30) return 'Masha\'Allah! 30+ Days 🔥';
-    if (_streak >= 14) return 'Two Weeks Strong 💪';
-    if (_streak >= 7) return 'One Week! Keep Going 🌟';
-    if (_streak >= 3) return 'On a Roll 🎯';
-    return 'Just Started 🌱';
+  void _openWhatsApp() async {
+    const url = 'https://chat.whatsapp.com/FDyQLduHssu4Ylh3t1sqTB?s=sh&p=a&ilr=0';
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open WhatsApp. Please install WhatsApp first.')),
+        );
+      }
+    }
   }
 
   @override
@@ -318,17 +277,8 @@ class _ProfilePage1State extends State<ProfilePage1>
             _buildAccountCard(),
             const SizedBox(height: 16),
 
-            // ── Streak Graph ────────────────────────────────────────────────
-            StreakGraph(streak: _streak, size: 220),
-            const SizedBox(height: 16),
-
-            // ── Spiritual Profile ───────────────────────────────────────────
-            _buildSectionCard(
-              title: 'SPIRITUAL PROFILE',
-              icon: Icons.auto_awesome_rounded,
-              iconColor: AppTheme.neonPurple,
-              child: _buildSpiritualProfile(),
-            ),
+            // ── Stats Card ────────────────────────────────────────────────
+            StatsCard(),
             const SizedBox(height: 16),
 
             // ── Notifications ───────────────────────────────────────────────
@@ -342,10 +292,11 @@ class _ProfilePage1State extends State<ProfilePage1>
             const SizedBox(height: 16),
 
             // ── Homescreen Widget ─────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 0),
-              child: ActionPromptCard(
-                title: 'Homescreen Widget',
+            if (!_hasWidget)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 0),
+                child: ActionPromptCard(
+                  title: 'Homescreen Widget',
                 subtitle:
                     'Add a homescreen widget for one-tap access\nto your daily tasks and streak.',
                 buttonText: 'Add Widget +100 ⭐',
@@ -358,28 +309,28 @@ class _ProfilePage1State extends State<ProfilePage1>
                     );
                     if (mounted) {
                       await _incrementStars(100);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Row(
-                            children: [
-                              Icon(Icons.star_rounded, color: AppTheme.starGold, size: 20),
-                              SizedBox(width: 8),
-                              Text('Widget added! +100 ⭐'),
-                            ],
-                          ),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
                     }
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Row(
+                          children: [
+                            Icon(Icons.star_rounded, color: AppTheme.starGold, size: 20),
+                            SizedBox(width: 8),
+                            Text('Widget added! +100 ⭐'),
+                          ],
+                        ),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
                   } else {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Long-press your home screen → Widgets → Meowmin Ai Diary to add it.'),
-                          backgroundColor: Color(0xFF311B92),
-                        ),
-                      );
-                    }
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Long-press your home screen → Widgets → Meowmin Ai Diary to add it.'),
+                        backgroundColor: Color(0xFF311B92),
+                      ),
+                    );
                   }
                 },
                 backgroundColor: const Color(0xFFE1BEE7),
@@ -440,114 +391,35 @@ class _ProfilePage1State extends State<ProfilePage1>
 
             _subscribeCard(),
             const SizedBox(height: 16),
+            DuoButton(
+              onPressed: _openWhatsApp,
+              backgroundColor: const Color(0xFF25D366),
+              depthColor: const Color(0xFF128C7E),
+              radius: 16,
+              height: 56,
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.chat_rounded, size: 20, color: AppTheme.starWhite),
+                  SizedBox(width: 10),
+                  Text(
+                    'Join WhatsApp Group',
+                    style: TextStyle(
+                      color: AppTheme.starWhite,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             _debugCard(),
             const SizedBox(height: 16),
           ],
         ),
       ),
       ),
-    );
-  }
-
-  // ── CARDS ──────────────────────────────────────────────────────────────────
-
-  Widget _buildUserCard() {
-    final isAnonymous = _currentUser?.isAnonymous ?? true;
-    final initials = _displayName.isNotEmpty ? _displayName[0].toUpperCase() : 'B';
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: _cardDecoration(borderColor: AppTheme.neonPurple.withValues(alpha: 0.3)),
-      child: Row(
-        children: [
-          // Avatar
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: AppTheme.neonPurple.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-              border: Border.all(color: AppTheme.neonPurple, width: 2),
-            ),
-            child: _currentUser?.photoURL != null && _currentUser!.photoURL!.isNotEmpty
-                ? ClipOval(child: Image.network(_currentUser!.photoURL!, fit: BoxFit.cover))
-                : Center(
-                    child: Text(
-                      initials,
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                        color: AppTheme.neonPurple,
-                      ),
-                    ),
-                  ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _displayName,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.starWhite,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isAnonymous ? 'Guest — Sign in to save progress' : (_currentUser?.email ?? ''),
-                  style: const TextStyle(fontSize: 13, color: AppTheme.ghostSilver),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.neonPurple.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.neonPurple.withValues(alpha: 0.3)),
-                  ),
-                  child: Text(
-                    _archetype,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.neonPurple,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSpiritualProfile() {
-    final quranPct = _streak > 0 ? ((_quranDays / _streak) * 100).round() : 0;
-    return Column(
-      children: [
-        _buildProfileRow('Display Name', _displayName),
-        _buildProfileRow('Spiritual Archetype', _archetype),
-        _buildProfileRow('Journals Written', '$_totalJournals ${_totalJournals == 1 ? "entry" : "entries"} 📓'),
-        _buildProfileRow('Quran Read', '$_quranDays days — $quranPct% 📖'),
-        _buildProfileRow('Account Status', _currentUser?.isAnonymous == false ? 'Synced ✅' : 'Guest Mode 👤'),
-        if (_onboardingAge != null) _buildProfileRow('Age', '${_onboardingAge}'),
-        if (_onboardingPhoneHours != null) _buildProfileRow('Avg. Phone Time', '~${_onboardingPhoneHours}h/day 📱'),
-        if (_onboardingCatName != null && _onboardingCatName!.isNotEmpty) _buildProfileRow('Cat Name', _onboardingCatName!),
-        if (_onboardingIntention != null) _buildProfileRow('Intention', _onboardingIntention!),
-        if (_onboardingHeart != null) _buildProfileRow('Heart State', _onboardingHeart!),
-        if (_onboardingChallenge != null) _buildProfileRow('Biggest Barrier', _onboardingChallenge!),
-        if (_onboardingJourney != null) _buildProfileRow('Journey', _onboardingJourney!),
-        if (_onboardingCommitment != null) _buildProfileRow('Commitment', _onboardingCommitment!),
-        const Divider(color: AppTheme.ghostSilver, height: 24),
-        _buildProfileRow('Current Streak', '$_streak ${_streak == 1 ? "day" : "days"} 🔥'),
-        _buildProfileRow('Streak Status', _streakLabel),
-      ],
     );
   }
 
@@ -928,19 +800,50 @@ class _ProfilePage1State extends State<ProfilePage1>
   // ── DEBUG ───────────────────────────────────────────────────────────────────
 
   Widget _debugCard() {
-    return _buildSectionCard(
-      title: 'DEBUG',
-      icon: Icons.bug_report_rounded,
-      iconColor: Colors.redAccent,
-      child: Column(
-        children: [
-          _buildStatusDot('Server', _serverStatus),
-          _buildStatusDot('Database', _dbStatus),
-          _buildProfileRow('Auth', _debugAuth),
-          _buildProfileRow('Trial', _debugTrial),
-          _buildProfileRow('Backend', _debugBackend),
-          _buildProfileRow('Shop cache', _debugShopCache),
-        ],
+    return GestureDetector(
+      onTap: () => setState(() => _debugExpanded = !_debugExpanded),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        alignment: Alignment.topCenter,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: _cardDecoration(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.bug_report_rounded, color: Colors.redAccent, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'DEBUG',
+                    style: const TextStyle(
+                      color: AppTheme.starWhite,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    _debugExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    color: Colors.redAccent.withValues(alpha: 0.6),
+                    size: 22,
+                  ),
+                ],
+              ),
+              if (_debugExpanded) ...[
+                const SizedBox(height: 20),
+                _buildStatusDot('Server', _serverStatus),
+                _buildStatusDot('Database', _dbStatus),
+                _buildProfileRow('Auth', _debugAuth),
+                _buildProfileRow('Trial', _debugTrial),
+                _buildProfileRow('Shop cache', _debugShopCache),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -979,42 +882,6 @@ class _ProfilePage1State extends State<ProfilePage1>
     );
   }
 
-  // ── HELPERS ────────────────────────────────────────────────────────────────
-
-  Widget _buildSectionCard({
-    required String title,
-    required IconData icon,
-    required Color iconColor,
-    required Widget child,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: _cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: iconColor, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: AppTheme.starWhite,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          child,
-        ],
-      ),
-    );
-  }
-
   Widget _buildProfileRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -1032,6 +899,19 @@ class _ProfilePage1State extends State<ProfilePage1>
         ],
       ),
     );
+  }
+
+  String _fmtTrial(int ms) {
+    final totalSec = ms ~/ 1000;
+    if (totalSec <= 0) return 'expired';
+    final min = totalSec ~/ 60;
+    final sec = totalSec % 60;
+    if (min >= 60) {
+      final h = min ~/ 60;
+      final m = min % 60;
+      return '${h}h ${m}m left';
+    }
+    return '${min}m ${sec}s left';
   }
 
   BoxDecoration _cardDecoration({Color? borderColor}) => BoxDecoration(

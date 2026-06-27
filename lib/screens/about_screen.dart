@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import 'onboarding_screen.dart';
 import '../components/widgets/duo_button.dart';
@@ -31,6 +32,8 @@ class AboutScreen extends StatelessWidget {
             const _AppHeader(),
             const SizedBox(height: 24),
             const _ActionButtons(),
+            const SizedBox(height: 12),
+            const _JoinWhatsAppButton(),
             const SizedBox(height: 32),
             const _OtherAppsSection(),
             const SizedBox(height: 24),
@@ -212,6 +215,50 @@ class _ActionButtons extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _JoinWhatsAppButton extends StatelessWidget {
+  const _JoinWhatsAppButton();
+
+  static const String _whatsAppUrl = 'https://chat.whatsapp.com/FDyQLduHssu4Ylh3t1sqTB?s=sh&p=a&ilr=0';
+
+  @override
+  Widget build(BuildContext context) {
+    return DuoButton(
+      onPressed: () async {
+        HapticFeedback.lightImpact();
+        final uri = Uri.parse(_whatsAppUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Could not open WhatsApp. Please install WhatsApp first.')),
+            );
+          }
+        }
+      },
+      backgroundColor: const Color(0xFF25D366),
+      depthColor: const Color(0xFF128C7E),
+      radius: 16,
+      height: 56,
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.chat_rounded, color: AppTheme.starWhite, size: 20),
+          SizedBox(width: 10),
+          Text(
+            'Join WhatsApp Group',
+            style: TextStyle(
+              color: AppTheme.starWhite,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

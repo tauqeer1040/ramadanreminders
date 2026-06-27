@@ -75,7 +75,9 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
             ),
         ],
       ),
-      body: AppBackground(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: AppBackground(
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
@@ -117,6 +119,7 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
               ],
             ),
           ),
+        ),
         ),
       ),
     );

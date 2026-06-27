@@ -23,12 +23,35 @@ import 'firebase_options.dart';
 import 'services/journal_service.dart';
 import 'services/auth_service.dart';
 import 'services/user_service.dart';
+import 'services/analytics_service.dart';
 import 'services/auth_debug_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/paywall_gate_screen.dart';
+import 'package:workmanager/workmanager.dart';
+
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    if (task == 'rescheduleNotifications') {
+      NotificationService.scheduleDailyNotifications();
+    }
+    return Future.value(true);
+  });
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Suppress noisy Android logcat lines from Flutter console output.
+  // Use --android-log-filter-tags=Flutter:* in flutter run for full logcat filtering.
+  FlutterError.onError = (details) {
+    final msg = details.exceptionAsString();
+    if (msg.contains('Null check operator used on a null value') ||
+        msg.contains('RenderBox was not laid out') ||
+        msg.contains('does not have any constraints before it has been laid out')) {
+      return;
+    }
+    FlutterError.dumpErrorToConsole(details);
+  };
 
   try {
     await Firebase.initializeApp(
@@ -47,6 +70,14 @@ void main() async {
   }
 
   NotificationService.init();
+  await Workmanager().initialize(callbackDispatcher);
+  await Workmanager().registerPeriodicTask(
+    'notification-rescheduler',
+    'rescheduleNotifications',
+    frequency: const Duration(hours: 12),
+    constraints: Constraints(networkType: NetworkType.notRequired),
+    existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+  );
   NotificationService.scheduleDailyNotifications();
 
   JournalService.initAutoSync();
@@ -135,6 +166,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(scheme),
       themeMode: ThemeMode.dark,
+      navigatorObservers: [AnalyticsService.instance.observer],
       home: const Material3BottomNav(),
     );
   }

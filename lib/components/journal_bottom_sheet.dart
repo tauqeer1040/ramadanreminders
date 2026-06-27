@@ -7,8 +7,8 @@ import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:intl/intl.dart';
 import '../services/journal_service.dart';
 import '../services/shop_service.dart';
+import '../services/analytics_service.dart';
 import '../features/mood/emotion_screen.dart';
-import '../features/mood/emotion_theme.dart';
 
 class JournalBottomSheet extends StatefulWidget {
   final String? initialText;
@@ -44,6 +44,8 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
   bool _morphing = false;
   bool _showMood = false;
   double _moodSliderValue = 0.5;
+
+  bool _blurReady = false;
 
   @override
   void initState() {
@@ -90,7 +92,10 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _textFocus.requestFocus();
+      if (mounted) {
+        _textFocus.requestFocus();
+        setState(() => _blurReady = true);
+      }
     });
   }
 
@@ -162,6 +167,7 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
 
   @override
   void dispose() {
+    JournalService.saveLocalJournalWithId(_journalId, _controller.text);
     _controller.dispose();
     _textFocus.dispose();
     _dismissCtrl.dispose();
@@ -245,14 +251,46 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
   void _onMoodDone() {
     HapticFeedback.heavyImpact();
     ShopService.addStars(5);
-    Navigator.of(context).pop(
-      EmotionEntry(value: _moodSliderValue, timestamp: DateTime.now()),
-    );
+    AnalyticsService.instance.logJournalSaved();
+    AnalyticsService.instance.logMoodCheckin(_moodSliderValue);
+    Navigator.of(context).pop(true);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
   // Build helpers
   // ───────────────────────────────────────────────────────────────────────────
+
+  Widget _wrapInSheet({required Widget child}) {
+    final wrapped = GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: child,
+    );
+    if (!_blurReady) {
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A2E),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+        ),
+        child: wrapped,
+      );
+    }
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.08),
+              border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+            ),
+            child: wrapped,
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildHandle(ColorScheme cs) {
     return Padding(
@@ -442,35 +480,21 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        Navigator.of(context).pop(
-          EmotionEntry(value: _moodSliderValue, timestamp: DateTime.now()),
-        );
+        Navigator.of(context).pop(true);
       },
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        child: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.08),
-                border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
-              ),
-              child: SafeArea(
-                bottom: true,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return MoodPanel(
-                      sliderValue: _moodSliderValue,
-                      onSliderChanged: _onMoodSliderChanged,
-                      onDone: _onMoodDone,
-                      availableHeight: constraints.maxHeight,
-                      sheetWidth: size.width,
-                    );
-                  },
-                ),
-              ),
-            ),
+      child: _wrapInSheet(
+        child: SafeArea(
+          bottom: true,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return MoodPanel(
+                sliderValue: _moodSliderValue,
+                onSliderChanged: _onMoodSliderChanged,
+                onDone: _onMoodDone,
+                availableHeight: constraints.maxHeight,
+                sheetWidth: size.width,
+              );
+            },
           ),
         ),
       ),
@@ -494,17 +518,8 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
       final bottomPadding = MediaQuery.of(context).padding.bottom;
       final targetMoodH = (size.height * 0.38).clamp(310.0, 370.0) + bottomPadding;
 
-      return ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        child: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.08),
-                border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
-              ),
-              child: AnimatedBuilder(
+      return _wrapInSheet(
+        child: AnimatedBuilder(
                 animation: _morphAnim,
                 builder: (context, _) {
                   final t = _morphAnim.value;
@@ -565,61 +580,46 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
                   );
                 },
               ),
-            ),
-          ),
-        ),
       );
     }
 
     // ── Normal journal mode ────────────────────────────────────────────
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.08),
-              border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
-            ),
-            child: PopScope(
-              canPop: false,
-              onPopInvokedWithResult: (didPop, _) {
-                if (didPop) return;
-                if (_hasWrittenContent) {
-                  JournalService.saveLocalJournalWithId(_journalId, _controller.text);
-                }
-                Navigator.pop(context, _hasWrittenContent ? 'saved' : null);
-              },
-              child: CustomScrollView(
-                controller: widget.scrollController,
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildHandle(cs),
-                        _buildTopBar(tt),
-                        const Divider(height: 1),
-                      ],
-                    ),
-                  ),
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: bottomInset),
-                      child: Column(
-                        children: [
-                          Expanded(child: _buildTextField(cs)),
-                          _buildSuggestionsSection(cs, tt, bottomInset),
-                        ],
-                      ),
-                    ),
-                  ),
+    return _wrapInSheet(
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          if (_hasWrittenContent) {
+            JournalService.saveLocalJournalWithId(_journalId, _controller.text);
+          }
+          Navigator.pop(context, _hasWrittenContent ? true : null);
+        },
+        child: CustomScrollView(
+          controller: widget.scrollController,
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildHandle(cs),
+                  _buildTopBar(tt),
+                  const Divider(height: 1),
                 ],
               ),
             ),
-          ),
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: bottomInset),
+                child: Column(
+                  children: [
+                    Expanded(child: _buildTextField(cs)),
+                    _buildSuggestionsSection(cs, tt, bottomInset),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -8,7 +8,6 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_card_swiper/flutter_card_swiper.dart';
-import 'package:text_scroll/text_scroll.dart';
 import 'package:scratcher/scratcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
@@ -17,11 +16,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../services/insight_service.dart';
 import '../services/favorites_service.dart';
 import '../services/shop_service.dart';
-import '../core/app_background.dart';
 import '../core/constants.dart';
 import './reflect_card.dart';
 import './insight_card_shimmer.dart';
 import './favorites_page.dart';
+import 'widgets/mascot_empty_state.dart';
 import '../utils/image_urls.dart';
 import '../screens/about_screen.dart';
 import '../theme/app_theme.dart';
@@ -384,7 +383,7 @@ class _QuranPageState extends State<QuranPage>
       final index = entry.key;
       final card = entry.value;
       final theme = _cardColorSchemes[index % _cardColorSchemes.length];
-      final pillBg = theme.accent.withOpacity(0.12);
+      final pillBg = theme.accent.withValues(alpha: 0.12);
 
       _deck.add(
         ReflectCard(
@@ -483,7 +482,7 @@ class _QuranPageState extends State<QuranPage>
     // 2. Ayah Card
     final ayahIndex = _insightCards.length;
     final ayahTheme = _cardColorSchemes[ayahIndex % _cardColorSchemes.length];
-    final ayahPillBg = ayahTheme.accent.withOpacity(0.12);
+    final ayahPillBg = ayahTheme.accent.withValues(alpha: 0.12);
 
     _deck.add(
       ReflectCard(
@@ -548,7 +547,7 @@ class _QuranPageState extends State<QuranPage>
               style: textTheme.bodyMedium?.copyWith(
                 fontSize: 16,
                 height: 1.5,
-                color: ayahTheme.text.withOpacity(0.8),
+                        color: ayahTheme.text.withValues(alpha: 0.8),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -751,7 +750,7 @@ class _QuranPageState extends State<QuranPage>
                                         IgnorePointer(
                                           child: Shimmer.fromColors(
                                             baseColor: Colors.transparent,
-                                            highlightColor: Colors.white.withOpacity(0.25),
+                                            highlightColor: Colors.white.withValues(alpha: 0.25),
                                             period: const Duration(milliseconds: 2000),
                                             child: Container(color: Colors.black),
                                           ),
@@ -760,20 +759,23 @@ class _QuranPageState extends State<QuranPage>
                                     ),
                                   );
                                 } else {
-                                  card = GestureDetector(
-                                    onDoubleTapDown: (details) {
-                                      _showHeart();
-                                      _favoriteCurrentInsight(index);
-                                      HapticFeedback.mediumImpact();
-                                    },
-                                    child: Stack(
-                                      children: [
-                                        card,
-                                        for (final heart in _hearts)
-                                          IgnorePointer(
-                                            child: _HeartWidget(heart: heart),
-                                          ),
-                                      ],
+                                  card = ClipRRect(
+                                    borderRadius: BorderRadius.circular(32),
+                                    child: GestureDetector(
+                                      onDoubleTapDown: (details) {
+                                        _showHeart();
+                                        _favoriteCurrentInsight(index);
+                                        HapticFeedback.mediumImpact();
+                                      },
+                                      child: Stack(
+                                        children: [
+                                          card,
+                                          for (final heart in _hearts)
+                                            IgnorePointer(
+                                              child: _HeartWidget(heart: heart),
+                                            ),
+                                        ],
+                                      ),
                                     ),
                                   );
                                 }
@@ -781,7 +783,10 @@ class _QuranPageState extends State<QuranPage>
                                 return card;
                               },
                             )
-                          : const Center(child: Text("No cards available")),
+                          : const MascotEmptyState(
+                              message: 'Start journaling to unlock\nyour daily insight cards.',
+                              actionLabel: 'Write a journal entry',
+                            ),
                 ),
               ),
             ),

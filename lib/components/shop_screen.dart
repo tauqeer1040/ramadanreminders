@@ -3,11 +3,13 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scratcher/scratcher.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import '../models/shop_item.dart';
 import '../services/shop_service.dart';
+import '../services/analytics_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/image_urls.dart';
 import '../screens/about_screen.dart';
@@ -117,6 +119,7 @@ class _ShopScreenState extends State<ShopScreen>
       return;
     }
 
+    AnalyticsService.instance.logShopPurchase(item.id);
     final stars = await ShopService.getStarBalance();
     if (mounted) {
       setState(() {
@@ -280,9 +283,9 @@ class _ShopScreenState extends State<ShopScreen>
         children: [
           // ── Top Bar: Avatar · Logo · Favorites ──────────────────────────
         SizedBox(
-          height: 128,
+          height: 100,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Row(
               children: [
                 InkWell(
@@ -408,9 +411,32 @@ class _ShopScreenState extends State<ShopScreen>
     );
   }
 
+  Widget _buildShopSkeleton() {
+    return Shimmer.fromColors(
+      baseColor: Colors.white.withValues(alpha: 0.04),
+      highlightColor: Colors.white.withValues(alpha: 0.10),
+      child: GridView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.78,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+        ),
+        itemCount: 4,
+        itemBuilder: (context, i) => Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody() {
     if (!_loaded) {
-      return const Center(child: CircularProgressIndicator(color: AppTheme.neonPurple));
+      return _buildShopSkeleton();
     }
 
     if (_loadError && _items.isEmpty) {
