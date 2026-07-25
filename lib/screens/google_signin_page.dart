@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/analytics_service.dart';
 import '../components/widgets/duo_button.dart';
 
 class GoogleSignInPage extends StatefulWidget {
@@ -20,11 +21,14 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
   bool _loading = false;
 
   Future<void> _signIn() async {
+    AnalyticsService.instance.logOnboardingGoogleSignIn(action: 'started');
     setState(() => _loading = true);
     try {
       await AuthService.signInWithGoogle();
+      AnalyticsService.instance.logOnboardingGoogleSignIn(action: 'completed');
       if (mounted) widget.onFinish();
     } catch (_) {
+      AnalyticsService.instance.logOnboardingGoogleSignIn(action: 'failed');
       // error handled inside signInWithGoogle
     } finally {
       if (mounted) setState(() => _loading = false);

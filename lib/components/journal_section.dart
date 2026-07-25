@@ -7,19 +7,6 @@ class JournalSection extends StatelessWidget {
   const JournalSection({super.key});
 
   void _openEditor(BuildContext context) async {
-    // 1. Check Guest Limits securely before pushing
-    final limitReached = await JournalService.isGuestLimitReached();
-    
-    if (limitReached && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Free Trial limit reached! Tap your Profile to sign up securely and unlock unlimited journals."),
-          duration: Duration(seconds: 4),
-        ),
-      );
-      return;
-    }
-
     if (!context.mounted) return;
 
     Navigator.push(

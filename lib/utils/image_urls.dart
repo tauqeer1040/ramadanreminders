@@ -18,6 +18,8 @@ String shopThumbnailUrl(int id) => 'assets/shop/thumbs/shop_$id.webp';
 
 String shopFullUrl(int id) => 'assets/shop/full/shop_$id.webp';
 
+String shopWidgetUrl(int id) => 'assets/shop/widget/shop_$id.webp';
+
 List<String> taskBackgroundUrls() =>
     List.generate(12, (i) => shopFullUrl(i + 1));
 

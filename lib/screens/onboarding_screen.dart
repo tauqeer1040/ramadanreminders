@@ -4,17 +4,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/user_service.dart';
 import '../services/shop_service.dart';
+import '../services/analytics_service.dart';
+import '../services/version_check_service.dart';
+import 'main_screen.dart';
 import '../components/onboarding/onboarding_data.dart';
 import '../components/onboarding/intro_pages.dart';
 import '../components/onboarding/final_pages.dart';
 import '../core/app_background.dart';
 import '../components/widgets/step_progress_dots.dart';
 import 'google_signin_page.dart';
-import '../components/onboarding/paywall_pages.dart';
 import '../theme/app_theme.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  final VoidCallback? onReady;
+  const OnboardingScreen({this.onReady, super.key});
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -28,11 +31,36 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   late AnimationController _bounceController;
   late Animation<double> _bounceAnimation;
 
-  static const int _totalPages = 17;
+  static const int _totalPages = 14;
+
+  final List<String> _pageNames = [
+    'welcome', 'music_selection', 'name', 'age_phone', 'bombshell',
+    'bombshell2', 'bombshell3', 'bridge',
+    'first_journal', 'ai_insight', 'celebration',
+    'summary', 'app_feedback', 'google_signin',
+  ];
+
+  String _ageBracket(int age) {
+    if (age < 18) return 'under_18';
+    if (age < 25) return '18_24';
+    if (age < 35) return '25_34';
+    if (age < 50) return '35_49';
+    return '50_plus';
+  }
+
+  String _hoursBucket(int hours) {
+    if (hours <= 2) return '0_2';
+    if (hours <= 4) return '3_4';
+    if (hours <= 6) return '5_6';
+    if (hours <= 8) return '7_8';
+    return '9_plus';
+  }
 
   @override
   void initState() {
     super.initState();
+    AnalyticsService.instance.logOnboardingStarted();
+    AnalyticsService.instance.logOnboardingPageViewed(_pageNames[0]);
     _bounceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -42,6 +70,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       TweenSequenceItem(tween: Tween(begin: 1.5, end: 0.8), weight: 20),
       TweenSequenceItem(tween: Tween(begin: 0.8, end: 1.0), weight: 50),
     ]).animate(CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onReady?.call();
+    });
   }
 
   @override
@@ -92,6 +123,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   }
 
   Future<void> _finishOnboarding() async {
+    AnalyticsService.instance.logOnboardingComplete();
+    AnalyticsService.instance.setUserProperty('onboarding_completed', 'true');
+    if (_data.age != null) {
+      AnalyticsService.instance.setUserProperty('user_age_bracket', _ageBracket(_data.age!));
+    }
+    if (_data.phoneHours != null) {
+      AnalyticsService.instance.setUserProperty('user_phone_hours_bucket', _hoursBucket(_data.phoneHours!));
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_complete', true);
 
@@ -138,11 +177,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     }
 
     if (mounted) {
-      Navigator.of(context).pop();
+      final result = await VersionCheckService.check();
+      if (result != null && mounted) {
+        if (result.requiresUpdate) {
+          await VersionCheckService.showUpdateDialog(context, result, force: true);
+        } else if (result.hasUpdate) {
+          await VersionCheckService.showUpdateDialog(context, result, force: false);
+        }
+      }
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MainScreen()),
+        (route) => false,
+      );
     }
   }
 
   void _showQuitConfirmation() {
+    AnalyticsService.instance.logOnboardingAbandoned(
+      _currentPage < _pageNames.length ? _pageNames[_currentPage] : 'unknown',
+    );
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -156,7 +210,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
-              Navigator.of(context).pop();
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const MainScreen()),
+                (route) => false,
+              );
             },
             child: const Text('Leave'),
           ),
@@ -193,7 +250,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                   child: PageView(
                     controller: _pageController,
                     physics: const NeverScrollableScrollPhysics(),
-                    onPageChanged: (i) => setState(() => _currentPage = i),
+                    onPageChanged: (i) {
+                      setState(() => _currentPage = i);
+                      if (i < _pageNames.length) {
+                        AnalyticsService.instance.logOnboardingPageViewed(_pageNames[i]);
+                      }
+                    },
                     children: _buildPages(),
                   ),
                 ),
@@ -283,11 +345,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
       // PART 3: CONCLUSION
       SummaryPage(data: _data, onNext: _goToNext, onBack: _goBack),
-       AppFeedbackPage(data: _data, onNext: _goToNext, onBack: _goBack),
-        GoogleSignInPage(onFinish: _goToNext, onBack: _goBack),
-       PaywallPage1(data: _data, onNext: _goToNext, onBack: _goBack),
-       PaywallPage2(data: _data, onNext: _goToNext, onBack: _goBack),
-       PaywallPage3(data: _data, onNext: _finishOnboarding),
+      AppFeedbackPage(data: _data, onNext: _goToNext, onBack: _goBack),
+      GoogleSignInPage(onFinish: _finishOnboarding, onBack: _goBack),
     ];
   }
 }

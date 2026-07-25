@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ramadan_reflections/services/widget_service.dart' show WidgetService;
+import 'package:ramadan_reflections/services/analytics_service.dart';
 
 class StreakService {
   static const _streakKey = 'streak';
@@ -67,6 +68,11 @@ class StreakService {
     await prefs.setInt(_streakKey, streak);
     await prefs.setString(_lastActivityDateKey, todayStr);
     await WidgetService.updateStreakWidget(streak);
+
+    // Log streak milestones at prime numbers and multiples of 7
+    if (streak > 1 && (StreakService.isPrime(streak) || streak % 7 == 0)) {
+      AnalyticsService.instance.logStreakMilestone(streak);
+    }
   }
 
   static Future<void> recordActivity() async {
@@ -92,6 +98,7 @@ class StreakService {
 
     claimed.add(key);
     await prefs.setStringList(_claimedPrimesKey, claimed);
+    AnalyticsService.instance.logStreakPrimeRewardClaimed(streak);
     return true;
   }
 }

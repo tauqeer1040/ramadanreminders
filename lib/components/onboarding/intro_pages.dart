@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:audiotags/audiotags.dart';
 import 'onboarding_data.dart';
 import '../../services/audio_service.dart';
+import '../../services/analytics_service.dart';
 import '../widgets/duo_button.dart';
 import '../widgets/commitment_button.dart';
 import '../../theme/app_theme.dart';
@@ -155,6 +156,7 @@ class _MusicSelectionPageState extends State<MusicSelectionPage> {
                   child: GestureDetector(
                     onTap: () {
                       setState(() => _selectedTrack = 0);
+                      AnalyticsService.instance.logOnboardingMusicSelected(0);
                       BackgroundMusicService().play(
                         'tunes/1_A.M_Study_Session_lofi_hip_hop_5min.m4a',
                       );
@@ -206,6 +208,7 @@ class _MusicSelectionPageState extends State<MusicSelectionPage> {
                   child: GestureDetector(
                     onTap: () {
                       setState(() => _selectedTrack = 1);
+                      AnalyticsService.instance.logOnboardingMusicSelected(1);
                       BackgroundMusicService().play(
                         'tunes/After_Dark_in_Cairo_Arabic_Melodies_Jazz_Fusion_for_Late_Night_Focus_Study_5min.m4a',
                       );
@@ -496,6 +499,7 @@ class _NamePageState extends State<NamePage> {
                               _catController.text.trim().isNotEmpty
                               ? _catController.text.trim()
                               : null;
+                          AnalyticsService.instance.logOnboardingNamesEntered();
                           widget.onNext();
                         },
                         backgroundColor: cs.primary,
@@ -638,6 +642,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
         DuoButton(
           onPressed: () {
             HapticFeedback.mediumImpact();
+            AnalyticsService.instance.logOnboardingHardQuestionsChosen(true);
             setState(() {
               _chosenHard = true;
               _stepIndex = 1;
@@ -661,6 +666,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
         DuoButton(
           onPressed: () {
             HapticFeedback.lightImpact();
+            AnalyticsService.instance.logOnboardingHardQuestionsChosen(false);
             setState(() {
               _chosenHard = false;
               _stepIndex = 4;
@@ -757,9 +763,10 @@ class _AgePhonePageState extends State<AgePhonePage> {
             const SizedBox(width: 16),
             Expanded(
               flex: 2,
-              child: DuoButton(
+                child: DuoButton(
                 onPressed: () {
                   HapticFeedback.lightImpact();
+                  AnalyticsService.instance.logOnboardingMillionDollars();
                   setState(() => _stepIndex = 2);
                 },
                 backgroundColor: cs.primary,
@@ -833,9 +840,10 @@ class _AgePhonePageState extends State<AgePhonePage> {
             const SizedBox(width: 16),
             Expanded(
               flex: 2,
-              child: DuoButton(
+                child: DuoButton(
                 onPressed: () {
                   HapticFeedback.lightImpact();
+                  AnalyticsService.instance.logOnboardingWakeupChoice();
                   setState(() => _stepIndex = 3);
                 },
                 backgroundColor: cs.primary,
@@ -884,6 +892,7 @@ class _AgePhonePageState extends State<AgePhonePage> {
         CommitmentButton(
           onCommit: () {
             HapticFeedback.mediumImpact();
+            AnalyticsService.instance.logOnboardingCommitmentMade();
             setState(() => _stepIndex = 4);
           },
           color: AppTheme.starGold,
@@ -976,6 +985,8 @@ class _AgePhonePageState extends State<AgePhonePage> {
                   HapticFeedback.mediumImpact();
                   widget.data.age = _age;
                   widget.data.phoneHours = _phoneHours.toInt();
+                  AnalyticsService.instance.logOnboardingAgeSet(_age);
+                  AnalyticsService.instance.logOnboardingPhoneHours(_phoneHours.toInt());
                   widget.onNext();
                 },
                 backgroundColor: cs.primary,

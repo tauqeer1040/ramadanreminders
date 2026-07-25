@@ -1,6 +1,8 @@
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'analytics_service.dart';
 
 class BackgroundMusicService with WidgetsBindingObserver {
   static final BackgroundMusicService _instance =
@@ -8,10 +10,22 @@ class BackgroundMusicService with WidgetsBindingObserver {
   factory BackgroundMusicService() => _instance;
   BackgroundMusicService._internal();
 
+  static const MethodChannel _channel = MethodChannel('com.taucity.meowmin/widget');
+
   final AudioPlayer _player = AudioPlayer();
   bool _isInitialized = false;
   bool _musicEnabled = true;
   String? _currentTrackPath;
+
+  Future<bool> _isDevicePlayingAudio() async {
+    try {
+      final bool? isPlaying = await _channel.invokeMethod<bool>('isDevicePlayingAudio');
+      return isPlaying ?? false;
+    } catch (e) {
+      debugPrint("Error checking device audio status: $e");
+      return false;
+    }
+  }
 
   static const String _prefKeyEnabled = 'background_music_enabled';
   static const String _prefKeyTrack = 'background_music_track';
@@ -41,6 +55,12 @@ class BackgroundMusicService with WidgetsBindingObserver {
   }
 
   Future<void> _playTrack(String assetPath) async {
+    final devicePlaying = await _isDevicePlayingAudio();
+    if (devicePlaying) {
+      debugPrint("Device is already playing audio. Skipping background music.");
+      await _player.stop();
+      return;
+    }
     try {
       await _player.stop();
       await _player.play(AssetSource(assetPath));
@@ -60,6 +80,7 @@ class BackgroundMusicService with WidgetsBindingObserver {
       await prefs.setBool(_prefKeyEnabled, true);
     }
     await _playTrack(assetPath);
+    AnalyticsService.instance.logAudioTrackPlayed(assetPath.split('/').last);
   }
 
   Future<void> setMusicEnabled(bool enabled) async {
@@ -90,6 +111,12 @@ class BackgroundMusicService with WidgetsBindingObserver {
 
   Future<void> resume() async {
     if (!_musicEnabled) return;
+    final devicePlaying = await _isDevicePlayingAudio();
+    if (devicePlaying) {
+      debugPrint("Device is already playing audio. Pausing background music.");
+      await _player.pause();
+      return;
+    }
     final state = _player.state;
     if (state == PlayerState.playing) return;
     if (state == PlayerState.paused) {

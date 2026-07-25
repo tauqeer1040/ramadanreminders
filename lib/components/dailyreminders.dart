@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../main.dart';
+import '../screens/main_screen.dart';
 import 'shared/bouncing_widget.dart';
 
 class Reminder {
@@ -104,7 +104,7 @@ class DailyReminder extends StatelessWidget {
       onPressed: () {
         HapticFeedback.lightImpact();
         if (reminder.type == 'verse' || reminder.type == 'dhikr') {
-          Material3BottomNav.switchTab(context, 1); // Insights
+          MainScreen.switchTab(context, 1); // Insights
         }
       },
       child: Container(

@@ -44,6 +44,7 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
   late AnimationController _wobbleCtrl;
   late CurvedAnimation _wobbleAnim;
   Timer? _wobbleTimer;
+  String? _mascotCustomMessage;
 
   @override
   void initState() {
@@ -136,7 +137,7 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
     return true;
   }
 
-  Future<void> _onJournalSaved() async {
+  Future<void> _onJournalSaved(double moodValue) async {
     HapticFeedback.mediumImpact();
     // Capture positions for star trail
     final startCtx = _writeBtnKey.currentContext;
@@ -151,27 +152,26 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
     }
 
     _tryIncrementStars(10, 'last_journal_star_time');
-    _confettiController.play();
+
+    // Confetti conditionally: if mood is slightly pleasant (>= 0.60) or better
+    if (moodValue >= 0.60) {
+      _confettiController.play();
+    }
+
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          elevation: 0,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.symmetric(horizontal: 60),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(100),
-          ),
-          backgroundColor: const Color(0xFFD4EDDA),
-          duration: const Duration(seconds: 2),
-          content: const Center(
-            child: Text(
-              'Journal saved ✨',
-              style: TextStyle(color: Colors.black),
-            ),
-          ),
-        ),
-      );
+      final name = _getDisplayName();
+      final templates = [
+        "Diary saved! Come back tomorrow morning to read your AI insights, $name.",
+        "Diary saved! I'll start making your Personal AI insights, $name!",
+        "Diary saved! Your entry is safe with me. I'll prepare your AI insights for tomorrow morning, $name.",
+        "Diary saved! Beautiful reflection, $name! Check back tomorrow morning for your AI insights.",
+        "Diary saved! Time to analyze your mood and write down some sweet insights for you tomorrow morning, $name."
+      ];
+      final random = Random();
+      final msg = templates[random.nextInt(templates.length)];
+      setState(() {
+        _mascotCustomMessage = msg;
+      });
     }
   }
 
@@ -351,6 +351,7 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
                   child: _MascotGreeting(
                     displayName: _getDisplayName(),
                     streakCount: _streakCount,
+                    customMessage: _mascotCustomMessage,
                   ),
                 ),
 
@@ -364,14 +365,14 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
                       if (limit && context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text("Free Trial limit reached! Tap your Profile to sign up securely and unlock unlimited journals."),
+                            content: Text("Free Trial limit reached! Tap your Profile to sign up securely and unlock unlimited diary entries."),
                             duration: Duration(seconds: 4),
                           ),
                         );
                         return;
                       }
                       if (context.mounted) {
-                        final wrote = await showModalBottomSheet<bool>(
+                        final wroteResult = await showModalBottomSheet<dynamic>(
                           context: context,
                           isScrollControlled: true,
                           useSafeArea: true,
@@ -389,7 +390,7 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
                             ),
                           ),
                         );
-                        if (wrote == true) _onJournalSaved();
+                        if (wroteResult is double) _onJournalSaved(wroteResult);
                       }
                     },
                     backgroundColor: AppTheme.neonPurple,
@@ -444,8 +445,8 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
             child: ConfettiWidget(
               confettiController: _confettiController,
               blastDirectionality: BlastDirectionality.explosive,
-              numberOfParticles: 24,
-              emissionFrequency: 0.06,
+              numberOfParticles: 8,
+              emissionFrequency: 0.02,
               maxBlastForce: 35,
               minBlastForce: 10,
               colors: const [
@@ -549,10 +550,12 @@ class _StarParticle {
 class _MascotGreeting extends StatefulWidget {
   final String displayName;
   final int streakCount;
+  final String? customMessage;
 
   const _MascotGreeting({
     required this.displayName,
     required this.streakCount,
+    this.customMessage,
   });
 
   @override
@@ -617,72 +620,74 @@ class _MascotGreetingState extends State<_MascotGreeting>
         );
       },
       child: Column(
-      children: [
-        // Speech bubble with chat tail
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              setState(() => _pickRandomMessage());
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage(_bubbleAsset),
-                  fit: BoxFit.fill,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Speech bubble with chat tail
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                setState(() => _pickRandomMessage());
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage(_bubbleAsset),
+                    fit: BoxFit.fill,
+                  ),
                 ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(44, 34, 44, 58),
-                child: Text(
-                  _currentMessage,
-                  textAlign: TextAlign.center,
-                  style: tt.bodyMedium?.copyWith(
-                    color: AppTheme.starWhite,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                    height: 1.4,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(44, 34, 44, 58),
+                  child: Text(
+                    widget.customMessage ?? _currentMessage,
+                    textAlign: TextAlign.center,
+                    style: tt.bodyMedium?.copyWith(
+                      color: AppTheme.starWhite,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      height: 1.4,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-        // Floating mascot with gradient glow
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    AppTheme.neonPurple.withValues(alpha: 0.25),
-                    AppTheme.neonPurple.withValues(alpha: 0.08),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.5, 1.0],
+          // Floating mascot with gradient glow
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 240,
+                height: 240,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      AppTheme.neonPurple.withValues(alpha: 0.25),
+                      AppTheme.neonPurple.withValues(alpha: 0.08),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.5, 1.0],
+                  ),
                 ),
               ),
-            ),
-            Image.asset(
-              'assets/photos/mascot/hi.webp',
-              width: 180,
-              height: 180,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => Icon(
-                Icons.auto_awesome_rounded,
-                color: Theme.of(context).colorScheme.onSurface,
-                size: 80,
+              Image.asset(
+                'assets/photos/mascot/hi.webp',
+                width: 216,
+                height: 216,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Theme.of(context).colorScheme.onSurface,
+                  size: 80,
+                ),
               ),
-            ),
-          ],
-        ),
-      ],
-    ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import 'user_service.dart';
 import 'auth_debug_service.dart';
+import 'analytics_service.dart';
 
 class AuthService {
   static final _auth = FirebaseAuth.instance;
@@ -114,6 +115,7 @@ class AuthService {
 
       if (userCredential != null && userCredential.user != null) {
         await UserService.syncUser(userCredential.user!);
+        AnalyticsService.instance.logSignIn('google');
         Superwall.shared.identify(userCredential.user!.uid);
         debug.logSignInSuccess(details: {
           'uid': userCredential.user!.uid,
@@ -156,6 +158,7 @@ class AuthService {
       );
       if (userCredential.user != null) {
         await UserService.syncUser(userCredential.user!);
+        AnalyticsService.instance.logSignUp('email');
       }
       return userCredential;
     } on FirebaseAuthException catch (e) {
@@ -186,6 +189,7 @@ class AuthService {
 
   /// Sign out and re-create anonymous session
   static Future<void> signOut() async {
+    AnalyticsService.instance.logSignOut();
     Superwall.shared.reset();
     await _auth.signOut();
     try {

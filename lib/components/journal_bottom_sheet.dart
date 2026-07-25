@@ -252,8 +252,10 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
     HapticFeedback.heavyImpact();
     ShopService.addStars(5);
     AnalyticsService.instance.logJournalSaved();
+    final wordCount = _controller.text.split(RegExp(r'\s+')).length;
+    AnalyticsService.instance.logJournalWordCount(wordCount);
     AnalyticsService.instance.logMoodCheckin(_moodSliderValue);
-    Navigator.of(context).pop(true);
+    Navigator.of(context).pop(_moodSliderValue);
   }
 
   // ───────────────────────────────────────────────────────────────────────────

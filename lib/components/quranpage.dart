@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -16,6 +15,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../services/insight_service.dart';
 import '../services/favorites_service.dart';
 import '../services/shop_service.dart';
+import '../services/analytics_service.dart';
 import '../core/constants.dart';
 import './reflect_card.dart';
 import './insight_card_shimmer.dart';
@@ -24,7 +24,6 @@ import 'widgets/mascot_empty_state.dart';
 import '../utils/image_urls.dart';
 import '../screens/about_screen.dart';
 import '../theme/app_theme.dart';
-import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 
 class QuranPage extends StatefulWidget {
   const QuranPage({super.key});
@@ -82,18 +81,12 @@ class _QuranPageState extends State<QuranPage>
   final List<_HeartBurst> _hearts = [];
   late String _revealedKey;
 
-  late AnimationController _wobbleCtrl;
-  late CurvedAnimation _wobbleAnim;
-  Timer? _wobbleTimer;
-
   @override
   void initState() {
     super.initState();
     _player.setPlayerMode(PlayerMode.mediaPlayer);
 
     _revealedKey = 'quran_revealed_${DateTime.now().toIso8601String().substring(0, 10)}';
-    _initScratchImages();
-    _loadPurchasedScratchImages();
     _loadRevealedCards();
     _initData();
 
@@ -115,39 +108,31 @@ class _QuranPageState extends State<QuranPage>
       }
     });
 
-    _wobbleCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    );
-    _wobbleAnim = CurvedAnimation(
-      parent: _wobbleCtrl,
-      curve: Curves.easeInOutSine,
-    );
-    _wobbleTimer = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => _wobbleCtrl.forward(from: 0),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AnalyticsService.instance.logQuranOpened();
+    });
   }
 
   @override
   void dispose() {
-    _wobbleCtrl.dispose();
-    _wobbleTimer?.cancel();
     _swiperController.dispose();
     _player.dispose();
     super.dispose();
   }
 
   Future<void> _initData() async {
-    // 1. Instantly load from cache
+    // 1. Load persistent scratch card images (only unlocked, stable order)
+    await _initScratchImages();
+
+    // 2. Instantly load from cache
     await _loadInsightLocallyOnly();
     await _loadAyahLocallyOnly();
 
-    // 2. Build initial deck and clear loading state immediately
+    // 3. Build initial deck and clear loading state immediately
     _buildDeck();
     if (mounted) setState(() => _isLoading = false);
 
-    // 3. Silently fetch fresh data in background from proxy
+    // 4. Silently fetch fresh data in background from proxy
     _fetchFreshDataSilently();
   }
 
@@ -286,25 +271,27 @@ class _QuranPageState extends State<QuranPage>
     }
   }
 
-  void _initScratchImages() {
-    _scratchCardImages = scratchCardUrls()..shuffle();
-  }
-
-  Future<void> _loadPurchasedScratchImages() async {
+  Future<void> _initScratchImages() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
       final unlocked = await ShopService.getUnlockedIds();
-      final purchased = unlocked
-          .where((id) {
-            final n = int.tryParse(id.split('_').last) ?? 0;
-            return n >= 13 && n <= 21;
-          })
-          .map((id) => shopFullUrl(int.parse(id.split('_').last)))
-          .take(3)
-          .toList();
-      if (purchased.isEmpty || !mounted) return;
+      final unlockedScratchIds = unlocked.where((id) {
+        final n = int.tryParse(id.split('_').last) ?? 0;
+        return n >= 13 && n <= 21;
+      }).toSet();
 
-      final remaining = scratchCardUrls().where((u) => !purchased.contains(u)).toList();
-      setState(() => _scratchCardImages = [...purchased, ...remaining]..shuffle());
+      const orderKey = 'quran_scratch_order';
+      final persisted = prefs.getStringList(orderKey) ?? [];
+      final validOrdered = persisted.where((id) => unlockedScratchIds.contains(id)).toList();
+      final existing = validOrdered.toSet();
+      final newItems = unlockedScratchIds.where((id) => !existing.contains(id)).toList();
+
+      final order = [...validOrdered, ...newItems];
+      final urls = order.map((id) => shopFullUrl(int.parse(id.split('_').last))).toList();
+
+      await prefs.setStringList(orderKey, order);
+
+      if (mounted) setState(() => _scratchCardImages = urls);
     } catch (_) {}
   }
 
@@ -647,27 +634,16 @@ class _QuranPageState extends State<QuranPage>
                     Expanded(
                       child: Center(
                         child: GestureDetector(
-                          onTap: () {
-                            Superwall.shared.registerPlacement('campaign_trigger');
-                          },
-                          child: AnimatedBuilder(
-                            animation: _wobbleAnim,
-                            builder: (context, child) {
-                              return Transform.rotate(
-                                angle: sin(_wobbleAnim.value * 4.5 * 2 * pi) * 0.08,
-                                child: child,
-                              );
-                            },
-                            child: Image.asset(
-                              'assets/photos/elements/meowmin.png',
-                              width: 120,
-                              height: 80,
-                              fit: BoxFit.contain,
-                            ).animate().shimmer(
-                              duration: 2500.ms,
-                              color: Colors.white.withValues(alpha: 0.45),
-                            ),
-                          ),
+                          onTap: () {},
+                        child: Image.asset(
+                          'assets/photos/elements/meowmin.png',
+                          width: 120,
+                          height: 80,
+                          fit: BoxFit.contain,
+                        ).animate().shimmer(
+                          duration: 2500.ms,
+                          color: Colors.white.withValues(alpha: 0.45),
+                        ),
                         ),
                       ),
                     ),
@@ -720,7 +696,8 @@ class _QuranPageState extends State<QuranPage>
                                 final revealed = _revealedCards.contains(index);
                                 Widget card = _deck[index];
 
-                                if (!revealed) {
+                                if (!revealed && _scratchCardImages.isNotEmpty) {
+                                  final scratchImage = _scratchCardImages[index % _scratchCardImages.length];
                                   card = ClipRRect(
                                     borderRadius: BorderRadius.circular(32),
                                     child: Stack(
@@ -728,14 +705,14 @@ class _QuranPageState extends State<QuranPage>
                                         Scratcher(
                                           brushSize: 30,
                                           threshold: 35,
-                                          image: (_scratchCardImages[index % _scratchCardImages.length]).startsWith('http')
+                                          image: scratchImage.startsWith('http')
                                               ? Image.network(
-                                                  _scratchCardImages[index % _scratchCardImages.length],
+                                                  scratchImage,
                                                   fit: BoxFit.cover,
                                                   errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                                                 )
                                               : Image.asset(
-                                                  _scratchCardImages[index % _scratchCardImages.length],
+                                                  scratchImage,
                                                   fit: BoxFit.cover,
                                                 ),
                                           onThreshold: () {

@@ -2,15 +2,12 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import '../services/journal_service.dart';
 import '../services/streak_service.dart';
 import '../services/favorites_service.dart';
-import '../services/trial_service.dart';
 import '../services/auth_service.dart';
-import '../main.dart';
+import '../screens/main_screen.dart';
 import '../theme/app_theme.dart';
 import '../components/profilepage.dart';
 
@@ -145,9 +142,7 @@ class _StatsCardState extends State<StatsCard>
   late Future<_StatsData> _future;
   late AnimationController _fadeCtrl;
   late Animation<double> _fade;
-  bool _isSubscribed = false;
-  int _graceSeconds = 0;
-  DateTime? _subscriptionExpiry;
+  // App is free - no subscription needed
 
   @override
   void initState() {
@@ -158,41 +153,6 @@ class _StatsCardState extends State<StatsCard>
     );
     _fade = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _load();
-    _checkSubscription();
-    _loadGrace();
-  }
-
-  Future<void> _checkSubscription() async {
-    try {
-      final status = await Superwall.shared.getSubscriptionStatus();
-      if (mounted) {
-        setState(() {
-          _isSubscribed = status.isActive;
-        });
-      }
-    } catch (e) {
-      debugPrint('[StatsCard] Subscription check error: $e');
-    }
-  }
-
-  Future<void> _loadGrace() async {
-    final ms = await TrialService.getRemainingMs();
-    if (mounted) setState(() => _graceSeconds = (ms / 1000).ceil().clamp(0, 99999));
-  }
-
-  void _launchPaywall() {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        Superwall.shared.identify(user.uid);
-      }
-      Superwall.shared.registerPlacement('campaign_trigger', feature: () {
-        debugPrint('[StatsCard] Feature callback fired — user is subscribed');
-        if (mounted) _checkSubscription();
-      });
-    } catch (e) {
-      debugPrint('[StatsCard] Paywall error: $e');
-    }
   }
 
   void _load() {
@@ -334,7 +294,7 @@ class _StatsCardState extends State<StatsCard>
     const fg = Color(0xFFF1F1F1);
 
     return GestureDetector(
-      onTap: () => Material3BottomNav.switchTab(context, 3),
+      onTap: () => MainScreen.switchTab(context, 3),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(22),
         child: BackdropFilter(
@@ -932,76 +892,63 @@ class _StatsCardState extends State<StatsCard>
   Widget _subscriptionCard() {
     const bg = Color(0xFFA5D6A7);
     const fg = Color(0xFF1A1A1A);
-    final graceMin = (_graceSeconds / 60).floor();
-    final inGrace = _graceSeconds > 0 && !_isSubscribed;
-    final statusText = _isSubscribed ? 'Monthly' : (inGrace ? 'Trial' : 'Free');
-    final subText = _isSubscribed ? 'Renews Jul 23' : (inGrace ? '$graceMin min left' : 'Tap to Unlock');
-    final showBolt = !_isSubscribed;
+    const statusText = 'Free';
+    const subText = 'All features unlocked';
+    const showBolt = false;
 
-    return GestureDetector(
-      onTap: () {
-        if (!_isSubscribed) {
-          _launchPaywall();
-        }
-      },
-      child: Container(
-        height: 72,
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text(
-                  'SUBSCRIPTION',
-                  style: TextStyle(
-                    color: fg,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
-                  ),
+    return Container(
+      height: 72,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'SUBSCRIPTION',
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
                 ),
-                const SizedBox(width: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: fg.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: Text(
-                    statusText,
-                    style: const TextStyle(
-                      color: fg,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+              ),
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: fg.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(5),
                 ),
-              ],
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                if (showBolt) ...[
-                  Icon(Icons.bolt_rounded, size: 12, color: fg),
-                  const SizedBox(width: 2),
-                ],
-                Text(
-                  subText,
+                child: Text(
+                  statusText,
                   style: const TextStyle(
                     color: fg,
-                    fontSize: 11,
+                    fontSize: 8,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Row(
+            children: [
+              Text(
+                subText,
+                style: const TextStyle(
+                  color: fg,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

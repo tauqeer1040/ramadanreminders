@@ -39,7 +39,7 @@ async function triggerBackgroundInsight(uid, date, journalText) {
   try {
     const sanitizedText = xss(journalText);
 
-    const FANAR_BASE_URL = process.env.FANAR_BASE_URL || 'https://playground.fanar.qa';
+    const FANAR_BASE_URL = process.env.FANAR_BASE_URL || 'https://api.fanar.qa';
     const FANAR_API_KEY = process.env.FANAR_API_KEY;
     const FANAR_MODEL = process.env.FANAR_MODEL || 'Fanar';
 
@@ -92,7 +92,10 @@ Ensure your response is valid JSON and nothing else. Do not wrap it in markdown.
     // Try Fanar AI first
     if (FANAR_API_KEY) {
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
         const fanarRes = await fetch(`${FANAR_BASE_URL}/v1/chat/completions`, {
+          signal: controller.signal,
           method: 'POST',
           headers: {
             Authorization: `Bearer ${FANAR_API_KEY}`,
@@ -104,6 +107,7 @@ Ensure your response is valid JSON and nothing else. Do not wrap it in markdown.
             temperature: 0.2,
           }),
         });
+        clearTimeout(timeout);
         if (fanarRes.ok) {
           const fanarData = await fanarRes.json();
           responseText = fanarData.choices?.[0]?.message?.content || null;

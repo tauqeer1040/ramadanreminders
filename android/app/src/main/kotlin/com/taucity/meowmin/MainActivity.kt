@@ -1,7 +1,7 @@
 package com.taucity.meowmin
 
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
+import android.media.AudioManager
+import android.content.Context
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -12,11 +12,10 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "getWidgetCount") {
-                val appWidgetManager = AppWidgetManager.getInstance(this)
-                val componentName = ComponentName(this, StreakWidgetProvider::class.java)
-                val ids = appWidgetManager.getAppWidgetIds(componentName)
-                result.success(ids.size)
+            if (call.method == "isDevicePlayingAudio") {
+                val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                val isPlaying = audioManager.isMusicActive
+                result.success(isPlaying)
             } else {
                 result.notImplemented()
             }

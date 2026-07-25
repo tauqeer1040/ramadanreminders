@@ -6,9 +6,9 @@ import 'package:scratcher/scratcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import '../models/shop_item.dart';
 import '../services/shop_service.dart';
+import '../services/widget_service.dart';
 import '../services/analytics_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/image_urls.dart';
@@ -21,42 +21,17 @@ class ShopScreen extends StatefulWidget {
   State<ShopScreen> createState() => _ShopScreenState();
 }
 
-class _ShopScreenState extends State<ShopScreen>
-    with SingleTickerProviderStateMixin {
+class _ShopScreenState extends State<ShopScreen> {
   List<ShopItem> _items = [];
   int _stars = 0;
   Set<String> _unlocked = {};
   bool _loaded = false;
   bool _loadError = false;
 
-  late AnimationController _wobbleCtrl;
-  late CurvedAnimation _wobbleAnim;
-  Timer? _wobbleTimer;
-
   @override
   void initState() {
     super.initState();
     _load();
-
-    _wobbleCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    );
-    _wobbleAnim = CurvedAnimation(
-      parent: _wobbleCtrl,
-      curve: Curves.easeInOutSine,
-    );
-    _wobbleTimer = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => _wobbleCtrl.forward(from: 0),
-    );
-  }
-
-  @override
-  void dispose() {
-    _wobbleCtrl.dispose();
-    _wobbleTimer?.cancel();
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -155,6 +130,7 @@ class _ShopScreenState extends State<ShopScreen>
           ),
         );
       }
+      unawaited(WidgetService.refreshWidgetBackground());
     }
   }
 
@@ -230,6 +206,7 @@ class _ShopScreenState extends State<ShopScreen>
   }
 
   void _showPreview(ShopItem item) {
+    AnalyticsService.instance.logShopItemViewed(item.id);
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -312,26 +289,15 @@ class _ShopScreenState extends State<ShopScreen>
                 Expanded(
                   child: Center(
                     child: GestureDetector(
-                      onTap: () {
-                        Superwall.shared.registerPlacement('campaign_trigger');
-                      },
-                      child: AnimatedBuilder(
-                        animation: _wobbleAnim,
-                        builder: (context, child) {
-                          return Transform.rotate(
-                            angle: sin(_wobbleAnim.value * 4.5 * 2 * pi) * 0.08,
-                            child: child,
-                          );
-                        },
-                        child: Image.asset(
-                          'assets/photos/elements/meowmin.png',
-                          width: 120,
-                          height: 80,
-                          fit: BoxFit.contain,
-                        ).animate().shimmer(
-                          duration: 2500.ms,
-                          color: Colors.white.withValues(alpha: 0.45),
-                        ),
+                      onTap: () {},
+                      child: Image.asset(
+                        'assets/photos/elements/meowmin.png',
+                        width: 120,
+                        height: 80,
+                        fit: BoxFit.contain,
+                      ).animate().shimmer(
+                        duration: 2500.ms,
+                        color: Colors.white.withValues(alpha: 0.45),
                       ),
                     ),
                   ),

@@ -51,33 +51,33 @@ class NotificationService {
     return granted ?? false;
   }
 
-  static Future<void> scheduleDailyNotifications() async {
+  static Future<void> scheduleDailyNotifications({String username = 'you'}) async {
     await _notificationsPlugin.cancelAll();
 
     final now = DateTime.now();
 
-    // Morning — 9:00 AM
+    // Morning — 9:00 AM — diary prompt
     var morningTime = DateTime(now.year, now.month, now.day, 9, 0);
     if (morningTime.isBefore(now)) {
       morningTime = morningTime.add(const Duration(days: 1));
     }
-    _scheduleAt(
+    await _scheduleAt(
       id: 1,
-      title: '🌅 Good Morning!',
-      body: "Your scratch cards are ready — come scratch and reveal today's rewards!",
-      time: morningTime,
+      title: '📝 Time to Reflect',
+      body: 'Write your diary $username',
+      time: morningTime.toUtc(),
     );
 
-    // Night — 10:00 PM
-    var nightTime = DateTime(now.year, now.month, now.day, 22, 0);
+    // Night — 9:00 PM — scratch cards reminder
+    var nightTime = DateTime(now.year, now.month, now.day, 21, 0);
     if (nightTime.isBefore(now)) {
       nightTime = nightTime.add(const Duration(days: 1));
     }
-    _scheduleAt(
+    await _scheduleAt(
       id: 2,
-      title: '📝 Time to Reflect',
-      body: "Write your diary — capture today's thoughts before you sleep.",
-      time: nightTime,
+      title: '🎁 Scratch Cards Ready',
+      body: 'your scratch cards are ready $username',
+      time: nightTime.toUtc(),
     );
   }
 
@@ -109,7 +109,13 @@ class NotificationService {
       id: id,
       title: title,
       body: body,
-      scheduledDate: tz.TZDateTime.from(time, tz.local),
+      scheduledDate: tz.TZDateTime.utc(
+        time.year,
+        time.month,
+        time.day,
+        time.hour,
+        time.minute,
+      ),
       notificationDetails: notificationDetails,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time,

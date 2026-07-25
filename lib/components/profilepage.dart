@@ -1,5 +1,9 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:path_provider/path_provider.dart';
+import 'package:audiotags/audiotags.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,6 +17,7 @@ import '../services/widget_service.dart';
 import '../core/constants.dart';
 import '../screens/manage_account_screen.dart';
 import '../services/user_service.dart';
+import '../services/streak_service.dart';
 import '../theme/app_theme.dart';
 import 'stats_card.dart';
 import 'widgets/duo_button.dart';
@@ -32,11 +37,10 @@ class ProfilePage1 extends StatefulWidget {
 }
 
 class _ProfilePage1State extends State<ProfilePage1>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   User? _currentUser;
   bool _isLoading = false;
   bool _notificationsGranted = false;
-  bool _hasWidget = false;
   bool _musicEnabled = true;
   bool _sfxEnabled = true;
   String _debugTrial = '';
@@ -46,6 +50,10 @@ class _ProfilePage1State extends State<ProfilePage1>
   String _dbStatus = 'yellow';
   bool _debugExpanded = false;
 
+  int _selectedTrack = 0;
+  final List<Uint8List?> _covers = [null, null];
+  bool _loadingCovers = true;
+
   late AnimationController _wobbleCtrl;
   late CurvedAnimation _wobbleAnim;
   Timer? _wobbleTimer;
@@ -53,6 +61,7 @@ class _ProfilePage1State extends State<ProfilePage1>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _currentUser = AuthService.currentUser;
     _musicEnabled = BackgroundMusicService().isMusicEnabled;
     _sfxEnabled = SfxService().isSfxEnabled;
@@ -64,6 +73,10 @@ class _ProfilePage1State extends State<ProfilePage1>
         _loadStats();
       }
     });
+
+    final currentPath = BackgroundMusicService().currentTrackPath ?? '';
+    _selectedTrack = currentPath.contains('Cairo') ? 1 : 0;
+    _loadCovers();
 
     _wobbleCtrl = AnimationController(
       vsync: this,
@@ -79,8 +92,33 @@ class _ProfilePage1State extends State<ProfilePage1>
     );
   }
 
+  Future<void> _loadCovers() async {
+    try {
+      final paths = [
+        'assets/tunes/1_A.M_Study_Session_lofi_hip_hop_5min.m4a',
+        'assets/tunes/After_Dark_in_Cairo_Arabic_Melodies_Jazz_Fusion_for_Late_Night_Focus_Study_5min.m4a',
+      ];
+      for (int i = 0; i < paths.length; i++) {
+        final byteData = await rootBundle.load(paths[i]);
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/${paths[i].split('/').last}');
+        await file.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
+        final tag = await AudioTags.read(file.path);
+        if (tag?.pictures.isNotEmpty == true) {
+          _covers[i] = tag!.pictures.first.bytes;
+        }
+      }
+    } catch (e) {
+      debugPrint("Error loading covers in profile: $e");
+    }
+    if (mounted) {
+      setState(() => _loadingCovers = false);
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _wobbleCtrl.dispose();
     _wobbleTimer?.cancel();
     super.dispose();
@@ -97,37 +135,34 @@ class _ProfilePage1State extends State<ProfilePage1>
     final shopCache = prefs.getString('shop_items_cache');
     final shopSize = shopCache != null ? '${(shopCache.length / 1024).toStringAsFixed(1)} KB' : '—';
 
-    // Health check
-    String serverStatus = 'yellow';
-    String dbStatus = 'yellow';
-    try {
-      final serverRes = await http
-          .get(Uri.parse(AppConstants.backendUrl.replaceAll('/api/v2', '')))
-          .timeout(const Duration(seconds: 5));
-      serverStatus = serverRes.statusCode == 200 ? 'green' : 'red';
-    } catch (_) {
-      serverStatus = 'red';
-    }
-    try {
-      final dbRes = await http
-          .get(Uri.parse('${AppConstants.backendUrl}/tags'))
-          .timeout(const Duration(seconds: 5));
-      dbStatus = dbRes.statusCode == 200 ? 'green' : 'red';
-    } catch (_) {
-      dbStatus = 'red';
-    }
-
-    final widgetExists = await WidgetService.hasWidget();
-
     if (mounted) {
       setState(() {
-        _hasWidget = widgetExists;
-        _serverStatus = serverStatus;
-        _dbStatus = dbStatus;
         _debugAuth = '${user?.uid ?? "—"} (${isAnon ? "anonymous" : "signed-in"})';
         _debugTrial = trialActive ? _fmtTrial(trialRemainingMs) : 'expired';
         _debugShopCache = shopSize;
       });
+    }
+
+    // Health check (Background)
+    try {
+      final checkUrl = '${AppConstants.backendUrl}/app-version';
+      final res = await http
+          .get(Uri.parse(checkUrl))
+          .timeout(const Duration(seconds: 5));
+      final ok = res.statusCode == 200;
+      if (mounted) {
+        setState(() {
+          _serverStatus = ok ? 'green' : 'red';
+          _dbStatus = ok ? 'green' : 'red';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _serverStatus = 'red';
+          _dbStatus = 'red';
+        });
+      }
     }
   }
 
@@ -166,9 +201,11 @@ class _ProfilePage1State extends State<ProfilePage1>
     final prefs = await SharedPreferences.getInstance();
     final current = prefs.getInt('total_stars') ?? 0;
     await prefs.setInt('total_stars', current + amount);
+    await _loadStats();
   }
 
   void _openWhatsApp() async {
+    await _incrementStars(100);
     const url = 'https://chat.whatsapp.com/FDyQLduHssu4Ylh3t1sqTB?s=sh&p=a&ilr=0';
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
@@ -279,70 +316,40 @@ class _ProfilePage1State extends State<ProfilePage1>
 
             // ── Stats Card ────────────────────────────────────────────────
             StatsCard(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
             // ── Notifications ───────────────────────────────────────────────
             if (!_notificationsGranted) ...[
               _buildNotificationCard(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
             ],
 
             // ── Audio Settings ────────────────────────────────────────────
             _buildAudioCard(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // ── Homescreen Widget ─────────────────────────────────────────
-            if (!_hasWidget)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 0),
-                child: ActionPromptCard(
-                  title: 'Homescreen Widget',
-                subtitle:
-                    'Add a homescreen widget for one-tap access\nto your daily tasks and streak.',
-                buttonText: 'Add Widget +100 ⭐',
-                onPressed: () async {
-                  final supported = await HomeWidget.isRequestPinWidgetSupported() ?? false;
-                  if (supported) {
-                    await HomeWidget.requestPinWidget(
-                      androidName: 'StreakWidgetProvider',
-                      name: 'StreakWidgetProvider',
-                    );
-                    if (mounted) {
-                      await _incrementStars(100);
-                    }
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Row(
-                          children: [
-                            Icon(Icons.star_rounded, color: AppTheme.starGold, size: 20),
-                            SizedBox(width: 8),
-                            Text('Widget added! +100 ⭐'),
-                          ],
-                        ),
-                        behavior: SnackBarBehavior.floating,
+            DuoButton(
+                onPressed: _pickWidget,
+                backgroundColor: const Color(0xFFAB47BC),
+                depthColor: const Color(0xFF7B1FA2),
+                radius: 16,
+                height: 56,
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.widgets_rounded, size: 20, color: AppTheme.starWhite),
+                    SizedBox(width: 10),
+                    Text(
+                      'Add Homescreen Widget +100 ⭐',
+                      style: TextStyle(
+                        color: AppTheme.starWhite,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
                       ),
-                    );
-                  } else {
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Long-press your home screen → Widgets → Meowmin Ai Diary to add it.'),
-                        backgroundColor: Color(0xFF311B92),
-                      ),
-                    );
-                  }
-                },
-                backgroundColor: const Color(0xFFE1BEE7),
-                foregroundColor: const Color(0xFF311B92),
-                icon: const Icon(
-                  Icons.widgets_rounded,
-                  size: 64,
-                  color: Color(0xFFAB47BC),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
 
             // ── Notification Prompt ────────────────────────────────────────
             if (!_notificationsGranted)
@@ -403,7 +410,7 @@ class _ProfilePage1State extends State<ProfilePage1>
                   Icon(Icons.chat_rounded, size: 20, color: AppTheme.starWhite),
                   SizedBox(width: 10),
                   Text(
-                    'Join WhatsApp Group',
+                    'Join WhatsApp Group +100 ⭐',
                     style: TextStyle(
                       color: AppTheme.starWhite,
                       fontSize: 16,
@@ -472,32 +479,6 @@ class _ProfilePage1State extends State<ProfilePage1>
       decoration: _cardDecoration(borderColor: AppTheme.neonPurple.withValues(alpha: 0.3)),
       child: Column(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppTheme.neonPurple.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.music_note_rounded, color: AppTheme.neonPurple, size: 22),
-              ),
-              const SizedBox(width: 14),
-              const Expanded(
-                child: Text(
-                  'AUDIO',
-                  style: TextStyle(
-                    color: AppTheme.starWhite,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
           _buildToggleRow(
             icon: Icons.music_note_rounded,
             label: 'Background Music',
@@ -508,6 +489,10 @@ class _ProfilePage1State extends State<ProfilePage1>
               setState(() => _musicEnabled = val);
             },
           ),
+          if (_musicEnabled) ...[
+            const SizedBox(height: 16),
+            _buildMusicSegmentedButton(),
+          ],
           Divider(color: AppTheme.starWhite.withValues(alpha: 0.08), height: 24),
           _buildToggleRow(
             icon: Icons.volume_up_rounded,
@@ -521,6 +506,96 @@ class _ProfilePage1State extends State<ProfilePage1>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMusicSegmentedButton() {
+    if (_loadingCovers) {
+      return const SizedBox(
+        height: 90,
+        child: Center(
+          child: CircularProgressIndicator(color: AppTheme.neonPurple),
+        ),
+      );
+    }
+
+    return Row(
+      children: List.generate(2, (index) {
+        final isSelected = _selectedTrack == index;
+        final trackName = index == 0 ? "1am study session" : "after dark in cairo";
+        final trackPath = index == 0
+            ? 'tunes/1_A.M_Study_Session_lofi_hip_hop_5min.m4a'
+            : 'tunes/After_Dark_in_Cairo_Arabic_Melodies_Jazz_Fusion_for_Late_Night_Focus_Study_5min.m4a';
+
+        return Expanded(
+          child: GestureDetector(
+            onTap: () async {
+              setState(() => _selectedTrack = index);
+              await BackgroundMusicService().play(trackPath);
+            },
+            child: Container(
+              height: 90,
+              margin: EdgeInsets.only(
+                left: index == 1 ? 8 : 0,
+                right: index == 0 ? 8 : 0,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isSelected ? AppTheme.neonPurple : AppTheme.starWhite.withValues(alpha: 0.1),
+                  width: isSelected ? 2.5 : 1,
+                ),
+                image: _covers[index] != null
+                    ? DecorationImage(
+                        image: MemoryImage(_covers[index]!),
+                        fit: BoxFit.cover,
+                        colorFilter: ColorFilter.mode(
+                          Colors.black.withValues(alpha: isSelected ? 0.45 : 0.65),
+                          BlendMode.srcOver,
+                        ),
+                      )
+                    : null,
+                color: _covers[index] == null ? AppTheme.neonPurple.withValues(alpha: 0.1) : null,
+              ),
+              child: Stack(
+                children: [
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        trackName,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: isSelected ? AppTheme.starWhite : AppTheme.starWhite.withValues(alpha: 0.7),
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (isSelected)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: AppTheme.neonPurple,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.check,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }),
     );
   }
 
@@ -901,6 +976,76 @@ class _ProfilePage1State extends State<ProfilePage1>
     );
   }
 
+  Future<void> _pickWidget() async {
+    if (!context.mounted) return;
+    final supported = await HomeWidget.isRequestPinWidgetSupported() ?? false;
+    if (!supported) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Long-press your home screen → Widgets → Meowmin Ai Diary to add it.'),
+          backgroundColor: Color(0xFF311B92),
+        ),
+      );
+      return;
+    }
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 16, bottom: 8),
+              child: Text(
+                'Choose Widget Size',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.widgets_rounded, color: AppTheme.neonPurple),
+              title: const Text('2×2 Widget'),
+              subtitle: const Text('Compact streak display'),
+              onTap: () => Navigator.pop(ctx, 'portrait'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.widgets_rounded, color: AppTheme.neonPurple),
+              title: const Text('2×4 Widget (Landscape)'),
+              subtitle: const Text('Wide streak display'),
+              onTap: () => Navigator.pop(ctx, 'landscape'),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+
+    if (choice == null || !mounted) return;
+
+    final streak = await StreakService.getStreak();
+    await WidgetService.updateStreakWidget(streak);
+    await HomeWidget.requestPinWidget(
+      androidName: choice == 'portrait' ? 'StreakWidgetProvider' : 'StreakWidgetLandscapeProvider',
+      name: choice == 'portrait' ? 'StreakWidgetProvider' : 'StreakWidgetLandscapeProvider',
+    );
+    if (mounted) {
+      await _incrementStars(100);
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.star_rounded, color: AppTheme.starGold, size: 20),
+            SizedBox(width: 8),
+            Text('Widget added! +100 ⭐'),
+          ],
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   String _fmtTrial(int ms) {
     final totalSec = ms ~/ 1000;
     if (totalSec <= 0) return 'expired';
@@ -929,4 +1074,10 @@ class _ProfilePage1State extends State<ProfilePage1>
       ),
     ],
   );
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadStats();
+    }
+  }
 }

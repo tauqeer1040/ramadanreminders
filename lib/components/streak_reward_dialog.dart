@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +6,7 @@ import 'package:scratcher/scratcher.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
 import '../services/shop_service.dart';
 import '../services/streak_service.dart';
+import '../services/widget_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/image_urls.dart';
 
@@ -166,4 +168,5 @@ Future<void> showStreakRewardDialog(BuildContext context) async {
     ),
   );
   ctrl.kill();
+  unawaited(WidgetService.refreshWidgetBackground());
 }

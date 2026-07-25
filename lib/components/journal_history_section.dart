@@ -299,7 +299,7 @@ class _JournalHistorySectionState extends State<JournalHistorySection> {
         final all = snap.data ?? [];
         if (all.isEmpty) {
           return MascotEmptyState(
-            message: 'No entries yet.\nTap the + button to write your first journal.',
+            message: 'No entries yet.\nTap the + button to write your first diary.',
             mascotSize: 80,
           );
         }

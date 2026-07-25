@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const crypto = require('crypto');
 const { createClient } = require('@libsql/client');
 const admin = require('firebase-admin');
 
@@ -15,8 +16,21 @@ app.use(cors({
   origin: (origin, cb) => cb(null, !origin || ALLOWED_ORIGINS.includes(origin)),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-App-Version'],
 }));
+
+app.use((req, res, next) => {
+  if (req.url === '/api/v2/superwall-webhook') {
+    let data = [];
+    req.on('data', chunk => data.push(chunk));
+    req.on('end', () => {
+      req.rawBody = Buffer.concat(data).toString();
+      next();
+    });
+  } else {
+    next();
+  }
+});
 app.use(express.json());
 app.use((req, res, next) => {
   console.log(`[API] ${req.method} ${req.url}`);
@@ -57,13 +71,59 @@ app.use('/api/v2', (req, res, next) => {
   return verifyAuth(req, res, next);
 });
 
-const LM_STUDIO_BASE_URL = process.env.LM_STUDIO_BASE_URL || 'http://192.168.1.4:1234';
-const LM_STUDIO_MODEL = process.env.LM_STUDIO_MODEL || 'fanar-1-9b-instruct';
-const AI_PROVIDER = process.env.AI_PROVIDER || 'lmstudio';
+async function verifyAppVersion(req, res, next) {
+  const versionHeader = req.headers['x-app-version'];
+  if (versionHeader && req.uid) {
+    db.execute({
+      sql: 'UPDATE users SET app_version = ? WHERE id = ?',
+      args: [String(versionHeader).trim(), req.uid],
+    }).catch(() => {});
+  }
+
+  try {
+    const cfg = await db.execute("SELECT key, value FROM app_config WHERE key IN ('minimum_app_version', 'update_url', 'update_message')");
+    const config = {};
+    for (const row of cfg.rows) config[row.key] = row.value;
+
+    if (versionHeader && config.minimum_app_version) {
+      const cmp = compareVersions(String(versionHeader).trim(), config.minimum_app_version);
+      if (cmp < 0) {
+        return res.status(426).json({
+          error: 'upgrade_required',
+          message: config.update_message || 'Please update your app to continue.',
+          updateUrl: config.update_url || '',
+          minimumVersion: config.minimum_app_version,
+        });
+      }
+    }
+  } catch (_) {}
+
+  next();
+}
+
+function compareVersions(a, b) {
+  const pa = a.split('+')[0].split('.').map(Number);
+  const pb = b.split('+')[0].split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0;
+    const nb = pb[i] || 0;
+    if (na > nb) return 1;
+    if (na < nb) return -1;
+  }
+  return 0;
+}
+
+app.use('/api/v2', (req, res, next) => {
+  const p = req.url;
+  if (p === '/ayah' || p === '/shop/items' || p === '/superwall-webhook' || p === '/app-version') return next();
+  if (!req.uid) return next();
+  return verifyAppVersion(req, res, next);
+});
+
 const AI_INITIAL_DELAY_HOURS = Math.max(0, Number(process.env.AI_INITIAL_DELAY_HOURS || 0));
 const AI_POLL_INTERVAL_MS = Math.max(5000, Number(process.env.AI_POLL_INTERVAL_MS || 60000));
 
-const FANAR_BASE_URL = process.env.FANAR_BASE_URL || 'https://playground.fanar.qa';
+const FANAR_BASE_URL = process.env.FANAR_BASE_URL || 'https://api.fanar.qa';
 const FANAR_API_KEY = process.env.FANAR_API_KEY;
 const FANAR_MODEL = process.env.FANAR_MODEL || 'Fanar';
 
@@ -155,6 +215,44 @@ async function ensureUserTable() {
   }
   if (!(await hasColumn('users', 'purchases'))) {
     await db.execute("ALTER TABLE users ADD COLUMN purchases TEXT DEFAULT '[]'");
+  }
+  if (!(await hasColumn('users', 'subscription_status'))) {
+    await db.execute("ALTER TABLE users ADD COLUMN subscription_status TEXT DEFAULT 'none'");
+  }
+  if (!(await hasColumn('users', 'subscription_product_id'))) {
+    await db.execute("ALTER TABLE users ADD COLUMN subscription_product_id TEXT");
+  }
+  if (!(await hasColumn('users', 'subscription_expires_at'))) {
+    await db.execute("ALTER TABLE users ADD COLUMN subscription_expires_at INTEGER");
+  }
+  if (!(await hasColumn('users', 'subscription_trial_started_at'))) {
+    await db.execute("ALTER TABLE users ADD COLUMN subscription_trial_started_at INTEGER");
+  }
+  if (!(await hasColumn('users', 'app_version'))) {
+    await db.execute("ALTER TABLE users ADD COLUMN app_version TEXT");
+  }
+}
+
+async function ensureAppConfigTable() {
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS app_config (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+
+  const seed = [
+    { key: 'latest_app_version', value: '1.0.0' },
+    { key: 'minimum_app_version', value: '1.0.0' },
+    { key: 'update_url', value: '' },
+    { key: 'update_message', value: 'A new version of Meowmin is available. Please update to continue.' },
+  ];
+
+  for (const row of seed) {
+    await db.execute({
+      sql: 'INSERT OR IGNORE INTO app_config (key, value) VALUES (?, ?)',
+      args: [row.key, row.value],
+    });
   }
 }
 
@@ -633,6 +731,7 @@ async function initDB() {
   await ensureJournalAiTable();
   await ensureIndexTables();
   await ensureTagMapTables();
+  await ensureAppConfigTable();
   await rebuildTagMapsFromIndexes();
   await db.execute("UPDATE journal_entries SET ai_status = 'pending' WHERE ai_status = 'processing'");
   console.log('[DB2] Schema ready.');
@@ -673,34 +772,16 @@ function parseAiJson(rawText) {
   return JSON.parse(raw);
 }
 
-async function callLmStudio(prompt) {
-  const res = await fetch(`${LM_STUDIO_BASE_URL}/api/v1/chat`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: LM_STUDIO_MODEL,
-      input: prompt,
-      temperature: 0.2,
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`LM Studio request failed (${res.status}): ${body.slice(0, 300)}`);
-  }
-
-  const data = await res.json();
-  return parseAiJson(data.output?.[0]?.content || data.text || '');
-}
-
 async function callFanarRaw(prompt, temperature = 0.2) {
   if (!FANAR_API_KEY) {
     throw new Error('FANAR_API_KEY is missing');
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
   const res = await fetch(`${FANAR_BASE_URL}/v1/chat/completions`, {
+    signal: controller.signal,
     method: 'POST',
     headers: {
       Authorization: `Bearer ${FANAR_API_KEY}`,
@@ -712,6 +793,8 @@ async function callFanarRaw(prompt, temperature = 0.2) {
       temperature,
     }),
   });
+
+  clearTimeout(timeout);
 
   if (!res.ok) {
     const body = await res.text();
@@ -763,7 +846,6 @@ async function callOpenRouter(prompt) {
 }
 
 async function callAI(prompt) {
-  // Try Fanar AI first, fallback to OpenRouter
   try {
     return await callFanar(prompt);
   } catch (fanarError) {
@@ -774,10 +856,6 @@ async function callAI(prompt) {
     return await callOpenRouter(prompt);
   } catch (openrouterError) {
     console.error('[OpenRouter] Failed:', openrouterError.message);
-    if (AI_PROVIDER === 'lmstudio') {
-      console.warn('[LM Studio] Attempting local fallback...');
-      return callLmStudio(prompt);
-    }
     throw openrouterError;
   }
 }
@@ -1497,7 +1575,7 @@ app.post('/api/v2/generate-insights', verifyAuth, aiLimiter, async (req, res) =>
     return res.status(400).json({ error: 'Missing journalEntry' });
   }
 
-  if (!process.env.OPENROUTER_API_KEY && AI_PROVIDER !== 'lmstudio') {
+  if (!FANAR_API_KEY && !process.env.OPENROUTER_API_KEY) {
     return res.status(503).json({ error: 'AI service not configured' });
   }
 
@@ -1565,30 +1643,17 @@ Return ONLY: ["insight one text...", "insight two text...", "insight three text.
   let lastError = null;
   for (const model of OPENROUTER_MODELS) {
     try {
-      const aiRes = AI_PROVIDER === 'lmstudio'
-        ? await (async () => {
-            const r = await fetch(`${LM_STUDIO_BASE_URL}/api/v1/chat`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ model: LM_STUDIO_MODEL, input: prompt, temperature: 0.3 }),
-            });
-            if (!r.ok) throw new Error(`LM Studio ${r.status}`);
-            const d = await r.json();
-            return d.output?.[0]?.content || d.text || '';
-          })()
-        : await (async () => {
-            const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
-            });
-            if (!r.ok) throw new Error(`OpenRouter ${model} ${r.status}`);
-            const d = await r.json();
-            return d.choices?.[0]?.message?.content || '';
-          })();
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
+      });
+      if (!r.ok) throw new Error(`OpenRouter ${model} ${r.status}`);
+      const d = await r.json();
+      const aiRes = d.choices?.[0]?.message?.content || '';
 
       let raw = String(aiRes).trim();
       if (raw.includes('```json')) raw = raw.split('```json')[1].split('```')[0].trim();
@@ -1604,6 +1669,17 @@ Return ONLY: ["insight one text...", "insight two text...", "insight three text.
   }
 
   res.status(503).json({ error: 'AI models saturated, please try again.' });
+});
+
+app.get('/api/v2/app-version', async (req, res) => {
+  try {
+    const cfg = await db.execute("SELECT key, value FROM app_config");
+    const result = {};
+    for (const row of cfg.rows) result[row.key] = row.value;
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/api/v2/ayah', async (req, res) => {
@@ -1805,6 +1881,124 @@ app.post('/api/v2/shop/purchase', async (req, res) => {
     res.json({ success: true, stars: newStars });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ── Superwall Webhook ──────────────────────────────────────────────────────
+app.post('/api/v2/superwall-webhook', async (req, res) => {
+  try {
+    const signature = req.headers['x-signature'];
+    const rawBody = req.rawBody;
+
+    if (!process.env.SUPERWALL_WEBHOOK_SECRET) {
+      console.warn('[SUPERWALL WEBHOOK] Secret not configured');
+      return res.status(500).json({ error: 'Webhook secret not configured' });
+    }
+
+    const expectedSig = crypto
+      .createHmac('sha256', process.env.SUPERWALL_WEBHOOK_SECRET)
+      .update(rawBody)
+      .digest('hex');
+
+    if (signature !== expectedSig) {
+      console.warn('[SUPERWALL WEBHOOK] Invalid signature');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    const event = req.body;
+    const { type, data } = event;
+    const eventData = data;
+
+    console.log(`[SUPERWALL WEBHOOK] Event: ${type} | Product: ${eventData.productId} | User: ${eventData.originalAppUserId}`);
+
+    const uid = eventData.originalAppUserId;
+    if (!uid) return res.status(200).json({ received: true });
+
+    const now = Date.now();
+
+    switch (type) {
+      case 'initial_purchase': {
+        const isTrial = eventData.periodType === 'TRIAL';
+        const status = isTrial ? 'trial' : 'active';
+        const expiresAt = eventData.expirationAt;
+        await db.execute({
+          sql: `UPDATE users SET
+            subscription_status = ?,
+            subscription_product_id = ?,
+            subscription_expires_at = ?,
+            subscription_trial_started_at = COALESCE(subscription_trial_started_at, ?)
+          WHERE id = ?`,
+          args: [status, eventData.productId, expiresAt, isTrial ? now : null, uid],
+        });
+        break;
+      }
+      case 'renewal': {
+        const newStatus = eventData.isTrialConversion ? 'active' : 'active';
+        await db.execute({
+          sql: `UPDATE users SET
+            subscription_status = ?,
+            subscription_product_id = ?,
+            subscription_expires_at = ?
+          WHERE id = ?`,
+          args: [newStatus, eventData.productId, eventData.expirationAt, uid],
+        });
+        if (eventData.isTrialConversion) {
+          console.log(`[SUPERWALL WEBHOOK] Trial converted to paid for user ${uid}`);
+        }
+        break;
+      }
+      case 'cancellation': {
+        await db.execute({
+          sql: `UPDATE users SET subscription_status = 'cancelled' WHERE id = ?`,
+          args: [uid],
+        });
+        break;
+      }
+      case 'uncancellation': {
+        await db.execute({
+          sql: `UPDATE users SET subscription_status = 'active' WHERE id = ?`,
+          args: [uid],
+        });
+        break;
+      }
+      case 'expiration': {
+        await db.execute({
+          sql: `UPDATE users SET subscription_status = 'expired' WHERE id = ?`,
+          args: [uid],
+        });
+        break;
+      }
+      case 'billing_issue': {
+        console.log(`[SUPERWALL WEBHOOK] Billing issue for user ${uid}: ${eventData.cancelReason || 'unknown'}`);
+        break;
+      }
+      case 'product_change': {
+        await db.execute({
+          sql: `UPDATE users SET
+            subscription_product_id = ?,
+            subscription_expires_at = ?
+          WHERE id = ?`,
+          args: [eventData.newProductId, eventData.expirationAt, uid],
+        });
+        break;
+      }
+      case 'subscription_paused': {
+        await db.execute({
+          sql: `UPDATE users SET subscription_status = 'paused' WHERE id = ?`,
+          args: [uid],
+        });
+        break;
+      }
+      case 'non_renewing_purchase': {
+        console.log(`[SUPERWALL WEBHOOK] Non-renewing purchase by user ${uid}: ${eventData.productId}`);
+        break;
+      }
+    }
+
+    res.status(200).json({ received: true });
+  } catch (error) {
+    console.error('[SUPERWALL WEBHOOK] Error:', error.message);
+    res.status(200).json({ received: true });
   }
 });
 

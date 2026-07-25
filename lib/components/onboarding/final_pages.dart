@@ -10,6 +10,7 @@ import 'package:in_app_review/in_app_review.dart';
 import '../../services/analogy_service.dart';
 import '../../services/journal_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/analytics_service.dart';
 import 'onboarding_data.dart';
 import '../../utils/image_urls.dart';
 import '../widgets/duo_button.dart';
@@ -389,6 +390,8 @@ class _FirstJournalPageState extends State<FirstJournalPage>
     if (text.isNotEmpty) {
       final dateKey = DateTime.now().toIso8601String().split('T')[0];
       await _journalService.saveJournalGratitude(dateKey, text);
+      final wordCount = text.split(RegExp(r'\s+')).length;
+      AnalyticsService.instance.logOnboardingFirstJournalWritten(wordCount);
     }
     if (mounted) {
       setState(() => _saving = false);
@@ -498,6 +501,7 @@ class _AiInsightPageState extends State<AiInsightPage>
     if (_swipedCount >= 3) return;
     _swipedCount++;
     widget.onStarsEarned?.call(20);
+    AnalyticsService.instance.logOnboardingScratchRevealed(_swipedCount);
   }
 
   void _triggerConfetti() {
@@ -555,6 +559,7 @@ class _AiInsightPageState extends State<AiInsightPage>
           _animationDone = true;
         });
       }
+      AnalyticsService.instance.logOnboardingInsightGenerated(success: false);
       return;
     }
 
@@ -587,6 +592,10 @@ class _AiInsightPageState extends State<AiInsightPage>
         ),
       ];
       _apiDone = true;
+      AnalyticsService.instance.logOnboardingInsightGenerated(
+        success: result.isNotEmpty,
+        cardCount: result.length,
+      );
     });
 
     if (!skipLoading) {
@@ -1167,6 +1176,10 @@ class SummaryPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AnalyticsService.instance.logOnboardingSummaryViewed();
+    });
 
     return LayoutBuilder(
       builder: (context, constraints) {
