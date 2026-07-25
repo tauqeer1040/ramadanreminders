@@ -7,6 +7,7 @@ const { createClient } = require('@libsql/client');
 const admin = require('firebase-admin');
 
 const app = express();
+app.set('trust proxy', 1);
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
   : ['http://localhost:3000', 'http://localhost:3007', 'https://meowmin.app'];
