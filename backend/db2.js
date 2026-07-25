@@ -1013,14 +1013,15 @@ async function pollPendingJournals() {
 
 setInterval(pollPendingJournals, AI_POLL_INTERVAL_MS);
 
-const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 20 });
+const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, validate: { xForwardedForHeader: false } });
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
   keyGenerator: (req) => req.uid || req.socket.remoteAddress,
+  validate: { xForwardedForHeader: false },
 });
 
-const generalLimiter = rateLimit({ windowMs: 60 * 1000, max: 60 });
+const generalLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, validate: { xForwardedForHeader: false } });
 
 app.use((req, res, next) => {
   const exempt = ['/api/v2/shop/purchase', '/api/v2/shop/items'];
