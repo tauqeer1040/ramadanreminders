@@ -52,7 +52,7 @@ async function verifyAuth(req, res, next) {
 }
 
 app.use('/api/v2', (req, res, next) => {
-  if (req.path === '/ayah' || req.path === '/shop/items') return next();
+  if (req.url === '/ayah' || req.url === '/shop/items' || req.url === '/app-version' || req.url === '/superwall-webhook') return next();
   return verifyAuth(req, res, next);
 });
 
