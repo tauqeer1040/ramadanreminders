@@ -56,13 +56,13 @@ app.use((req, res, next) => {
 
 // Auth middleware
 app.use('/api/v2', (req, res, next) => {
-  if (req.url === '/ayah' || req.url === '/shop/items' || req.url === '/app-version' || req.url === '/superwall-webhook' || req.url === '/internal/poll-ai' || req.url === '/internal/errors') return next();
+  if (['/ayah', '/shop/items', '/app-version', '/superwall-webhook', '/internal/poll-ai', '/internal/errors'].includes(req.path)) return next();
   return verifyAuth(req, res, next);
 });
 
 // App-version middleware
 app.use('/api/v2', (req, res, next) => {
-  const p = req.url;
+  const p = req.path;
   if (p === '/ayah' || p === '/shop/items' || p === '/superwall-webhook' || p === '/app-version') return next();
   if (!req.uid) return next();
   return verifyAppVersion(req, res, next);
