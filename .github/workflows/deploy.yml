@@ -36,6 +36,10 @@ jobs:
         working-directory: landing
         run: npm ci
 
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
       - name: Build landing site
         working-directory: landing
         run: npm run build
