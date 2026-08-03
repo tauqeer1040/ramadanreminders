@@ -56,7 +56,7 @@ app.use((req, res, next) => {
 
 // Auth middleware
 app.use('/api/v2', (req, res, next) => {
-  if (req.url === '/ayah' || req.url === '/shop/items' || req.url === '/app-version' || req.url === '/superwall-webhook' || req.url === '/internal/poll-ai') return next();
+  if (req.url === '/ayah' || req.url === '/shop/items' || req.url === '/app-version' || req.url === '/superwall-webhook' || req.url === '/internal/poll-ai' || req.url === '/internal/errors') return next();
   return verifyAuth(req, res, next);
 });
 
