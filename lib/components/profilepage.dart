@@ -25,6 +25,7 @@ import '../services/streak_service.dart';
 import '../theme/app_theme.dart';
 import 'stats_card.dart';
 import 'widgets/duo_button.dart';
+import 'widgets/auth_debug_card.dart';
 import 'action_prompt_card.dart';
 import 'package:ramadan_reflections/services/revenuecat_service.dart';
 import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
@@ -51,6 +52,7 @@ class _ProfilePage1State extends State<ProfilePage1>
   String _debugTrial = '';
   String _debugAuth = '';
   String _debugShopCache = '';
+  String _debugLastError = '';
   String _serverStatus = 'yellow';
   String _dbStatus = 'yellow';
   bool _debugExpanded = false;
@@ -134,22 +136,51 @@ class _ProfilePage1State extends State<ProfilePage1>
   }
 
   Future<void> _loadStats() async {
-    final prefs = await SharedPreferences.getInstance();
+    String debugTrial = '';
+    String debugAuth = '';
+    String debugShopCache = '';
+    String lastSync = '';
+    String lastError = '';
 
-    // Debug info
-    final user = AuthService.currentUser;
-    final isAnon = user?.isAnonymous ?? true;
-    final trialStatus = await TrialService.getStatus();
-    final trialRemainingMs = await TrialService.getRemainingMs();
-    final shopCache = prefs.getString('shop_items_cache');
-    final shopSize = shopCache != null ? '${(shopCache.length / 1024).toStringAsFixed(1)} KB' : '—';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      lastSync = _fmtLastSync(prefs.getString('last_sync_at'));
+      final shopCache = prefs.getString('shop_items_cache');
+      debugShopCache = shopCache != null
+          ? '${(shopCache.length / 1024).toStringAsFixed(1)} KB'
+          : '—';
+    } catch (e) {
+      lastError = 'prefs: $e';
+      debugPrint('[Profile] prefs failed: $e');
+    }
+
+    try {
+      final user = AuthService.currentUser;
+      final isAnon = user?.isAnonymous ?? true;
+      debugAuth = '${user?.uid ?? "—"} (${isAnon ? "anonymous" : "signed-in"})';
+    } catch (e) {
+      lastError = 'auth: $e';
+      debugPrint('[Profile] auth failed: $e');
+    }
+
+    try {
+      final trialStatus = await TrialService.getStatus();
+      final trialRemainingMs = await TrialService.getRemainingMs();
+      debugTrial = trialStatus.trialActive
+          ? _fmtTrial(trialRemainingMs)
+          : 'expired';
+    } catch (e) {
+      lastError = 'trial: $e';
+      debugPrint('[Profile] trial failed: $e');
+    }
 
     if (mounted) {
       setState(() {
-        _debugAuth = '${user?.uid ?? "—"} (${isAnon ? "anonymous" : "signed-in"})';
-        _debugTrial = trialStatus.trialActive ? _fmtTrial(trialRemainingMs) : 'expired';
-        _debugShopCache = shopSize;
-        _lastSync = _fmtLastSync(prefs.getString('last_sync_at'));
+        _debugAuth = debugAuth;
+        _debugTrial = debugTrial;
+        _debugShopCache = debugShopCache;
+        _lastSync = lastSync;
+        _debugLastError = lastError;
       });
     }
 
@@ -962,6 +993,9 @@ class _ProfilePage1State extends State<ProfilePage1>
                 _buildProfileRow('Trial', _debugTrial),
                 _buildProfileRow('Shop cache', _debugShopCache),
                 _buildProfileRow('Last Sync', _lastSync),
+                if (_debugLastError.isNotEmpty)
+                  _buildProfileRow('Last Error', _debugLastError, valueColor: Colors.redAccent),
+                const AuthDebugCard(),
               ],
             ],
           ),
@@ -1004,7 +1038,7 @@ class _ProfilePage1State extends State<ProfilePage1>
     );
   }
 
-  Widget _buildProfileRow(String label, String value) {
+  Widget _buildProfileRow(String label, String value, {Color? valueColor}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
@@ -1015,8 +1049,8 @@ class _ProfilePage1State extends State<ProfilePage1>
             color: AppTheme.ghostSilver, fontSize: 14, fontWeight: FontWeight.w500,
           )),
           const SizedBox(width: 12),
-          Flexible(child: Text(value, textAlign: TextAlign.end, style: const TextStyle(
-            color: AppTheme.starWhite, fontSize: 14, fontWeight: FontWeight.w700,
+          Flexible(child: Text(value, textAlign: TextAlign.end, style: TextStyle(
+            color: valueColor ?? AppTheme.starWhite, fontSize: 14, fontWeight: FontWeight.w700,
           ))),
         ],
       ),
