@@ -1,19 +1,23 @@
 import 'dart:async';
-import 'dart:math';
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:math';
 import 'package:path_provider/path_provider.dart';
 import 'package:audiotags/audiotags.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
+import 'package:lottie/lottie.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/audio_service.dart';
 import '../services/sfx_service.dart';
 import '../services/trial_service.dart';
 import '../services/widget_service.dart';
+import '../services/pwa_install_service.dart';
+import '../services/journal_remote_storage.dart';
+import '../services/journal_service.dart';
 import '../core/constants.dart';
 import '../screens/manage_account_screen.dart';
 import '../services/user_service.dart';
@@ -22,7 +26,8 @@ import '../theme/app_theme.dart';
 import 'stats_card.dart';
 import 'widgets/duo_button.dart';
 import 'action_prompt_card.dart';
-import 'package:superwallkit_flutter/superwallkit_flutter.dart';
+import 'package:ramadan_reflections/services/revenuecat_service.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -57,6 +62,8 @@ class _ProfilePage1State extends State<ProfilePage1>
   late AnimationController _wobbleCtrl;
   late CurvedAnimation _wobbleAnim;
   Timer? _wobbleTimer;
+  Timer? _healthTimer;
+  String _lastSync = '';
 
   @override
   void initState() {
@@ -90,6 +97,7 @@ class _ProfilePage1State extends State<ProfilePage1>
       const Duration(seconds: 15),
       (_) => _wobbleCtrl.forward(from: 0),
     );
+    _startHealthPolling();
   }
 
   Future<void> _loadCovers() async {
@@ -121,6 +129,7 @@ class _ProfilePage1State extends State<ProfilePage1>
     WidgetsBinding.instance.removeObserver(this);
     _wobbleCtrl.dispose();
     _wobbleTimer?.cancel();
+    _healthTimer?.cancel();
     super.dispose();
   }
 
@@ -130,7 +139,7 @@ class _ProfilePage1State extends State<ProfilePage1>
     // Debug info
     final user = AuthService.currentUser;
     final isAnon = user?.isAnonymous ?? true;
-    final trialActive = await TrialService.isTrialActive();
+    final trialStatus = await TrialService.getStatus();
     final trialRemainingMs = await TrialService.getRemainingMs();
     final shopCache = prefs.getString('shop_items_cache');
     final shopSize = shopCache != null ? '${(shopCache.length / 1024).toStringAsFixed(1)} KB' : '—';
@@ -138,12 +147,30 @@ class _ProfilePage1State extends State<ProfilePage1>
     if (mounted) {
       setState(() {
         _debugAuth = '${user?.uid ?? "—"} (${isAnon ? "anonymous" : "signed-in"})';
-        _debugTrial = trialActive ? _fmtTrial(trialRemainingMs) : 'expired';
+        _debugTrial = trialStatus.trialActive ? _fmtTrial(trialRemainingMs) : 'expired';
         _debugShopCache = shopSize;
+        _lastSync = _fmtLastSync(prefs.getString('last_sync_at'));
       });
     }
 
-    // Health check (Background)
+    _performHealthCheck();
+  }
+
+  Future<void> _onRefresh() async {
+    await JournalRemoteStorage.pullAllJournalsToLocal();
+    JournalService.notifyJournalsChanged();
+    StatsCard.refresh(context);
+    _loadCovers();
+    await _loadStats();
+  }
+
+  void _startHealthPolling() {
+    _healthTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _performHealthCheck();
+    });
+  }
+
+  Future<void> _performHealthCheck() async {
     try {
       final checkUrl = '${AppConstants.backendUrl}/app-version';
       final res = await http
@@ -164,6 +191,17 @@ class _ProfilePage1State extends State<ProfilePage1>
         });
       }
     }
+  }
+
+  String _fmtLastSync(String? iso) {
+    if (iso == null || iso.isEmpty) return 'never';
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return iso;
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 
   Future<void> _checkNotificationStatus() async {
@@ -226,46 +264,67 @@ class _ProfilePage1State extends State<ProfilePage1>
       backgroundColor: Colors.transparent,
       body: SafeArea(
         child: RefreshIndicator(
-        onRefresh: _loadStats,
+        onRefresh: _onRefresh,
         color: AppTheme.neonPurple,
         backgroundColor: const Color(0xFF1A1A2E),
         child: ListView(
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
           children: [
             // ── Top Bar: Avatar · Logo · Favorites ──────────────────────────
             SizedBox(
               height: 128,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Row(
                   children: [
                     InkWell(
                       onTap: () {
                         HapticFeedback.lightImpact();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const AboutScreen()),
-                        );
+                        BackgroundMusicService().toggleMusic();
+                        setState(() {});
                       },
                       borderRadius: BorderRadius.circular(20),
-                      child: CircleAvatar(
-                        radius: 28,
-                        backgroundColor: cs.primaryContainer,
-                        child: ClipOval(
-                          child: Image.asset(
-                            'assets/photos/mascot/hi.webp',
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
+                      child: Stack(
+                        children: [
+                          if (BackgroundMusicService().isMusicEnabled)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: IgnorePointer(
+                                child: Transform.scale(
+                                  scale: 2,
+                                  alignment: Alignment.bottomCenter,
+                                  child: Lottie.asset('assets/photos/elements/Music fly.json', fit: BoxFit.cover),
+                                ),
+                              ),
+                            ),
+                          CircleAvatar(
+                            radius: 28,
+                            backgroundColor: cs.primaryContainer,
+                            child: ClipOval(
+                              child: Image.asset(
+                                'assets/photos/mascot/face.png',
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                     Expanded(
                       child: Center(
                         child: GestureDetector(
                           onTap: () {
-                            Superwall.shared.registerPlacement('campaign_trigger');
+                            HapticFeedback.lightImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AboutScreen(),
+                              ),
+                            );
                           },
                           child: AnimatedBuilder(
                             animation: _wobbleAnim,
@@ -318,6 +377,8 @@ class _ProfilePage1State extends State<ProfilePage1>
             StatsCard(),
             const SizedBox(height: 24),
 
+
+
             // ── Notifications ───────────────────────────────────────────────
             if (!_notificationsGranted) ...[
               _buildNotificationCard(),
@@ -334,14 +395,14 @@ class _ProfilePage1State extends State<ProfilePage1>
                 depthColor: const Color(0xFF7B1FA2),
                 radius: 16,
                 height: 56,
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.widgets_rounded, size: 20, color: AppTheme.starWhite),
-                    SizedBox(width: 10),
+                    Icon(kIsWeb ? Icons.add_to_home_screen_rounded : Icons.widgets_rounded, size: 20, color: AppTheme.starWhite),
+                    const SizedBox(width: 10),
                     Text(
-                      'Add Homescreen Widget +100 ⭐',
-                      style: TextStyle(
+                      kIsWeb ? 'Install App on Home Screen +100 ⭐' : 'Add Homescreen Widget +100 ⭐',
+                      style: const TextStyle(
                         color: AppTheme.starWhite,
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -824,19 +885,19 @@ class _ProfilePage1State extends State<ProfilePage1>
   Widget _subscribeCard() {
     return DuoButton(
       onPressed: _showPaywall,
-      backgroundColor: AppTheme.starGold,
-      depthColor: AppTheme.starGold.withValues(alpha: 0.6),
+      backgroundColor: const Color(0xFFFF6D00),
+      depthColor: const Color(0xFFE65100),
       radius: 16,
       height: 56,
       child: const Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.workspace_premium, color: Colors.black, size: 20),
+          Icon(Icons.workspace_premium, color: Colors.white, size: 20),
           SizedBox(width: 10),
           Text(
             'Subscribe',
             style: TextStyle(
-              color: Colors.black,
+              color: Colors.white,
               fontSize: 16,
               fontWeight: FontWeight.w900,
             ),
@@ -846,29 +907,14 @@ class _ProfilePage1State extends State<ProfilePage1>
     );
   }
 
-  void _showPaywall() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Launching paywall...'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      debugPrint('[ProfilePaywall] User: ${user?.uid} anonymous: ${user?.isAnonymous}');
-      if (user != null) {
-        Superwall.shared.identify(user.uid);
-      }
-      Superwall.shared.registerPlacement('campaign_trigger', feature: () {
-        debugPrint('[ProfilePaywall] Feature callback fired');
-      });
-    } catch (e) {
-      debugPrint('[ProfilePaywall] Error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
+  Future<void> _showPaywall() async {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Meowmin Pro is coming soon!'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -915,6 +961,7 @@ class _ProfilePage1State extends State<ProfilePage1>
                 _buildProfileRow('Auth', _debugAuth),
                 _buildProfileRow('Trial', _debugTrial),
                 _buildProfileRow('Shop cache', _debugShopCache),
+                _buildProfileRow('Last Sync', _lastSync),
               ],
             ],
           ),
@@ -978,6 +1025,12 @@ class _ProfilePage1State extends State<ProfilePage1>
 
   Future<void> _pickWidget() async {
     if (!context.mounted) return;
+
+    if (kIsWeb) {
+      await _installPwa();
+      return;
+    }
+
     final supported = await HomeWidget.isRequestPinWidgetSupported() ?? false;
     if (!supported) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1044,6 +1097,47 @@ class _ProfilePage1State extends State<ProfilePage1>
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  Future<void> _installPwa() async {
+    if (PwaInstallService.isStandalone) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Meowmin is already installed on your home screen.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final shown = await PwaInstallService.promptInstall();
+    if (!context.mounted) return;
+
+    if (shown) {
+      await _incrementStars(100);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.star_rounded, color: AppTheme.starGold, size: 20),
+              SizedBox(width: 8),
+              Text('Tap Install to add Meowmin to your home screen! +100 ⭐'),
+            ],
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Use your browser menu → "Add to Home Screen" / "Install App" to install Meowmin.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   String _fmtTrial(int ms) {

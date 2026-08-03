@@ -2,55 +2,45 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_service.dart';
 import '../services/streak_service.dart';
-import '../services/journal_service.dart';
+import '../services/star_service.dart';
+import '../services/audio_service.dart';
 import 'package:lottie/lottie.dart';
-import 'package:confetti/confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import '../screens/about_screen.dart';
-import 'widgets/duo_button.dart';
-import 'journal_bottom_sheet.dart';
+import '../providers/homepage_provider.dart';
 import 'journal_history_section.dart';
 import 'widgets/streak_graph.dart';
+import 'widgets/star_badge.dart';
+import 'widgets/journal_entry_button.dart';
 import 'streak_reward_dialog.dart';
-import '../theme/app_theme.dart';
+import 'widgets/mascot_greeting.dart';
 
-
-class Homepage extends StatefulWidget {
+class Homepage extends ConsumerStatefulWidget {
   const Homepage({super.key});
 
   @override
-  State<Homepage> createState() => HomepageState();
+  ConsumerState<Homepage> createState() => HomepageState();
 }
 
-class HomepageState extends State<Homepage> with TickerProviderStateMixin {
-  int _streakCount = 1;
-  int _totalStars = 0;
-  bool _showStreak = true;
+class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixin {
   Timer? _alternateTimer;
   late AnimationController _starAnimController;
   late Animation<double> _starScaleAnim;
-  late ConfettiController _confettiController;
   final _starBadgeKey = GlobalKey();
-  final _writeBtnKey = GlobalKey();
   final _journalKey = GlobalKey();
   final _scrollCtrl = ScrollController();
-  bool _showStarTrail = false;
-  Offset? _trailStart, _trailEnd;
-  late AnimationController _trailController;
   late AnimationController _wobbleCtrl;
   late CurvedAnimation _wobbleAnim;
   Timer? _wobbleTimer;
-  String? _mascotCustomMessage;
 
   @override
   void initState() {
     super.initState();
     _loadStreak();
-    loadStars();
+    _loadStars();
 
     _wobbleCtrl = AnimationController(
       vsync: this,
@@ -64,16 +54,6 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
       const Duration(seconds: 15),
       (_) => _wobbleCtrl.forward(from: 0),
     );
-    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
-    _trailController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..addStatusListener((status) {
-      if (status == AnimationStatus.completed && mounted) {
-        setState(() => _showStarTrail = false);
-      }
-    });
-
     _starAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -85,10 +65,9 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
     ]).animate(CurvedAnimation(parent: _starAnimController, curve: Curves.easeInOut));
 
     _alternateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted) setState(() => _showStreak = !_showStreak);
+      if (mounted) ref.read(homepageProvider.notifier).toggleStreak();
     });
 
-    // Listen to Auth state to refresh the dynamic avatar automatically!
     AuthService.authStateChanges.listen((user) {
       if (mounted) setState(() {});
     });
@@ -96,11 +75,16 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
 
   Future<void> _loadStreak() async {
     final streak = await StreakService.getStreak();
-    if (mounted) setState(() => _streakCount = streak);
+    if (mounted) ref.read(homepageProvider.notifier).setStreak(streak);
     final hasReward = await StreakService.checkAndClaimPrimeReward();
     if (hasReward && mounted) {
       showStreakRewardDialog(context);
     }
+  }
+
+  Future<void> _loadStars() async {
+    final stars = await StarService.loadStars();
+    if (mounted) ref.read(homepageProvider.notifier).setStars(stars);
   }
 
   @override
@@ -110,69 +94,7 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
     _wobbleCtrl.dispose();
     _wobbleAnim.dispose();
     _wobbleTimer?.cancel();
-    _confettiController.dispose();
-    _trailController.dispose();
     super.dispose();
-  }
-
-  Future<void> loadStars() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (mounted) setState(() => _totalStars = prefs.getInt('total_stars') ?? 0);
-  }
-
-  Future<bool> _tryIncrementStars(int amount, String cooldownKey) async {
-    final prefs = await SharedPreferences.getInstance();
-    final lastTime = prefs.getInt(cooldownKey) ?? 0;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    if (now - lastTime < 43200000) return false; // 12 hours
-    await prefs.setInt(cooldownKey, now);
-    final current = prefs.getInt('total_stars') ?? 0;
-    final updated = current + amount;
-    await prefs.setInt('total_stars', updated);
-    if (mounted) {
-      setState(() => _totalStars = updated);
-      _starAnimController.forward(from: 0);
-      HapticFeedback.heavyImpact();
-    }
-    return true;
-  }
-
-  Future<void> _onJournalSaved(double moodValue) async {
-    HapticFeedback.mediumImpact();
-    // Capture positions for star trail
-    final startCtx = _writeBtnKey.currentContext;
-    final endCtx = _starBadgeKey.currentContext;
-    if (startCtx != null && endCtx != null && mounted) {
-      final startBox = startCtx.findRenderObject() as RenderBox;
-      final endBox = endCtx.findRenderObject() as RenderBox;
-      _trailStart = startBox.localToGlobal(startBox.size.center(Offset.zero));
-      _trailEnd = endBox.localToGlobal(endBox.size.center(Offset.zero));
-      setState(() => _showStarTrail = true);
-      _trailController.forward(from: 0);
-    }
-
-    _tryIncrementStars(10, 'last_journal_star_time');
-
-    // Confetti conditionally: if mood is slightly pleasant (>= 0.60) or better
-    if (moodValue >= 0.60) {
-      _confettiController.play();
-    }
-
-    if (mounted) {
-      final name = _getDisplayName();
-      final templates = [
-        "Diary saved! Come back tomorrow morning to read your AI insights, $name.",
-        "Diary saved! I'll start making your Personal AI insights, $name!",
-        "Diary saved! Your entry is safe with me. I'll prepare your AI insights for tomorrow morning, $name.",
-        "Diary saved! Beautiful reflection, $name! Check back tomorrow morning for your AI insights.",
-        "Diary saved! Time to analyze your mood and write down some sweet insights for you tomorrow morning, $name."
-      ];
-      final random = Random();
-      final msg = templates[random.nextInt(templates.length)];
-      setState(() {
-        _mascotCustomMessage = msg;
-      });
-    }
   }
 
   String _getDisplayName() {
@@ -182,553 +104,140 @@ class HomepageState extends State<Homepage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final state = ref.watch(homepageProvider);
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
 
-    return Stack(
-      children: [
-        SafeArea(
-          child: LayoutBuilder(
+    return SafeArea(
+      child: LayoutBuilder(
             builder: (context, constraints) {
               final vh = constraints.maxHeight;
               const appbarH = 128.0;
-              const writeBtnH = 72.0;
-              const writeBtnBottom = 48.0;
-              final hoverH = max(100.0, vh - appbarH - writeBtnH - writeBtnBottom);
+              const writeBtnH = 120.0;
+              const writeBtnTop = 56.0;
+              final hoverH = max(300.0, vh - appbarH - writeBtnH - writeBtnTop);
               return SingleChildScrollView(
-              controller: _scrollCtrl,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: vh),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // ── Top Bar: Profile Avatar · App Title · Streak/Score ─────────
-                SizedBox(
-                  height: 128,
-                  child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24.0,
-                    vertical: 16,
-                  ),
-                  child: Row(
+                controller: _scrollCtrl,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: vh),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Profile avatar
-                      InkWell(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const AboutScreen()),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(20),
-                        child: CircleAvatar(
-                          radius: 28,
-                          backgroundColor: cs.primaryContainer,
-                          child: ClipOval(
-                            child: Image.asset(
-                              'assets/photos/mascot/hi.webp',
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // App title
-                      Expanded(
-                        child: Center(
-                          child: GestureDetector(
-                            onTap: () {
-                              Superwall.shared.registerPlacement(
-                                'campaign_trigger',
-                              );
-                            },
-                            child: AnimatedBuilder(
-                              animation: _wobbleAnim,
-                              builder: (context, child) {
-                                return Transform.rotate(
-                                  angle: sin(
-                                        _wobbleAnim.value * 4.5 * 2 * pi,
-                                      ) *
-                                      0.08,
-                                  child: child,
-                                );
-                              },
-                              child: Image.asset(
-                                'assets/photos/elements/meowmin.png',
-                                width: 120,
-                                height: 80,
-                                fit: BoxFit.contain,
-                              ).animate().shimmer(
-                                duration: 2500.ms,
-                                color: Colors.white.withValues(alpha: 0.45),
+                      SizedBox(
+                        height: 128,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          child: Row(
+                            children: [
+                              InkWell(
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  BackgroundMusicService().toggleMusic();
+                                  setState(() {});
+                                },
+                                borderRadius: BorderRadius.circular(20),
+                                child: Stack(
+                                  children: [
+                                    if (BackgroundMusicService().isMusicEnabled)
+                                      Positioned(
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        child: IgnorePointer(
+                                          child: Transform.scale(
+                                            scale: 2,
+                                            alignment: Alignment.bottomCenter,
+                                            child: Lottie.asset('assets/photos/elements/Music fly.json', fit: BoxFit.cover),
+                                          ),
+                                        ),
+                                      ),
+                                    CircleAvatar(
+                                      radius: 28,
+                                      backgroundColor: cs.primaryContainer,
+                                      child: ClipOval(
+                                        child: Image.asset(
+                                          'assets/photos/mascot/face.png',
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Alternating streak / star badge
-                      AnimatedSwitcher(
-                          key: _starBadgeKey,
-                          duration: const Duration(milliseconds: 600),
-                          transitionBuilder: (child, animation) {
-                            return SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0, 0.3),
-                                end: Offset.zero,
-                              ).animate(CurvedAnimation(
-                                parent: animation,
-                                curve: Curves.easeOutCubic,
-                              )),
-                              child: FadeTransition(opacity: animation, child: child),
-                            );
-                          },
-                          child: _showStreak
-                            ? Row(
-                                key: const ValueKey('streak'),
-                                children: [
-                                  SizedBox(
-                                    width: 44,
-                                    height: 44,
-                                    child: Lottie.asset(
-                                      'assets/photos/elements/Streak Fire.json',
-                                      fit: BoxFit.contain,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '$_streakCount',
-                                    style: tt.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                      color: cs.onSurface,
-                                      fontSize: 20,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : Row(
-                                key: const ValueKey('stars'),
-                                children: [
-                                  ScaleTransition(
-                                    scale: _starScaleAnim,
-                                    child: const Icon(
-                                      Icons.star_rounded,
-                                      color: AppTheme.starGold,
-                                      size: 36,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ScaleTransition(
-                                    scale: _starScaleAnim,
-                                    child: Text(
-                                      '$_totalStars',
-                                      style: tt.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.w800,
-                                        color: AppTheme.starGold,
-                                        fontSize: 20,
+                              Expanded(
+                                child: Center(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      HapticFeedback.lightImpact();
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()));
+                                    },
+                                    child: AnimatedBuilder(
+                                      animation: _wobbleAnim,
+                                      builder: (context, child) {
+                                        return Transform.rotate(
+                                          angle: sin(_wobbleAnim.value * 4.5 * 2 * pi) * 0.08,
+                                          child: child,
+                                        );
+                                      },
+                                      child: Image.asset(
+                                        'assets/photos/elements/meowmin.png',
+                                        width: 120,
+                                        height: 80,
+                                        fit: BoxFit.contain,
+                                      ).animate().shimmer(
+                                        duration: 2500.ms,
+                                        color: Colors.white.withValues(alpha: 0.45),
                                       ),
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
-        ),
-        if (_showStarTrail && _trailStart != null && _trailEnd != null)
-          IgnorePointer(
-            child: _StarTrail(
-              start: _trailStart!,
-              end: _trailEnd!,
-              controller: _trailController,
-            ),
-          ),
-      ],
-                  ),
-                ),
-                ),
-
-                // ── Mascot Greeting ────────────────────────────────────────────
-                SizedBox(
-                  height: hoverH,
-                  child: _MascotGreeting(
-                    displayName: _getDisplayName(),
-                    streakCount: _streakCount,
-                    customMessage: _mascotCustomMessage,
-                  ),
-                ),
-
-                // ── Write Button ───────────────────────────────────────────────
-                Padding(
-                  padding: EdgeInsets.only(left: 24, right: 24, bottom: writeBtnBottom),
-                  child: DuoButton(
-                    key: _writeBtnKey,
-                    onPressed: () async {
-                      final limit = await JournalService.isGuestLimitReached();
-                      if (limit && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Free Trial limit reached! Tap your Profile to sign up securely and unlock unlimited diary entries."),
-                            duration: Duration(seconds: 4),
-                          ),
-                        );
-                        return;
-                      }
-                      if (context.mounted) {
-                        final wroteResult = await showModalBottomSheet<dynamic>(
-                          context: context,
-                          isScrollControlled: true,
-                          useSafeArea: true,
-                          backgroundColor: Colors.transparent,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                          ),
-                          builder: (_) => DraggableScrollableSheet(
-                            initialChildSize: 0.85,
-                            minChildSize: 0.4,
-                            maxChildSize: 0.95,
-                            expand: false,
-                            builder: (ctx, scrollCtrl) => JournalBottomSheet(
-                              scrollController: scrollCtrl,
-                            ),
-                          ),
-                        );
-                        if (wroteResult is double) _onJournalSaved(wroteResult);
-                      }
-                    },
-                    backgroundColor: AppTheme.neonPurple,
-                    depthColor: AppTheme.neonPurple.withValues(alpha: 0.7),
-                    radius: 20,
-                    height: 72,
-                    sfxType: DuoSfxType.positive,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.edit_rounded, color: AppTheme.starWhite, size: 22),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Write',
-                          style: TextStyle(
-                            color: AppTheme.starWhite,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
+                              StarBadge(
+                                key: _starBadgeKey,
+                                streakCount: state.streakCount,
+                                totalStars: state.totalStars,
+                                showStreak: state.showStreak,
+                                starScaleAnim: _starScaleAnim,
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // ── Journal History ───────────────────────────────────────
-                JournalHistorySection(key: _journalKey, maxEntries: 3),
-
-                const SizedBox(height: 24),
-
-                // ── Streak Graph ──────────────────────────────────────────
-                StreakGraph(streak: _streakCount, size: 220),
-
-                // ── Footer Mascot ──────────────────────
-                Image.asset(
-                  'assets/photos/mascot/trio3.png',
-                  width: double.infinity,
-                  fit: BoxFit.fitWidth,
-                ),
-                // const SizedBox(height: 32),
-              ],
-            ),
-          ),
-          );
-        },
-      ),
-    ),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: ConfettiWidget(
-              confettiController: _confettiController,
-              blastDirectionality: BlastDirectionality.explosive,
-              numberOfParticles: 8,
-              emissionFrequency: 0.02,
-              maxBlastForce: 35,
-              minBlastForce: 10,
-              colors: const [
-                Colors.blue,
-                Colors.pink,
-                Colors.yellow,
-                Colors.green,
-                Colors.purple,
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StarTrail extends StatelessWidget {
-  final Offset start;
-  final Offset end;
-  final AnimationController controller;
-
-  const _StarTrail({
-    required this.start,
-    required this.end,
-    required this.controller,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final rng = Random();
-    final stars = List.generate(18, (i) {
-      final t = i / 18;
-      final delay = t * 0.25;
-      final lateral = Offset(
-        (rng.nextDouble() - 0.5) * 24,
-        (rng.nextDouble() - 0.5) * 24,
-      );
-      return _StarParticle(
-        delay: delay,
-        lateral: lateral,
-      );
-    });
-
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        final progress = controller.value;
-        return Stack(
-          children: stars.map((p) {
-            final p0 = start;
-            final p3 = end;
-            final cp1 = Offset(p0.dx + 40, p0.dy + 100);
-            final cp2 = Offset(p3.dx - 80, p3.dy + 160);
-
-            final raw = (progress - p.delay).clamp(0.0, 1.0) / (1 - p.delay);
-            final tCurve = Curves.easeInOut.transform(raw.clamp(0.0, 1.0));
-
-            final pos = _cubicBezier(p0, cp1, cp2, p3, tCurve) + p.lateral;
-
-            final opacity = (tCurve < 0.1)
-                ? tCurve / 0.1
-                : (tCurve > 0.85)
-                    ? (1 - tCurve) / 0.15
-                    : 1.0;
-
-            return Positioned(
-              left: pos.dx - 10,
-              top: pos.dy - 10,
-              child: Opacity(
-                opacity: opacity * (raw < 0 ? 0 : 1),
-                child: Icon(
-                  Icons.star_rounded,
-                  color: AppTheme.starGold,
-                  size: 20,
-                ),
-              ),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
-  Offset _cubicBezier(Offset p0, Offset p1, Offset p2, Offset p3, double t) {
-    final mt = 1 - t;
-    return p0 * (mt * mt * mt) +
-        p1 * (3 * mt * mt * t) +
-        p2 * (3 * mt * t * t) +
-        p3 * (t * t * t);
-  }
-}
-
-class _StarParticle {
-  final double delay;
-  final Offset lateral;
-
-  const _StarParticle({required this.delay, required this.lateral});
-}
-
-class _MascotGreeting extends StatefulWidget {
-  final String displayName;
-  final int streakCount;
-  final String? customMessage;
-
-  const _MascotGreeting({
-    required this.displayName,
-    required this.streakCount,
-    this.customMessage,
-  });
-
-  @override
-  State<_MascotGreeting> createState() => _MascotGreetingState();
-}
-
-class _MascotGreetingState extends State<_MascotGreeting>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _floatController;
-  late Animation<double> _floatAnim;
-  late String _currentMessage;
-  static const _bubbleAsset = 'assets/chatbubbles/1 (3).png';
-
-  static const _messageTemplates = [
-    'Hey {name}, how are we feeling today?',
-    'Hey {name}, I had a busy day! I caught a mouse and made you your scratch cards, take a look!',
-    "Masha'Allah {name}, you're on a {streak}-day streak! Keep it going!",
-    'Purring while I wait for you to write in your journal, {name}.',
-    'Ready for today\'s reflection, {name}?',
-    '{name}, the stars are aligned for a beautiful day ahead.',
-    'Meow! Let\'s make today amazing, {name}!',
-    'I\'ve been working on special insights just for you, {name}!',
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _floatController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2500),
-    )..repeat(reverse: true);
-    _floatAnim = Tween<double>(begin: -8, end: 8).animate(
-      CurvedAnimation(parent: _floatController, curve: Curves.easeInOut),
-    );
-    _pickRandomMessage();
-  }
-
-  void _pickRandomMessage() {
-    final template =
-        _messageTemplates[Random().nextInt(_messageTemplates.length)];
-    _currentMessage = template
-        .replaceAll('{name}', widget.displayName)
-        .replaceAll('{streak}', '${widget.streakCount}');
-  }
-
-  @override
-  void dispose() {
-    _floatController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-
-    return AnimatedBuilder(
-      animation: _floatAnim,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(0, _floatAnim.value),
-          child: child,
-        );
-      },
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Speech bubble with chat tail
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                setState(() => _pickRandomMessage());
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage(_bubbleAsset),
-                    fit: BoxFit.fill,
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(44, 34, 44, 58),
-                  child: Text(
-                    widget.customMessage ?? _currentMessage,
-                    textAlign: TextAlign.center,
-                    style: tt.bodyMedium?.copyWith(
-                      color: AppTheme.starWhite,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          // Floating mascot with gradient glow
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: 240,
-                height: 240,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      AppTheme.neonPurple.withValues(alpha: 0.25),
-                      AppTheme.neonPurple.withValues(alpha: 0.08),
-                      Colors.transparent,
+                      ),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: hoverH),
+                        child: MascotGreeting(
+                          displayName: _getDisplayName(),
+                          streakCount: state.streakCount,
+                          customMessage: state.mascotMessage,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24).copyWith(top: 56),
+                        child: JournalEntryButton(
+                          displayName: _getDisplayName(),
+                          starBadgeKey: _starBadgeKey,
+                          onJournalSaved: (msg) {
+                            _loadStars();
+                            _starAnimController.forward(from: 0);
+                            ref.read(homepageProvider.notifier).setMascotMessage(msg);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 48),
+                      JournalHistorySection(key: _journalKey, maxEntries: 3),
+                      const SizedBox(height: 24),
+                      StreakGraph(streak: state.streakCount, size: 220),
+                      Image.asset(
+                        'assets/photos/mascot/trio3.png',
+                        width: double.infinity,
+                        fit: BoxFit.fitWidth,
+                      ),
                     ],
-                    stops: const [0.0, 0.5, 1.0],
                   ),
                 ),
-              ),
-              Image.asset(
-                'assets/photos/mascot/hi.webp',
-                width: 216,
-                height: 216,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => Icon(
-                  Icons.auto_awesome_rounded,
-                  color: Theme.of(context).colorScheme.onSurface,
-                  size: 80,
-                ),
-              ),
-            ],
+              );
+            },
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TimingWidget extends StatelessWidget {
-  final String title;
-  final String time;
-  final IconData icon;
-  final Color color;
-
-  const _TimingWidget({
-    required this.title,
-    required this.time,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 28),
-        const SizedBox(height: 8),
-        Text(
-          title,
-          style: tt.labelMedium?.copyWith(
-            color: cs.onSurface.withValues(alpha: 0.7),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          time,
-          style: tt.titleMedium?.copyWith(
-            color: cs.onSurface,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
     );
   }
 }

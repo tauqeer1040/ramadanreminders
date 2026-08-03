@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,18 +9,18 @@ import 'package:scratcher/scratcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:lottie/lottie.dart';
 
 import '../services/insight_service.dart';
 import '../services/favorites_service.dart';
 import '../services/shop_service.dart';
 import '../services/analytics_service.dart';
-import '../core/constants.dart';
+import '../services/audio_service.dart';
 import './reflect_card.dart';
 import './insight_card_shimmer.dart';
 import './favorites_page.dart';
 import 'widgets/mascot_empty_state.dart';
 import '../utils/image_urls.dart';
-import '../screens/about_screen.dart';
 import '../theme/app_theme.dart';
 
 class QuranPage extends StatefulWidget {
@@ -50,24 +48,22 @@ class _QuranPageState extends State<QuranPage>
       text: Color(0xFF00154F),
       accent: Color(0xFF0052FF),
     ),
+    _CardColorTheme(
+      bg: Color(0xFFFFF0B2),
+      text: Color(0xFF4E2E00),
+      accent: Color(0xFFA86200),
+    ),
   ];
 
   bool _isLoading = true;
   bool _playing = false;
-  String? _error;
 
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
 
-  // Ayah State
-  String arabic = '';
-  String transliteration = '';
-  String english = '';
-  String surah = '';
-  int ayahNumber = 0;
-  String audioUrl = '';
-
   final AudioPlayer _player = AudioPlayer();
+  final AudioPlayer _purrPlayer = AudioPlayer()..setPlayerMode(PlayerMode.lowLatency);
+  final AudioPlayer _rewardPlayer = AudioPlayer()..setPlayerMode(PlayerMode.lowLatency);
   String _preparedUrl = '';
 
   List<InsightCard> _insightCards = [];
@@ -117,24 +113,21 @@ class _QuranPageState extends State<QuranPage>
   void dispose() {
     _swiperController.dispose();
     _player.dispose();
+    _purrPlayer.dispose();
+    _rewardPlayer.dispose();
     super.dispose();
   }
 
   Future<void> _initData() async {
-    // 1. Load persistent scratch card images (only unlocked, stable order)
     await _initScratchImages();
-
-    // 2. Instantly load from cache
     await _loadInsightLocallyOnly();
-    await _loadAyahLocallyOnly();
 
-    // 3. Build initial deck and clear loading state immediately
     _buildDeck();
     if (mounted) setState(() => _isLoading = false);
 
-    // 4. Silently fetch fresh data in background from proxy
     _fetchFreshDataSilently();
   }
+
 
   Future<void> _loadInsightLocallyOnly() async {
     try {
@@ -148,46 +141,9 @@ class _QuranPageState extends State<QuranPage>
     } catch (_) {}
   }
 
-  Future<void> _loadAyahLocallyOnly() async {
-    final prefs = await SharedPreferences.getInstance();
-    final cachedData = prefs.getString('ayah_data');
 
-    if (cachedData != null) {
-      try {
-        final data = jsonDecode(cachedData);
-        if (mounted) {
-          setState(() {
-            arabic = data['arabic'] ?? '';
-            transliteration = data['transliteration'] ?? '';
-            english = data['english'] ?? '';
-            surah = data['surah'] ?? '';
-            ayahNumber = data['ayahNumber'] ?? 0;
-            audioUrl = data['audioUrl'] ?? '';
-          });
-
-          if (audioUrl.isNotEmpty && _preparedUrl != audioUrl) {
-            _player.setSourceUrl(audioUrl).catchError((_) {});
-            _preparedUrl = audioUrl;
-          }
-        }
-      } catch (_) {}
-    } else {
-      // Fallback offline Ayah if totally fresh install to prevent empty UI
-      if (mounted) {
-        setState(() {
-          arabic = "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ";
-          transliteration = "Bismillaahir Rahmaanir Raheem";
-          english =
-              "In the name of Allah, the Entirely Merciful, the Especially Merciful.";
-          surah = "Al-Fatihah";
-          ayahNumber = 1;
-        });
-      }
-    }
-  }
 
   Future<void> _fetchFreshDataSilently() async {
-    // 1. Fetch personalized AI insight cards from V2 Backend
     if (FirebaseAuth.instance.currentUser != null) {
       InsightService.fetchPersonalizedInsights(limit: 3, forceRefresh: true).then((cards) {
         if (mounted && cards.isNotEmpty) {
@@ -197,77 +153,6 @@ class _QuranPageState extends State<QuranPage>
           });
         }
       });
-    }
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final today = DateTime.now().toIso8601String().substring(0, 10);
-      final cachedDate = prefs.getString('ayah_date');
-
-      // V2 Turso Backend URL
-      final baseUrl = AppConstants.backendUrl;
-      
-      // Step A: Priority - Use AI suggested verse from the latest insight
-      if (_insightCards.isNotEmpty) {
-        final ref = _insightCards.first.reference;
-        if (ref.contains(':')) { // Looks like a verse reference
-           final res = await http.get(Uri.parse('$baseUrl/ayah?ref=$ref')).timeout(const Duration(seconds: 5));
-           if (res.statusCode == 200) {
-             final data = jsonDecode(res.body);
-             if (mounted) {
-               setState(() {
-                 arabic = data['arabic'];
-                 transliteration = data['transliteration'];
-                 english = data['english'];
-                 surah = data['surah'];
-                 ayahNumber = data['ayahNumber'];
-                 audioUrl = data['audioUrl'] ?? '';
-                 _buildDeck(); 
-               });
-               if (audioUrl.isNotEmpty && _preparedUrl != audioUrl) {
-                 _player.setSourceUrl(audioUrl).catchError((_) {});
-                 _preparedUrl = audioUrl;
-               }
-             }
-             // Cache it even if it's personalized
-             await prefs.setString('ayah_date', today);
-             await prefs.setString('ayah_data', res.body);
-             return; 
-           }
-        }
-      }
-
-      // Step B: Fallback - Random Ayah (if not already fetched today)
-      if (cachedDate == today) return;
-
-      final res = await http.get(Uri.parse('$baseUrl/ayah?ref=random')).timeout(const Duration(seconds: 5));
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-
-        if (mounted) {
-          setState(() {
-            arabic = data['arabic'];
-            transliteration = data['transliteration'];
-            english = data['english'];
-            surah = data['surah'];
-            ayahNumber = data['ayahNumber'];
-            audioUrl = data['audioUrl'];
-            _buildDeck(); // Seamlessly rebuild deck with new data
-          });
-
-          if (audioUrl.isNotEmpty && _preparedUrl != audioUrl) {
-            _player.setSourceUrl(audioUrl).catchError((_) {});
-            _preparedUrl = audioUrl;
-          }
-        }
-
-        // Cache it securely for offline reads
-        await prefs.setString('ayah_date', today);
-        await prefs.setString('ayah_data', res.body);
-      }
-    } catch (e) {
-      // Silently fail if server offline
     }
   }
 
@@ -322,29 +207,28 @@ class _QuranPageState extends State<QuranPage>
   }
 
   void _favoriteCurrentInsight(int cardIndex) async {
-    if (cardIndex < 0 || cardIndex >= _deck.length) return;
-    if (cardIndex < _insightCards.length) {
-      final card = _insightCards[cardIndex];
+    if (cardIndex < 0 || cardIndex >= _insightCards.length) return;
+    final card = _insightCards[cardIndex];
+    if (card.type == 'surah_guidance') {
+      await FavoritesService.addFavorite(FavoriteItem(
+        type: FavoriteType.ayah,
+        savedAt: DateTime.now(),
+        arabic: card.arabicVerse,
+        transliteration: card.transliteration,
+        english: card.english,
+        surah: card.surahName,
+        ayahNumber: card.ayahNumber,
+        audioUrl: card.audioUrl,
+      ));
+    } else {
       await FavoritesService.addFavorite(FavoriteItem(
         type: FavoriteType.insight,
         savedAt: DateTime.now(),
         date: card.date,
-        greeting: card.greeting,
-        insight: card.insight,
-        reference: card.reference,
-        quote: card.quote,
-        tags: card.tags,
-      ));
-    } else {
-      await FavoritesService.addFavorite(FavoriteItem(
-        type: FavoriteType.ayah,
-        savedAt: DateTime.now(),
-        arabic: arabic,
-        transliteration: transliteration,
-        english: english,
-        surah: surah,
-        ayahNumber: ayahNumber,
-        audioUrl: audioUrl,
+        insight: card.type == 'personalized_insight'
+            ? card.insight
+            : '${card.story ?? ''}\n\n${card.lesson ?? ''}',
+        reference: card.reference ?? card.storyReference,
       ));
     }
   }
@@ -365,213 +249,383 @@ class _QuranPageState extends State<QuranPage>
     _deck = [];
     final textTheme = Theme.of(context).textTheme;
 
-    // 1. Personalized AI insight cards — one per fetched insight (tag-ranked)
     for (final entry in _insightCards.asMap().entries) {
       final index = entry.key;
       final card = entry.value;
       final theme = _cardColorSchemes[index % _cardColorSchemes.length];
       final pillBg = theme.accent.withValues(alpha: 0.12);
 
-      _deck.add(
-        ReflectCard(
-          backgroundColor: theme.bg,
-          borderColor: theme.text,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.auto_awesome, color: theme.text, size: 26),
-                  const SizedBox(width: 8),
-                  Expanded(
+      Widget cardContent;
+      switch (card.type) {
+        case 'personalized_insight':
+          cardContent = _buildPersonalizedInsightCard(card, theme, pillBg, textTheme);
+        case 'surah_guidance':
+          cardContent = _buildSurahGuidanceCard(card, theme, pillBg, textTheme);
+          final audioUrl = card.audioUrl ?? '';
+          _deck.add(
+            ReflectCard(
+              backgroundColor: theme.bg,
+              borderColor: theme.text,
+              showPlayButton: audioUrl.isNotEmpty,
+              playButtonColor: theme.text,
+              isPlaying: _playing && _preparedUrl == audioUrl,
+              playbackProgress: _duration.inMilliseconds > 0
+                  ? _position.inMilliseconds / _duration.inMilliseconds
+                  : 0.0,
+              onPlay: () async {
+                if (audioUrl.isEmpty) return;
+                HapticFeedback.mediumImpact();
+                if (_playing && _preparedUrl == audioUrl) {
+                  await _player.pause();
+                } else {
+                  try {
+                    if (_preparedUrl != audioUrl || _position == Duration.zero) {
+                      await _player.play(UrlSource(audioUrl));
+                      _preparedUrl = audioUrl;
+                    } else {
+                      await _player.resume();
+                    }
+                  } catch (e) {
+                    await _player.play(UrlSource(audioUrl));
+                    _preparedUrl = audioUrl;
+                  }
+                }
+              },
+              child: cardContent,
+            ),
+          );
+        case 'story_and_task':
+          cardContent = _buildStoryTaskCard(card, theme, pillBg, textTheme);
+          _deck.add(
+            ReflectCard(
+              backgroundColor: theme.bg,
+              borderColor: theme.text,
+              child: cardContent,
+            ),
+          );
+        default:
+          cardContent = _buildPersonalizedInsightCard(card, theme, pillBg, textTheme);
+          _deck.add(
+            ReflectCard(
+              backgroundColor: theme.bg,
+              borderColor: theme.text,
+              child: cardContent,
+            ),
+          );
+      }
+    }
+  }
+
+  Widget _faceAvatar(_CardColorTheme theme, {double size = 32}) {
+    return ClipOval(
+      child: Image.asset(
+        'assets/photos/mascot/face.png',
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome, color: theme.text, size: size * 0.8),
+      ),
+    );
+  }
+
+  Widget _buildPersonalizedInsightCard(InsightCard card, _CardColorTheme theme, Color pillBg, TextTheme textTheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipOval(
+              child: Image.asset(
+                'assets/photos/mascot/face.png',
+                width: 32,
+                height: 32,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome, color: theme.text, size: 26),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                card.insight ?? '',
+                style: textTheme.bodyLarge?.copyWith(
+                  height: 1.6,
+                  color: theme.text,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (card.journalExcerpt != null && card.journalExcerpt!.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: pillBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.text.withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.format_quote, size: 18, color: theme.text.withValues(alpha: 0.5)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '"${card.journalExcerpt}"',
+                    style: textTheme.bodySmall?.copyWith(
+                      fontStyle: FontStyle.italic,
+                      height: 1.4,
+                      color: theme.text.withValues(alpha: 0.75),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        if (card.quote != null && card.quote!.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: pillBg,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  card.quote!,
+                  style: textTheme.bodyMedium?.copyWith(
+                    fontStyle: FontStyle.italic,
+                    height: 1.5,
+                    color: theme.text,
+                  ),
+                ),
+                if (card.reference != null && card.reference!.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
                     child: Text(
-                      'Your Journal Insight',
-                      style: TextStyle(
-                        fontSize: 20,
+                      '— ${card.reference}',
+                      style: textTheme.labelMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: theme.text,
                       ),
                     ),
                   ),
                 ],
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSurahGuidanceCard(InsightCard card, _CardColorTheme theme, Color pillBg, TextTheme textTheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (card.arabicVerse != null && card.arabicVerse!.isNotEmpty) ...[
+          Text(
+            card.arabicVerse!,
+            textAlign: TextAlign.center,
+            textDirection: TextDirection.rtl,
+            style: TextStyle(
+              fontSize: 30,
+              height: 1.7,
+              fontFamily: 'Amiri',
+              color: theme.text,
+            ),
+          ),
+          const SizedBox(height: 18),
+        ],
+        if (card.transliteration != null && card.transliteration!.isNotEmpty) ...[
+          Text(
+            card.transliteration!,
+            textAlign: TextAlign.center,
+            style: textTheme.bodyMedium?.copyWith(
+              fontSize: 15,
+              height: 1.4,
+              color: theme.text.withValues(alpha: 0.8),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
+        if (card.english != null && card.english!.isNotEmpty) ...[
+          Text(
+            '\u201c${card.english}\u201d',
+            textAlign: TextAlign.center,
+            style: textTheme.bodyMedium?.copyWith(
+              fontSize: 16,
+              height: 1.5,
+              fontStyle: FontStyle.italic,
+              color: theme.text,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (card.surahName != null && card.ayahNumber != null) ...[
+          Align(
+            alignment: Alignment.center,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: pillBg,
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(height: 6),
-              // Tag chips
-              if (card.tags.isNotEmpty)
-                Wrap(
-                  spacing: 6,
-                  children: card.tags.map((tag) => Chip(
-                    label: Text(
-                      tag,
-                      style: textTheme.labelSmall?.copyWith(
-                        color: theme.text,
-                      ),
-                    ),
-                    backgroundColor: pillBg,
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                  )).toList(),
-                ),
-              const SizedBox(height: 16),
-              Text(
-                card.greeting,
-                style: textTheme.titleMedium?.copyWith(
+              child: Text(
+                '${card.surahName} : ${card.ayahNumber}',
+                style: textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: theme.text,
                 ),
               ),
-              const SizedBox(height: 10),
-              Text(
-                card.insight,
-                style: textTheme.bodyLarge?.copyWith(
-                  height: 1.6,
-                  color: theme.text,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: pillBg,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      card.quote,
-                      style: textTheme.bodyMedium?.copyWith(
-                        fontStyle: FontStyle.italic,
-                        height: 1.5,
-                        color: theme.text,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        '— ${card.reference}',
-                        style: textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.text,
-                        ),
-                      ),
-                    ),
-                  ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        if (card.explanation != null && card.explanation!.isNotEmpty) ...[
+          Divider(color: pillBg, thickness: 1),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _faceAvatar(theme),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  card.explanation!,
+                  style: textTheme.bodyMedium?.copyWith(
+                    height: 1.6,
+                    color: theme.text,
+                  ),
                 ),
               ),
             ],
           ),
-        ),
-      );
-    }
+        ],
+      ],
+    );
+  }
 
-    // 2. Ayah Card
-    final ayahIndex = _insightCards.length;
-    final ayahTheme = _cardColorSchemes[ayahIndex % _cardColorSchemes.length];
-    final ayahPillBg = ayahTheme.accent.withValues(alpha: 0.12);
-
-    _deck.add(
-      ReflectCard(
-        backgroundColor: ayahTheme.bg,
-        borderColor: ayahTheme.text,
-        playButtonColor: ayahTheme.text,
-        showPlayButton: true,
-        isPlaying: _playing,
-        playbackProgress: _duration.inMilliseconds > 0
-            ? _position.inMilliseconds / _duration.inMilliseconds
-            : 0.0,
-        onPlay: () async {
-          if (audioUrl.isEmpty) return;
-          HapticFeedback.mediumImpact();
-          if (_playing) {
-            await _player.pause();
-          } else {
-            try {
-              if (_preparedUrl != audioUrl || _position == Duration.zero) {
-                await _player.play(UrlSource(audioUrl));
-                _preparedUrl = audioUrl;
-              } else {
-                await _player.resume();
-              }
-            } catch (e) {
-              await _player.play(UrlSource(audioUrl));
-              _preparedUrl = audioUrl;
-            }
-          }
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (_error != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: ayahPillBg,
-                  borderRadius: BorderRadius.circular(8),
-                ),
+  Widget _buildStoryTaskCard(InsightCard card, _CardColorTheme theme, Color pillBg, TextTheme textTheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (card.story != null && card.story!.isNotEmpty) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _faceAvatar(theme),
+              const SizedBox(width: 10),
+              Expanded(
                 child: Text(
-                  _error!,
-                  style: TextStyle(color: ayahTheme.text),
-                ),
-              ),
-            Text(
-              arabic,
-              textAlign: TextAlign.center,
-              textDirection: TextDirection.rtl,
-              style: TextStyle(
-                fontSize: 34,
-                height: 1.8,
-                fontFamily: 'Amiri',
-                color: ayahTheme.text,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              transliteration,
-              textAlign: TextAlign.center,
-              style: textTheme.bodyMedium?.copyWith(
-                fontSize: 16,
-                height: 1.5,
-                        color: ayahTheme.text.withValues(alpha: 0.8),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              '\u201c$english\u201d',
-              textAlign: TextAlign.center,
-              style: textTheme.bodyLarge?.copyWith(
-                fontSize: 18,
-                height: 1.6,
-                fontStyle: FontStyle.italic,
-                color: ayahTheme.text,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Align(
-              alignment: Alignment.center,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: ayahPillBg,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$surah : $ayahNumber',
-                  style: textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: ayahTheme.text,
+                  card.story!,
+                  style: textTheme.bodyLarge?.copyWith(
+                    height: 1.6,
+                    color: theme.text,
                   ),
+                ),
+              ),
+            ],
+          ),
+          if (card.storyReference != null && card.storyReference!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                '— ${card.storyReference}',
+                style: textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  fontStyle: FontStyle.italic,
+                  color: theme.text.withValues(alpha: 0.7),
                 ),
               ),
             ),
           ],
-        ),
-      ),
+        ],
+        if (card.lesson != null && card.lesson!.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: pillBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.text.withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _faceAvatar(theme, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    card.lesson!,
+                    style: textTheme.bodyMedium?.copyWith(
+                      height: 1.5,
+                      color: theme.text,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        if (card.taskTitle != null && card.taskTitle!.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.text.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: theme.text.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.check_circle_outline, color: theme.text, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        card.taskTitle!,
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.text,
+                        ),
+                      ),
+                      if (card.taskDescription != null && card.taskDescription!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          card.taskDescription!,
+                          style: textTheme.bodySmall?.copyWith(
+                            height: 1.4,
+                            color: theme.text.withValues(alpha: 0.75),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
+
 
   Future<bool> _onSwipe(
     int previousIndex,
@@ -613,22 +667,37 @@ class _QuranPageState extends State<QuranPage>
                     InkWell(
                       onTap: () {
                         HapticFeedback.lightImpact();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const AboutScreen()),
-                        );
+                        BackgroundMusicService().toggleMusic();
+                        if (context.mounted) setState(() {});
                       },
                       borderRadius: BorderRadius.circular(20),
-                      child: CircleAvatar(
-                        radius: 28,
-                        backgroundColor: cs.primaryContainer,
-                        child: ClipOval(
-                          child: Image.asset(
-                            'assets/photos/mascot/hi.webp',
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
+                      child: Stack(
+                        children: [
+                          if (BackgroundMusicService().isMusicEnabled)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: IgnorePointer(
+                                child: Transform.scale(
+                                  scale: 2,
+                                  alignment: Alignment.bottomCenter,
+                                  child: Lottie.asset('assets/photos/elements/Music fly.json', fit: BoxFit.cover),
+                                ),
+                              ),
+                            ),
+                          CircleAvatar(
+                            radius: 28,
+                            backgroundColor: cs.primaryContainer,
+                            child: ClipOval(
+                              child: Image.asset(
+                                'assets/photos/mascot/face.png',
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                     Expanded(
@@ -677,7 +746,7 @@ class _QuranPageState extends State<QuranPage>
               child: Center(
                 child: SizedBox(
                   width: MediaQuery.of(context).size.width * 0.9,
-                  height: 520,
+                  height: 620,
                   child: _isLoading
                       ? const InsightCardShimmer()
                       : _deck.isNotEmpty
@@ -715,12 +784,22 @@ class _QuranPageState extends State<QuranPage>
                                                   scratchImage,
                                                   fit: BoxFit.cover,
                                                 ),
+                                          onScratchStart: () {
+                                            HapticFeedback.mediumImpact();
+                                            _purrPlayer.setReleaseMode(ReleaseMode.loop);
+                                            _purrPlayer.play(AssetSource('tunes/sfx/cat_purr.mp3'));
+                                          },
+                                          onScratchEnd: () {
+                                            _purrPlayer.stop();
+                                          },
                                           onThreshold: () {
+                                            _purrPlayer.stop();
                                             setState(() => _revealedCards.add(index));
                                             _saveRevealedCards();
                                             HapticFeedback.heavyImpact();
                                             _triggerConfetti();
-                                            ShopService.addStars(3);
+                                            _rewardPlayer.play(AssetSource('tunes/positive_tone_a6b6.wav'));
+                                            ShopService.awardStars('quran_read');
                                           },
                                           child: card,
                                         ),
@@ -803,7 +882,6 @@ class _HeartWidgetState extends State<_HeartWidget>
   late AnimationController _controller;
   late Animation<double> _scaleAnim;
   late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
 
   @override
   void initState() {
@@ -821,16 +899,7 @@ class _HeartWidgetState extends State<_HeartWidget>
         curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
       ),
     );
-    _slideAnim = Tween<Offset>(
-      begin: Offset.zero,
-      end: const Offset(0, -0.4),
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward();
-    _controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed && mounted) {
-        // handled by timer in _showHeart
-      }
-    });
   }
 
   @override
@@ -841,20 +910,21 @@ class _HeartWidgetState extends State<_HeartWidget>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return FractionalTranslation(
-          translation: _slideAnim.value,
-          child: Opacity(
+    return Center(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return Opacity(
             opacity: _fadeAnim.value,
             child: Transform.scale(
               scale: _scaleAnim.value,
               child: const Icon(Icons.favorite, size: 80, color: Colors.red),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
+
+

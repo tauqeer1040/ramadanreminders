@@ -2,6 +2,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'analytics_protocol.dart';
 import 'analytics_service.dart';
 
 class BackgroundMusicService with WidgetsBindingObserver {
@@ -9,6 +10,12 @@ class BackgroundMusicService with WidgetsBindingObserver {
       BackgroundMusicService._internal();
   factory BackgroundMusicService() => _instance;
   BackgroundMusicService._internal();
+
+  AnalyticsProtocol _analytics = AnalyticsService.instance;
+
+  static void injectAnalytics(AnalyticsProtocol a) {
+    _instance._analytics = a;
+  }
 
   static const MethodChannel _channel = MethodChannel('com.taucity.meowmin/widget');
 
@@ -80,7 +87,7 @@ class BackgroundMusicService with WidgetsBindingObserver {
       await prefs.setBool(_prefKeyEnabled, true);
     }
     await _playTrack(assetPath);
-    AnalyticsService.instance.logAudioTrackPlayed(assetPath.split('/').last);
+    _analytics.logEvent('audio_track_played', params: {'track_name': assetPath.split('/').last});
   }
 
   Future<void> setMusicEnabled(bool enabled) async {

@@ -1,0 +1,19 @@
+name: Poll AI jobs
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger AI poll
+        run: |
+          curl -fsS -m 60 -X POST "https://meowmin.pages.dev/api/v2/internal/poll-ai" \
+            -H "x-internal-secret: ${{ secrets.INTERNAL_POLL_SECRET }}" \
+            -o /dev/null -w "poll-ai: %{http_code}\n"

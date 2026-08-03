@@ -55,6 +55,7 @@ class NotificationService {
     await _notificationsPlugin.cancelAll();
 
     final now = DateTime.now();
+    final local = tz.local;
 
     // Morning — 9:00 AM — diary prompt
     var morningTime = DateTime(now.year, now.month, now.day, 9, 0);
@@ -65,7 +66,7 @@ class NotificationService {
       id: 1,
       title: '📝 Time to Reflect',
       body: 'Write your diary $username',
-      time: morningTime.toUtc(),
+      dateTime: tz.TZDateTime(local, morningTime.year, morningTime.month, morningTime.day, 9, 0),
     );
 
     // Night — 9:00 PM — scratch cards reminder
@@ -77,7 +78,19 @@ class NotificationService {
       id: 2,
       title: '🎁 Scratch Cards Ready',
       body: 'your scratch cards are ready $username',
-      time: nightTime.toUtc(),
+      dateTime: tz.TZDateTime(local, nightTime.year, nightTime.month, nightTime.day, 21, 0),
+    );
+
+    // Night — 10:00 PM — wind-down reminder
+    var windDownTime = DateTime(now.year, now.month, now.day, 22, 0);
+    if (windDownTime.isBefore(now)) {
+      windDownTime = windDownTime.add(const Duration(days: 1));
+    }
+    await _scheduleAt(
+      id: 3,
+      title: '🌙 Wind Down',
+      body: 'Time to relax and reflect $username',
+      dateTime: tz.TZDateTime(local, windDownTime.year, windDownTime.month, windDownTime.day, 22, 0),
     );
   }
 
@@ -85,7 +98,7 @@ class NotificationService {
     required int id,
     required String title,
     required String body,
-    required DateTime time,
+    required tz.TZDateTime dateTime,
   }) async {
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
@@ -109,13 +122,7 @@ class NotificationService {
       id: id,
       title: title,
       body: body,
-      scheduledDate: tz.TZDateTime.utc(
-        time.year,
-        time.month,
-        time.day,
-        time.hour,
-        time.minute,
-      ),
+      scheduledDate: dateTime,
       notificationDetails: notificationDetails,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time,

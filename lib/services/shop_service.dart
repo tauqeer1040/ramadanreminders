@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_client.dart';
@@ -20,30 +19,6 @@ class ShopService {
     final fallback = _fallbackItems();
     await _cacheItems(fallback);
     return fallback;
-  }
-
-  static Future<List<ShopItem>> _loadCachedItems() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_cacheKey);
-      if (raw == null) return [];
-      final list = jsonDecode(raw) as List;
-      return list.map((e) {
-        final item = e as Map<String, dynamic>;
-        final id = item['id'] as String;
-        final idNum = int.tryParse(id.replaceAll(RegExp(r'[^0-9]'), ''));
-        return ShopItem(
-          id: id,
-          name: item['name'] as String,
-          thumbnailUrl: idNum != null ? shopThumbnailUrl(idNum) : assetUrl(item['thumbnailUrl'] as String? ?? ''),
-          imageUrl: idNum != null ? shopFullUrl(idNum) : assetUrl(item['imageUrl'] as String? ?? ''),
-          cost: item['cost'] as int? ?? 100,
-          localAsset: item['localAsset'] as String? ?? '',
-        );
-      }).toList();
-    } catch (_) {
-      return [];
-    }
   }
 
   static Future<void> _cacheItems(List<ShopItem> items) async {
@@ -154,34 +129,13 @@ class ShopService {
     } catch (_) {}
   }
 
-  static Future<bool> addStars(int amount) async {
+  static Future<bool> awardStars(String action) async {
     try {
       final headers = await ApiClient.postHeaders();
       final res = await http.post(
-        Uri.parse('${AppConstants.backendUrl}/stars/add'),
+        Uri.parse('${AppConstants.backendUrl}/stars/award'),
         headers: headers,
-        body: jsonEncode({'amount': amount}),
-      ).timeout(const Duration(seconds: 5));
-      if (res.statusCode != 200) return false;
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-      final serverStars = body['stars'] as int?;
-      if (serverStars != null) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setInt('total_stars', serverStars);
-      }
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static Future<bool> setStars(int amount) async {
-    try {
-      final headers = await ApiClient.postHeaders();
-      final res = await http.post(
-        Uri.parse('${AppConstants.backendUrl}/stars/set'),
-        headers: headers,
-        body: jsonEncode({'amount': amount}),
+        body: jsonEncode({'action': action}),
       ).timeout(const Duration(seconds: 5));
       if (res.statusCode != 200) return false;
       final body = jsonDecode(res.body) as Map<String, dynamic>;

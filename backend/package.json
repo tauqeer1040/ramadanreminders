@@ -2,10 +2,14 @@
   "name": "ramadan-journal-backend",
   "version": "1.0.0",
   "description": "Backend service for Ramadan App Journal Analysis",
-  "main": "index.js",
+  "main": "db2.js",
   "scripts": {
-    "start": "node db2.js",
-    "dev": "node --watch db2.js"
+    "start": "bash server.sh start",
+    "stop": "bash server.sh stop",
+    "restart": "bash server.sh restart",
+    "dev": "node --watch app.js",
+    "test": "node tests/encryption.test.js && npx jest --forceExit --detectOpenHandles",
+    "test:jest": "npx jest --forceExit --detectOpenHandles"
   },
   "dependencies": {
     "@google/generative-ai": "^0.3.1",
@@ -16,10 +20,16 @@
     "express": "^4.19.2",
     "express-rate-limit": "^8.3.1",
     "firebase-admin": "^13.7.0",
+    "helmet": "^8.3.0",
     "ioredis": "^5.10.1",
-    "xss": "^1.0.15"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "sharp": "^0.35.1"
+    "jest": "^30.4.2",
+    "sharp": "^0.35.1",
+    "supertest": "^7.2.2"
+  },
+  "overrides": {
+    "iconv-lite": "^0.7.2"
   }
 }

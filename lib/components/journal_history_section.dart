@@ -274,6 +274,18 @@ class _JournalHistorySectionState extends State<JournalHistorySection> {
   void initState() {
     super.initState();
     _future = JournalService.getAllLocalJournals();
+    JournalService.localJournalsVersion.addListener(_onJournalsChanged);
+  }
+
+  @override
+  void dispose() {
+    JournalService.localJournalsVersion.removeListener(_onJournalsChanged);
+    super.dispose();
+  }
+
+  void _onJournalsChanged() {
+    if (!mounted) return;
+    _refresh();
   }
 
   void _refresh() {

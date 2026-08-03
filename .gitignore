@@ -58,3 +58,12 @@ backend/node_modules/
 !package-lock.json
 !pubspec.json
 backend/*firebase-adminsdk*.json
+# Local Netlify folder
+.netlify
+
+# Cloudflare Pages local dev
+.dev.vars
+public/
+.wrangler/
+backend/local.db
+backend/.server.pid

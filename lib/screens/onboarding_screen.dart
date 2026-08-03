@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/user_service.dart';
@@ -8,12 +7,9 @@ import '../services/analytics_service.dart';
 import '../services/version_check_service.dart';
 import 'main_screen.dart';
 import '../components/onboarding/onboarding_data.dart';
-import '../components/onboarding/intro_pages.dart';
-import '../components/onboarding/final_pages.dart';
+import '../components/onboarding/onboarding_step.dart';
 import '../core/app_background.dart';
 import '../components/widgets/step_progress_dots.dart';
-import 'google_signin_page.dart';
-import '../theme/app_theme.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final VoidCallback? onReady;
@@ -23,82 +19,41 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerProviderStateMixin {
+class _OnboardingScreenState extends State<OnboardingScreen>
+    with SingleTickerProviderStateMixin {
   final _pageController = PageController();
   final _data = OnboardingData();
-  int _currentPage = 0;
-  int _stars = 0;
-  late AnimationController _bounceController;
-  late Animation<double> _bounceAnimation;
-
-  static const int _totalPages = 14;
-
-  final List<String> _pageNames = [
-    'welcome', 'music_selection', 'name', 'age_phone', 'bombshell',
-    'bombshell2', 'bombshell3', 'bridge',
-    'first_journal', 'ai_insight', 'celebration',
-    'summary', 'app_feedback', 'google_signin',
-  ];
-
-  String _ageBracket(int age) {
-    if (age < 18) return 'under_18';
-    if (age < 25) return '18_24';
-    if (age < 35) return '25_34';
-    if (age < 50) return '35_49';
-    return '50_plus';
-  }
-
-  String _hoursBucket(int hours) {
-    if (hours <= 2) return '0_2';
-    if (hours <= 4) return '3_4';
-    if (hours <= 6) return '5_6';
-    if (hours <= 8) return '7_8';
-    return '9_plus';
-  }
+  late OnboardingStep _currentStep;
+  int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    AnalyticsService.instance.logOnboardingStarted();
-    AnalyticsService.instance.logOnboardingPageViewed(_pageNames[0]);
-    _bounceController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _bounceAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.5), weight: 30),
-      TweenSequenceItem(tween: Tween(begin: 1.5, end: 0.8), weight: 20),
-      TweenSequenceItem(tween: Tween(begin: 0.8, end: 1.0), weight: 50),
-    ]).animate(CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut));
+    _currentStep = OnboardingStep.fromIndex(0);
+    AnalyticsService.instance.logEvent('onboarding_started');
+    _logPageView();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onReady?.call();
     });
   }
 
+  void _logPageView() {
+    AnalyticsService.instance.logEvent('onboarding_page_viewed', params: {'page': _currentStep.name});
+  }
+
   @override
   void dispose() {
-    _bounceController.dispose();
     _pageController.dispose();
     super.dispose();
   }
 
-  void _addStars([int amount = 10]) {
-    setState(() => _stars += amount);
-    _bounceController.forward(from: 0);
-    HapticFeedback.heavyImpact();
-  }
-
   void _goToNext() {
-    if (_currentPage != 9) {
-      if (_currentPage == 8) {
-        _addStars(50);
-      } else {
-        _addStars(10);
-      }
-    }
-    if (_currentPage < _totalPages - 1) {
+    if (_currentIndex < OnboardingStep.all.length - 1) {
+      _currentIndex++;
+      _currentStep = OnboardingStep.fromIndex(_currentIndex);
+      _logPageView();
       _pageController.animateToPage(
-        _currentPage + 1,
+        _currentIndex,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOutCubicEmphasized,
       );
@@ -106,34 +61,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   }
 
   void _goBack() {
-    int deduct = 10;
-    if (_currentPage == 9) {
-      deduct = 50;
-    } else if (_currentPage == 10) {
-      deduct = 0;
-    }
-    setState(() => _stars = (_stars - deduct).clamp(0, 990));
-    if (_currentPage > 0) {
+    if (_currentIndex > 0) {
+      _currentIndex--;
+      _currentStep = OnboardingStep.fromIndex(_currentIndex);
       _pageController.animateToPage(
-        _currentPage - 1,
+        _currentIndex,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOutCubicEmphasized,
       );
     }
   }
 
+  // ignore: unused_element
   Future<void> _finishOnboarding() async {
-    AnalyticsService.instance.logOnboardingComplete();
+    AnalyticsService.instance.logEvent('onboarding_complete');
     AnalyticsService.instance.setUserProperty('onboarding_completed', 'true');
     if (_data.age != null) {
-      AnalyticsService.instance.setUserProperty('user_age_bracket', _ageBracket(_data.age!));
+      AnalyticsService.instance.setUserProperty(
+        'user_age_bracket',
+        _ageBracket(_data.age!),
+      );
     }
     if (_data.phoneHours != null) {
-      AnalyticsService.instance.setUserProperty('user_phone_hours_bucket', _hoursBucket(_data.phoneHours!));
+      AnalyticsService.instance.setUserProperty(
+        'user_phone_hours_bucket',
+        _hoursBucket(_data.phoneHours!),
+      );
     }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_complete', true);
-
     await prefs.setString('onboarding_displayName', _data.displayName ?? '');
     if (_data.age != null) await prefs.setInt('onboarding_age', _data.age!);
     if (_data.phoneHours != null) {
@@ -166,12 +122,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       await UserService.syncUser(user);
     }
 
-    await prefs.setInt('total_stars', _stars);
-
-    // Sync initial star balance to server
-    ShopService.setStars(_stars);
-
-    // Unlock the 3 scratch cards shown during onboarding
+    await ShopService.awardStars('onboarding_complete');
     for (final id in _data.scratchCardIds) {
       await ShopService.unlockItem(id);
     }
@@ -193,10 +144,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     }
   }
 
+  String _ageBracket(int age) {
+    if (age < 18) return 'under_18';
+    if (age < 25) return '18_24';
+    if (age < 35) return '25_34';
+    if (age < 50) return '35_49';
+    return '50_plus';
+  }
+
+  String _hoursBucket(int hours) {
+    if (hours <= 2) return '0_2';
+    if (hours <= 4) return '3_4';
+    if (hours <= 6) return '5_6';
+    if (hours <= 8) return '7_8';
+    return '9_plus';
+  }
+
   void _showQuitConfirmation() {
-    AnalyticsService.instance.logOnboardingAbandoned(
-      _currentPage < _pageNames.length ? _pageNames[_currentPage] : 'unknown',
-    );
+    AnalyticsService.instance.logEvent('onboarding_abandoned', params: {'page': _currentStep.name});
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -225,12 +190,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final totalPages = OnboardingStep.all.length;
 
     return PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, _) {
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (_currentPage == 0) {
+        if (_currentIndex == 0) {
           _showQuitConfirmation();
         } else {
           _goBack();
@@ -245,18 +211,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
           child: SafeArea(
             child: Column(
               children: [
-                _buildTopBar(cs),
+                _buildTopBar(cs, totalPages),
                 Expanded(
                   child: PageView(
                     controller: _pageController,
                     physics: const NeverScrollableScrollPhysics(),
                     onPageChanged: (i) {
-                      setState(() => _currentPage = i);
-                      if (i < _pageNames.length) {
-                        AnalyticsService.instance.logOnboardingPageViewed(_pageNames[i]);
-                      }
+                      setState(() {
+                        _currentIndex = i;
+                        _currentStep = OnboardingStep.fromIndex(i);
+                      });
+                      _logPageView();
                     },
-                    children: _buildPages(),
+                    children: OnboardingStep.all.map(
+                      (step) => step.buildPage(_data, _goToNext, _goBack),
+                    ).toList(),
                   ),
                 ),
               ],
@@ -267,7 +236,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     );
   }
 
-  Widget _buildTopBar(ColorScheme cs) {
+  Widget _buildTopBar(ColorScheme cs, int totalPages) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
       child: Column(
@@ -276,47 +245,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Step ${_currentPage + 1} of $_totalPages',
+                'Step ${_currentIndex + 1} of $totalPages',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: cs.onSurface,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: cs.outlineVariant.withOpacity(0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.star_rounded, color: AppTheme.starGold, size: 16),
-                    const SizedBox(width: 4),
-                    AnimatedBuilder(
-                      animation: _bounceAnimation,
-                      builder: (context, child) => Transform.scale(
-                        scale: _bounceAnimation.value,
-                        child: child,
-                      ),
-                      child: Text(
-                        '$_stars',
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              const SizedBox.shrink(),
             ],
           ),
           const SizedBox(height: 16),
           StepProgressDots(
-            totalSteps: _totalPages,
-            currentStep: _currentPage,
+            totalSteps: totalPages,
+            currentStep: _currentIndex,
             height: 8,
             spacing: 6,
             animateActiveWidth: true,
@@ -324,29 +265,5 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
         ],
       ),
     );
-  }
-
-  List<Widget> _buildPages() {
-    return [
-      // PART 1: INTRODUCTION (Screens 1-6)
-      WelcomePage(onNext: _goToNext),
-      MusicSelectionPage(onNext: _goToNext, onBack: _goBack),
-      NamePage(data: _data, onNext: _goToNext, onBack: _goBack),
-      AgePhonePage(data: _data, onNext: _goToNext, onBack: _goBack),
-      BombshellPage(data: _data, onNext: _goToNext, onBack: _goBack),
-      BombshellPage2(data: _data, onNext: _goToNext, onBack: _goBack),
-      BombshellPage3(data: _data, onNext: _goToNext, onBack: _goBack),
-      BridgePage(data: _data, onNext: _goToNext, onBack: _goBack),
-
-      // PART 2: FIRST JOURNAL
-      FirstJournalPage(data: _data, onNext: _goToNext, onBack: _goBack),
-      AiInsightPage(data: _data, onNext: _goToNext, onBack: _goBack, onStarsEarned: _addStars),
-      CelebrationPage(data: _data, onNext: _goToNext, onBack: _goBack),
-
-      // PART 3: CONCLUSION
-      SummaryPage(data: _data, onNext: _goToNext, onBack: _goBack),
-      AppFeedbackPage(data: _data, onNext: _goToNext, onBack: _goBack),
-      GoogleSignInPage(onFinish: _finishOnboarding, onBack: _goBack),
-    ];
   }
 }

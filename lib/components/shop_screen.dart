@@ -6,13 +6,14 @@ import 'package:scratcher/scratcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:lottie/lottie.dart';
 import '../models/shop_item.dart';
 import '../services/shop_service.dart';
 import '../services/widget_service.dart';
 import '../services/analytics_service.dart';
+import '../services/audio_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/image_urls.dart';
-import '../screens/about_screen.dart';
 import 'favorites_page.dart';
 
 class ShopScreen extends StatefulWidget {
@@ -260,30 +261,45 @@ class _ShopScreenState extends State<ShopScreen> {
         children: [
           // ── Top Bar: Avatar · Logo · Favorites ──────────────────────────
         SizedBox(
-          height: 100,
+          height: 128,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Row(
               children: [
                 InkWell(
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AboutScreen()),
-                    );
+                    BackgroundMusicService().toggleMusic();
+                    setState(() {});
                   },
                   borderRadius: BorderRadius.circular(20),
-                  child: CircleAvatar(
-                    radius: 28,
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    child: ClipOval(
-                      child: Image.asset(
-                        'assets/photos/mascot/hi.webp',
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: Theme.of(context).colorScheme.onSurface, size: 28),
+                  child: Stack(
+                    children: [
+                      if (BackgroundMusicService().isMusicEnabled)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: IgnorePointer(
+                            child: Transform.scale(
+                              scale: 2,
+                              alignment: Alignment.bottomCenter,
+                              child: Lottie.asset('assets/photos/elements/Music fly.json', fit: BoxFit.cover),
+                            ),
+                          ),
+                        ),
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/photos/mascot/face.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: Theme.of(context).colorScheme.onSurface, size: 28),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
                 Expanded(

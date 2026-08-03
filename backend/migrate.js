@@ -26,17 +26,12 @@ async function migrate() {
       id TEXT PRIMARY KEY,
       display_name TEXT,
       email TEXT,
-      fcm_token TEXT,
       journal_count INTEGER DEFAULT 0,
       relevant_tags TEXT DEFAULT '[]',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       last_active DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-
-  if (!(await hasColumn('users', 'fcm_token'))) {
-    await db.execute('ALTER TABLE users ADD COLUMN fcm_token TEXT');
-  }
 
   await db.execute(`
     CREATE TABLE IF NOT EXISTS journal_entries (

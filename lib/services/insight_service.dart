@@ -7,51 +7,115 @@ import '../core/api_client.dart';
 
 /// A single resolved AI insight card ready to be displayed on the Quran page.
 class InsightCard {
+  static final RegExp _leadingEmoji = RegExp(
+    r'^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{2B50}\u{200D}]+',
+    unicode: true,
+  );
+
   final String date;
-  final String greeting;
-  final String insight;
-  final String reference;
-  final String quote;
-  final List<String> tags;
+  final String type;
+
+  // personalized_insight
+  final String? journalExcerpt;
+  final String? insight;
+  final String? quote;
+  final String? reference;
+
+  // surah_guidance
+  final String? explanation;
+  final String? arabicVerse;
+  final String? transliteration;
+  final String? english;
+  final String? surahName;
+  final int? ayahNumber;
+  final String? audioUrl;
+
+  // story_and_task
+  final String? story;
+  final String? storyReference;
+  final String? lesson;
+  final String? taskTitle;
+  final String? taskDescription;
 
   InsightCard({
     required this.date,
-    required this.greeting,
-    required this.insight,
-    required this.reference,
-    required this.quote,
-    required this.tags,
+    this.type = 'personalized_insight',
+    this.journalExcerpt,
+    this.insight,
+    this.quote,
+    this.reference,
+    this.explanation,
+    this.arabicVerse,
+    this.transliteration,
+    this.english,
+    this.surahName,
+    this.ayahNumber,
+    this.audioUrl,
+    this.story,
+    this.storyReference,
+    this.lesson,
+    this.taskTitle,
+    this.taskDescription,
   });
 
-  factory InsightCard.fromFirestore(String date, Map<String, dynamic> data) {
-    return InsightCard(
-      date: date,
-      greeting: data['greeting'] ?? '',
-      insight: data['insight'] ?? '',
-      reference: data['reference'] ?? '',
-      quote: data['quote'] ?? '',
-      tags: List<String>.from(data['tags'] ?? []),
-    );
-  }
-
-  /// Serialize to JSON map for caching in SharedPreferences.
   Map<String, dynamic> toJson() => {
         'date': date,
-        'greeting': greeting,
+        'type': type,
+        'journalExcerpt': journalExcerpt,
         'insight': insight,
-        'reference': reference,
         'quote': quote,
-        'tags': tags,
+        'reference': reference,
+        'explanation': explanation,
+        'arabicVerse': arabicVerse,
+        'transliteration': transliteration,
+        'english': english,
+        'surahName': surahName,
+        'ayahNumber': ayahNumber,
+        'audioUrl': audioUrl,
+        'story': story,
+        'storyReference': storyReference,
+        'lesson': lesson,
+        'taskTitle': taskTitle,
+        'taskDescription': taskDescription,
       };
 
   factory InsightCard.fromJson(Map<String, dynamic> json) {
+    String? clean(String? s) {
+      if (s == null) return null;
+      return s.replaceFirst(_leadingEmoji, '').trim();
+    }
+
+    final t = json['type'] as String? ?? '';
+    // Backward compat: old format cards without type get mapped to personalized_insight
+    if (t.isEmpty) {
+      return InsightCard(
+        date: json['date'] ?? '',
+        type: 'personalized_insight',
+        journalExcerpt: clean(json['journalExcerpt'] as String?),
+        insight: clean(json['insight'] as String? ?? json['greeting'] as String?),
+        quote: clean(json['quote'] as String?),
+        reference: json['reference'] as String?,
+      );
+    }
     return InsightCard(
       date: json['date'] ?? '',
-      greeting: json['greeting'] ?? '',
-      insight: json['insight'] ?? '',
-      reference: json['reference'] ?? '',
-      quote: json['quote'] ?? '',
-      tags: List<String>.from(json['tags'] ?? []),
+      type: t,
+      journalExcerpt: clean(json['journalExcerpt'] as String?),
+      insight: clean(json['insight'] as String?),
+      quote: clean(json['quote'] as String?),
+      reference: json['reference'] as String?,
+      explanation: clean(json['explanation'] as String?),
+      arabicVerse: json['arabicVerse'] as String?,
+      transliteration: json['transliteration'] as String?,
+      english: json['english'] as String?,
+      surahName: json['surahName'] as String?,
+      ayahNumber: json['ayahNumber'] as int?,
+      audioUrl: json['audioUrl'] as String?,
+      story: clean(json['story'] as String?),
+      storyReference: json['storyReference'] as String?,
+      lesson: clean(json['lesson'] as String?),
+      taskTitle: json['taskTitle'] as String?,
+      taskDescription: json['taskDescription'] as String?,
     );
   }
 }
@@ -60,67 +124,38 @@ class InsightService {
   static final _auth = FirebaseAuth.instance;
   static final String _backendUrl = AppConstants.backendUrl;
 
-  static const String _cacheKey = 'insight_cards_cache';
-  static const String _cacheDateKey = 'insight_cards_cache_date';
   static const String _dailyContentKey = 'daily_content_cache';
-  static const String _dailyContentDateKey = 'daily_content_cache_date';
 
   static String _today() {
     final now = DateTime.now();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
-  static Future<List<InsightCard>?> loadCacheInternal() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final cachedDate = prefs.getString(_cacheDateKey);
-      if (cachedDate != _today()) return null;
-
-      final cachedJson = prefs.getString(_cacheKey);
-      if (cachedJson == null) return null;
-
-      final List<dynamic> list = jsonDecode(cachedJson);
-      return list.map((e) => InsightCard.fromJson(e as Map<String, dynamic>)).toList();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static Future<void> _saveCache(List<InsightCard> cards) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_cacheKey, jsonEncode(cards.map((c) => c.toJson()).toList()));
-      await prefs.setString(_cacheDateKey, _today());
-    } catch (_) {}
-  }
-
   static Future<void> invalidateCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_cacheKey);
-      await prefs.remove(_cacheDateKey);
       await prefs.remove(_dailyContentKey);
-      await prefs.remove(_dailyContentDateKey);
     } catch (_) {}
   }
 
-  static Future<Map<String, dynamic>?> loadDailyContentCache() async {
+  static Future<Map<String, dynamic>?> _loadCachedDailyContent() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (prefs.getString(_dailyContentDateKey) != _today()) return null;
       final raw = prefs.getString(_dailyContentKey);
       if (raw == null) return null;
-      return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      final parsed = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      if (parsed['_date'] != _today()) return null;
+      return parsed;
     } catch (_) {
       return null;
     }
   }
 
-  static Future<void> _saveDailyContentCache(Map<String, dynamic> payload) async {
+  static Future<void> _saveDailyContent(Map<String, dynamic> payload) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      payload['_date'] = _today();
       await prefs.setString(_dailyContentKey, jsonEncode(payload));
-      await prefs.setString(_dailyContentDateKey, _today());
     } catch (_) {}
   }
 
@@ -128,7 +163,7 @@ class InsightService {
     final user = _auth.currentUser;
     if (user == null) return null;
 
-    final cached = await loadDailyContentCache();
+    final cached = await _loadCachedDailyContent();
     if (!forceRefresh && cached != null) {
       return cached;
     }
@@ -141,12 +176,24 @@ class InsightService {
 
       if (response.statusCode == 200) {
         final payload = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
-        await _saveDailyContentCache(payload);
+        await _saveDailyContent(payload);
         return payload;
       }
     } catch (_) {}
 
     return cached;
+  }
+
+  static Future<List<InsightCard>?> loadCacheInternal() async {
+    final cached = await _loadCachedDailyContent();
+    if (cached == null) return null;
+    final cardsRaw = cached['insightCards'];
+    if (cardsRaw is List) {
+      return cardsRaw
+          .map((e) => InsightCard.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return null;
   }
 
   /// Returns personalized insight cards from the V2 backend's stored journal AI rows.
@@ -164,13 +211,9 @@ class InsightService {
           .map((e) => InsightCard.fromJson(Map<String, dynamic>.from(e as Map)))
           .take(limit)
           .toList();
-      if (cards.isNotEmpty) {
-        await _saveCache(cards);
-        return cards;
-      }
+      if (cards.isNotEmpty) return cards;
     }
 
-    final cached = await loadCacheInternal();
-    return cached?.take(limit).toList() ?? [];
+    return [];
   }
 }

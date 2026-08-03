@@ -11,3 +11,8 @@
 # Firebase
 -keep class com.google.firebase.** { *; }
 -dontwarn com.google.firebase.**
+
+# RevenueCat
+-keep class com.revenuecat.** { *; }
+-dontwarn com.revenuecat.**
+-keep class com.revenuecat.purchases.** { *; }

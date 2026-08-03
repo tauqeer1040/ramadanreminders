@@ -1,85 +1,96 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/api_client.dart';
+import '../core/constants.dart';
+
+class TrialStatus {
+  final bool trialActive;
+  final int daysRemaining;
+  final int graceMs;
+  final String subscriptionStatus;
+
+  const TrialStatus({
+    required this.trialActive,
+    required this.daysRemaining,
+    required this.graceMs,
+    required this.subscriptionStatus,
+  });
+
+  bool get canAccess => trialActive || graceMs > 0;
+
+  factory TrialStatus.fromJson(Map<String, dynamic> json) {
+    return TrialStatus(
+      trialActive: json['trialActive'] as bool,
+      daysRemaining: json['daysRemaining'] as int,
+      graceMs: json['graceMs'] as int,
+      subscriptionStatus: json['subscriptionStatus'] as String,
+    );
+  }
+
+  factory TrialStatus.fallback() => const TrialStatus(
+        trialActive: true,
+        daysRemaining: 3,
+        graceMs: 1800000,
+        subscriptionStatus: 'none',
+      );
+}
 
 class TrialService {
-  static const _trialStartKey = 'trial_start';
-  static const _trialDays = 3;
-  static const _graceMsKey = 'grace_remaining_ms';
-  static const _initialGraceMs = 30 * 60 * 1000; // 30 minutes
-  static const _launchCostMs = 1 * 60 * 1000;     // 1 minute per launch
+  TrialStatus? _cached;
 
-  /// Initialize trial on first launch (no-op if already started).
-  static Future<void> initialize() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!prefs.containsKey(_trialStartKey)) {
-      await prefs.setInt(_trialStartKey, DateTime.now().millisecondsSinceEpoch);
+  Future<TrialStatus> fetchStatus() async {
+    final headers = await ApiClient.authHeaders();
+    final response = await http.get(
+      Uri.parse('${AppConstants.backendUrl}/trial-status'),
+      headers: headers,
+    );
+    if (response.statusCode != 200) {
+      debugPrint('[TrialService] Server returned ${response.statusCode}, using fallback');
+      return TrialStatus.fallback();
     }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    _cached = TrialStatus.fromJson(json);
+    return _cached!;
   }
 
-  /// Whether the trial is still active for an anonymous user.
-  static Future<bool> isTrialActive() async {
-    final prefs = await SharedPreferences.getInstance();
-    final startMs = prefs.getInt(_trialStartKey);
-    if (startMs == null) return false;
-    final start = DateTime.fromMillisecondsSinceEpoch(startMs);
-    return DateTime.now().difference(start).inDays < _trialDays;
+  static Future<TrialStatus> getStatus() async {
+    final service = TrialService();
+    return service.fetchStatus();
   }
 
-  /// Days remaining in the trial (0–3). 0 if expired or not started.
-  static Future<int> daysRemaining() async {
-    final prefs = await SharedPreferences.getInstance();
-    final startMs = prefs.getInt(_trialStartKey);
-    if (startMs == null) return 0;
-    final start = DateTime.fromMillisecondsSinceEpoch(startMs);
-    final elapsed = DateTime.now().difference(start).inDays;
-    return (_trialDays - elapsed).clamp(0, _trialDays);
-  }
+  TrialStatus? get cached => _cached;
 
-  /// Whether the trial has expired (started but past 3 days).
-  static Future<bool> isTrialExpired() async {
-    final prefs = await SharedPreferences.getInstance();
-    final startMs = prefs.getInt(_trialStartKey);
-    if (startMs == null) return false;
-    final start = DateTime.fromMillisecondsSinceEpoch(startMs);
-    return DateTime.now().difference(start).inDays >= _trialDays;
-  }
+  // ── Grace period (server-authoritative) ──────────────────────────
 
-  // ── Grace period (hard paywall bypass) ──────────────────────────────
-
-  /// Initialize grace balance on first launch (no-op if already set).
-  static Future<void> initializeGrace() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!prefs.containsKey(_graceMsKey)) {
-      await prefs.setInt(_graceMsKey, _initialGraceMs);
-    }
-  }
-
-  /// Deduct 1 minute for this launch. Returns remaining ms.
-  static Future<int> deductLaunchCost() async {
-    final prefs = await SharedPreferences.getInstance();
-    final current = prefs.getInt(_graceMsKey) ?? _initialGraceMs;
-    final remaining = (current - _launchCostMs).clamp(0, _initialGraceMs);
-    await prefs.setInt(_graceMsKey, remaining);
-    return remaining;
-  }
-
-  /// Deduct real-time session usage. Returns remaining ms.
-  static Future<int> consumeSessionMs(int elapsedMs) async {
-    if (elapsedMs <= 0) return await getRemainingMs();
-    final prefs = await SharedPreferences.getInstance();
-    final current = prefs.getInt(_graceMsKey) ?? 0;
-    final remaining = (current - elapsedMs).clamp(0, _initialGraceMs);
-    await prefs.setInt(_graceMsKey, remaining);
-    return remaining;
-  }
-
-  /// Remaining grace balance in ms.
   static Future<int> getRemainingMs() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_graceMsKey) ?? 0;
+    final status = await TrialService.getStatus();
+    return status.graceMs;
   }
 
-  /// Whether the user has any grace remaining.
+  static const String _graceKey = 'grace_remaining_ms';
+  static const int _launchCostMs = 60000;
+
+  static Future<int> _readGraceRemaining() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_graceKey) ?? 30 * 60 * 1000;
+  }
+
+  static Future<void> _writeGraceRemaining(int ms) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_graceKey, ms);
+  }
+
+  static Future<int> deductLaunchCost() async {
+    final current = await _readGraceRemaining();
+    final remaining = (current - _launchCostMs).clamp(0, current);
+    await _writeGraceRemaining(remaining);
+    return remaining;
+  }
+
   static Future<bool> hasGraceRemaining() async {
-    return await getRemainingMs() > 0;
+    final current = await _readGraceRemaining();
+    return current > 0;
   }
 }

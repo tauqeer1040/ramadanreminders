@@ -1,10 +1,13 @@
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import 'user_service.dart';
 import 'auth_debug_service.dart';
 import 'analytics_service.dart';
+import 'crypto_service.dart';
+import 'journal_remote_storage.dart';
+import 'journal_service.dart';
+import 'revenuecat_service.dart';
 
 class AuthService {
   static final _auth = FirebaseAuth.instance;
@@ -89,7 +92,7 @@ class AuthService {
           userCredential = await user.linkWithCredential(credential);
           await _auth.currentUser?.reload();
           debug.logEvent('LINK_OK', 'Account linked successfully!',
-            details: {'newUid': userCredential?.user?.uid ?? 'unknown'},
+            details: {'newUid': userCredential.user?.uid ?? 'unknown'},
           );
         } on FirebaseAuthException catch (e) {
           debug.logEvent('LINK_ERR', 'Link failed: ${e.code} - ${e.message ?? ''}',
@@ -113,10 +116,13 @@ class AuthService {
         userCredential = await _auth.signInWithCredential(credential);
       }
 
-      if (userCredential != null && userCredential.user != null) {
+      if (userCredential.user != null) {
         await UserService.syncUser(userCredential.user!);
-        AnalyticsService.instance.logSignIn('google');
-        Superwall.shared.identify(userCredential.user!.uid);
+        await CryptoService.fetchAndStoreKey();
+        await JournalRemoteStorage.pullAllJournalsToLocal();
+        JournalService.notifyJournalsChanged();
+        AnalyticsService.instance.logEvent('sign_in', params: {'method': 'google'});
+        await RevenueCatService.instance.identify(userCredential.user!.uid);
         debug.logSignInSuccess(details: {
           'uid': userCredential.user!.uid,
           'email': userCredential.user!.email ?? 'none',
@@ -158,7 +164,9 @@ class AuthService {
       );
       if (userCredential.user != null) {
         await UserService.syncUser(userCredential.user!);
-        AnalyticsService.instance.logSignUp('email');
+        await CryptoService.fetchAndStoreKey();
+        await JournalRemoteStorage.pullAllJournalsToLocal();
+        AnalyticsService.instance.logEvent('sign_up', params: {'method': 'email'});
       }
       return userCredential;
     } on FirebaseAuthException catch (e) {
@@ -171,6 +179,8 @@ class AuthService {
           );
           if (userCredential.user != null) {
             await UserService.syncUser(userCredential.user!);
+            await CryptoService.fetchAndStoreKey();
+            await JournalRemoteStorage.pullAllJournalsToLocal();
           }
           return userCredential;
         } catch (innerError) {
@@ -189,8 +199,8 @@ class AuthService {
 
   /// Sign out and re-create anonymous session
   static Future<void> signOut() async {
-    AnalyticsService.instance.logSignOut();
-    Superwall.shared.reset();
+    AnalyticsService.instance.logEvent('sign_out');
+    await RevenueCatService.instance.reset();
     await _auth.signOut();
     try {
       await GoogleSignIn().signOut();
@@ -198,5 +208,6 @@ class AuthService {
       print("Google Sign-Out Error: $e");
     }
     await _auth.signInAnonymously();
+    await CryptoService.fetchAndStoreKey();
   }
 }

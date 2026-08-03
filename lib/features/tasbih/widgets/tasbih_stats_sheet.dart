@@ -49,7 +49,6 @@ class _TasbihStatsSheetState extends State<_TasbihStatsSheet> {
     final dhikrs = widget.controller.dhikrList;
 
     // Sort dhikrs by total count (descending) or keep original order. Let's keep original for radar.
-    final totalOverall = widget.controller.totalCount;
 
     // Define a vibrant palette for the chart details
     final colors = [

@@ -1,0 +1,118 @@
+---
+import Base from '../layouts/Base.astro';
+
+const features = [
+  {
+    title: 'AI-powered diary',
+    subtitle: 'Write a daily reflection and get personalized Islamic insights.',
+    image: '/screenshots/diary.webp',
+    alt: 'Meowmin AI diary',
+  },
+  {
+    title: 'Personalized insights',
+    subtitle: 'Qur\u2019anic guidance and reflections tailored to your day.',
+    image: '/screenshots/insights.webp',
+    alt: 'Meowmin personalized insights',
+  },
+  {
+    title: 'Daily streaks',
+    subtitle: 'Build a consistent spiritual habit, one day at a time.',
+    image: '/screenshots/streaks.webp',
+    alt: 'Meowmin streaks',
+  },
+  {
+    title: 'Shop & rewards',
+    subtitle: 'Earn stars, open scratch cards, and collect your rewards.',
+    image: '/screenshots/shop.webp',
+    alt: 'Meowmin shop',
+  },
+];
+---
+
+<Base>
+  <!-- Hero -->
+  <section class="pt-8 sm:pt-12 pb-16 sm:pb-20 px-6 lg:px-8">
+    <div class="max-w-6xl mx-auto">
+      <div class="flex flex-col-reverse lg:flex-row items-center" style="gap: 80px;">
+        <!-- Left: text -->
+        <div class="flex-shrink-0 text-center lg:text-left flex flex-col items-center lg:items-start w-full lg:max-w-[600px]">
+          <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 mb-4 sm:mb-6 leading-tight w-full lg:max-w-none">
+            Your AI-powered Ramadan journal companion.
+          </h1>
+          <p class="text-lg sm:text-xl text-gray-600 mb-8 sm:mb-10">
+            Reflect. Connect. Grow. Write a daily reflection, get personalized Islamic insights, build your streak, and collect rewards — all in one calm, beautiful app.
+          </p>
+          <div class="inline-flex flex-col items-center">
+            <a href="/app" class="inline-flex items-center space-x-2 bg-brand text-white pl-[27px] pr-8 py-4 rounded-full hover:bg-brand-dark transition transform hover:scale-105 mb-4 font-semibold">
+              <span>Open the Web App</span>
+            </a>
+            <p class="text-sm text-gray-500" style="margin-top: -8px;">Free to start · No credit card required</p>
+          </div>
+        </div>
+        <!-- Right: app screenshot in phone frame -->
+        <div class="flex-shrink-0">
+          <div class="relative mx-auto" style="width: 320px;">
+            <div class="absolute -inset-6 rounded-[3rem] bg-gradient-to-br from-brand/20 to-gold/20 blur-2xl"></div>
+            <div class="relative rounded-[2.5rem] border-[10px] border-gray-900 bg-gray-900 shadow-2xl overflow-hidden" style="max-width: 320px;">
+              <img src="/screenshots/home.webp" alt="Meowmin home screen" class="w-full h-auto block" loading="eager" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section id="how" class="py-16 sm:py-20 px-6 lg:px-8">
+    <div class="max-w-6xl mx-auto">
+      <div class="flex flex-col lg:flex-row items-start gap-12 lg:gap-20">
+        <div class="flex-1 w-full">
+          <h2 class="text-4xl sm:text-5xl font-bold mb-16 text-gray-900" style="line-height: 1.3;">
+            How it works
+          </h2>
+          <div class="space-y-12 w-full">
+            <!-- Step 1 -->
+            <div class="relative pb-12 w-full">
+              <span class="absolute top-0 right-0 text-6xl font-bold text-gray-200">01</span>
+              <h3 class="text-3xl font-semibold mb-2.5 text-gray-900 relative z-10 pr-20 lg:pr-24">Write your daily reflection</h3>
+              <p class="text-gray-600 text-lg relative z-10 pr-20 lg:pr-24">Jot down your day like you would in a journal — just a few honest sentences.</p>
+              <div class="absolute left-0 right-0 bottom-0 border-b border-gray-200"></div>
+            </div>
+            <!-- Step 2 -->
+            <div class="relative pb-12 w-full">
+              <span class="absolute top-0 right-0 text-6xl font-bold text-gray-200">02</span>
+              <h3 class="text-3xl font-semibold mb-2.5 text-gray-900 relative z-10 pr-20 lg:pr-24">AI returns personalized insights</h3>
+              <p class="text-gray-600 text-lg relative z-10 pr-20 lg:pr-24">Receive Islamic reflections, suggested tasks, and Qur'anic references based on what you wrote.</p>
+              <div class="absolute left-0 right-0 bottom-0 border-b border-gray-200"></div>
+            </div>
+            <!-- Step 3 -->
+            <div class="relative w-full">
+              <span class="absolute top-0 right-0 text-6xl font-bold text-gray-200">03</span>
+              <h3 class="text-3xl font-semibold mb-2.5 text-gray-900 relative z-10 pr-20 lg:pr-24">Build your streak</h3>
+              <p class="text-gray-600 text-lg relative z-10 pr-20 lg:pr-24">Make it a daily habit and watch your spiritual streak grow.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="py-16 sm:py-20 px-6 lg:px-8">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-3xl sm:text-4xl md:text-5xl font-bold text-center mb-3 sm:mb-4">Simple, but powerful</h2>
+      <p class="text-lg sm:text-xl text-gray-600 text-center mb-12 sm:mb-16 max-w-3xl mx-auto">
+        Everything you need to build a closer connection with Allah, without the complexity.
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-16">
+        {features.map((f) => (
+          <div class="flex flex-col items-center">
+            <img src={f.image} alt={f.alt} class="w-[92%] h-auto rounded-3xl shadow-sm" loading="lazy" />
+            <h3 class="text-xl font-semibold text-center mt-4">{f.title}</h3>
+            <p class="text-gray-600 text-center mt-1">{f.subtitle}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</Base>

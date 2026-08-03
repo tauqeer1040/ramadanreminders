@@ -21,14 +21,14 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
   bool _loading = false;
 
   Future<void> _signIn() async {
-    AnalyticsService.instance.logOnboardingGoogleSignIn(action: 'started');
+    AnalyticsService.instance.logEvent('onboarding_google_sign_in', params: {'action': 'started'});
     setState(() => _loading = true);
     try {
       await AuthService.signInWithGoogle();
-      AnalyticsService.instance.logOnboardingGoogleSignIn(action: 'completed');
+      AnalyticsService.instance.logEvent('onboarding_google_sign_in', params: {'action': 'completed'});
       if (mounted) widget.onFinish();
     } catch (_) {
-      AnalyticsService.instance.logOnboardingGoogleSignIn(action: 'failed');
+      AnalyticsService.instance.logEvent('onboarding_google_sign_in', params: {'action': 'failed'});
       // error handled inside signInWithGoogle
     } finally {
       if (mounted) setState(() => _loading = false);

@@ -1,35 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:workmanager/workmanager.dart';
-import 'firebase_options.dart';
-import 'services/notification_service.dart';
-import 'services/journal_service.dart';
-import 'services/audio_service.dart';
-import 'services/sfx_service.dart';
-import 'services/auth_service.dart';
-import 'services/user_service.dart';
 import 'services/analytics_service.dart';
+import 'services/app_bootstrap.dart';
+import 'core/app_navigator.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
-
-void callbackDispatcher() {
-  Workmanager().executeTask((task, inputData) async {
-    if (task == 'rescheduleNotifications') {
-      final username = inputData?['username'] as String? ?? 'you';
-      await NotificationService.scheduleDailyNotifications(username: username);
-    }
-    return Future.value(true);
-  });
-}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Suppress noisy Android logcat lines from Flutter console output.
   FlutterError.onError = (details) {
     final msg = details.exceptionAsString();
     if (msg.contains('Null check operator used on a null value') ||
@@ -40,26 +21,18 @@ void main() async {
     FlutterError.dumpErrorToConsole(details);
   };
 
-  try {
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-    }
-  } catch (e) {
-    debugPrint("Failed to initialize Firebase: $e");
-  }
+  await AppBootstrap.run();
 
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  runApp(const MyApp());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final ColorScheme scheme = ColorScheme.fromSeed(
       seedColor: AppTheme.neonPurple,
       brightness: Brightness.dark,
@@ -123,6 +96,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(scheme),
       themeMode: ThemeMode.dark,
+      navigatorKey: appNavigatorKey,
       navigatorObservers: [AnalyticsService.instance.observer],
       home: const SplashScreen(),
     );

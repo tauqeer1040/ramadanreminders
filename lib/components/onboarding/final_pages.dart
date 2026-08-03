@@ -391,7 +391,7 @@ class _FirstJournalPageState extends State<FirstJournalPage>
       final dateKey = DateTime.now().toIso8601String().split('T')[0];
       await _journalService.saveJournalGratitude(dateKey, text);
       final wordCount = text.split(RegExp(r'\s+')).length;
-      AnalyticsService.instance.logOnboardingFirstJournalWritten(wordCount);
+      AnalyticsService.instance.logEvent('onboarding_first_journal_written', params: {'wordCount': wordCount.toString()});
     }
     if (mounted) {
       setState(() => _saving = false);
@@ -501,7 +501,7 @@ class _AiInsightPageState extends State<AiInsightPage>
     if (_swipedCount >= 3) return;
     _swipedCount++;
     widget.onStarsEarned?.call(20);
-    AnalyticsService.instance.logOnboardingScratchRevealed(_swipedCount);
+    AnalyticsService.instance.logEvent('onboarding_scratch_revealed', params: {'count': _swipedCount.toString()});
   }
 
   void _triggerConfetti() {
@@ -559,7 +559,7 @@ class _AiInsightPageState extends State<AiInsightPage>
           _animationDone = true;
         });
       }
-      AnalyticsService.instance.logOnboardingInsightGenerated(success: false);
+      AnalyticsService.instance.logEvent('onboarding_insight_generated', params: {'success': 'false'});
       return;
     }
 
@@ -592,10 +592,10 @@ class _AiInsightPageState extends State<AiInsightPage>
         ),
       ];
       _apiDone = true;
-      AnalyticsService.instance.logOnboardingInsightGenerated(
-        success: result.isNotEmpty,
-        cardCount: result.length,
-      );
+      AnalyticsService.instance.logEvent('onboarding_insight_generated', params: {
+        'success': result.isNotEmpty.toString(),
+        'cardCount': result.length.toString(),
+      });
     });
 
     if (!skipLoading) {
@@ -1178,7 +1178,7 @@ class SummaryPage extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      AnalyticsService.instance.logOnboardingSummaryViewed();
+      AnalyticsService.instance.logEvent('onboarding_summary_viewed');
     });
 
     return LayoutBuilder(

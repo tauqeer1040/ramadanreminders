@@ -4,6 +4,20 @@ import '../models/bullet_item.dart';
 import '../services/journal_service.dart';
 import '../core/app_background.dart';
 
+class _CardColorTheme {
+  final Color bg;
+  final Color text;
+  final Color accent;
+  const _CardColorTheme({required this.bg, required this.text, required this.accent});
+}
+
+const List<_CardColorTheme> _cardColorSchemes = [
+  _CardColorTheme(bg: Color(0xFFD6DF7E), text: Color(0xFF13441A), accent: Color(0xFF187B25)),
+  _CardColorTheme(bg: Color(0xFFFAA49A), text: Color(0xFF4E1106), accent: Color(0xFFC4391D)),
+  _CardColorTheme(bg: Color(0xFFA0C4FF), text: Color(0xFF00154F), accent: Color(0xFF0052FF)),
+  _CardColorTheme(bg: Color(0xFFFFF0B2), text: Color(0xFF4E2E00), accent: Color(0xFFA86200)),
+];
+
 class JournalHistoryScreen extends StatefulWidget {
   const JournalHistoryScreen({super.key});
 
@@ -68,7 +82,7 @@ class _JournalHistoryScreenState extends State<JournalHistoryScreen> {
               itemCount: _dates.length,
               itemBuilder: (context, index) {
                 final date = _dates[index];
-                return _buildDateCard(date, colorScheme, textTheme);
+                return _buildDateCard(date, index, colorScheme, textTheme);
               },
             ),
       ),
@@ -77,9 +91,11 @@ class _JournalHistoryScreenState extends State<JournalHistoryScreen> {
 
   Widget _buildDateCard(
     String dateStr,
+    int index,
     ColorScheme colorScheme,
     TextTheme textTheme,
   ) {
+    final scheme = _cardColorSchemes[index % _cardColorSchemes.length];
     DateTime? date;
     try {
       date = DateTime.parse(dateStr);
@@ -90,22 +106,22 @@ class _JournalHistoryScreenState extends State<JournalHistoryScreen> {
         : dateStr;
 
     return Card(
-      color: colorScheme.surfaceContainerLow,
+      color: scheme.bg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: colorScheme.outlineVariant),
+        side: BorderSide(color: scheme.text),
       ),
       margin: const EdgeInsets.only(bottom: 12),
       child: ExpansionTile(
         title: Text(
           formattedDate,
           style: textTheme.titleMedium?.copyWith(
-            color: colorScheme.primary,
+            color: scheme.text,
             fontWeight: FontWeight.bold,
           ),
         ),
-        iconColor: colorScheme.primary,
-        collapsedIconColor: colorScheme.onSurfaceVariant,
+        iconColor: scheme.text,
+        collapsedIconColor: scheme.text.withValues(alpha: 0.6),
         children: [
           FutureBuilder<Map<String, dynamic>>(
             future: _loadEntryDetails(dateStr),
@@ -132,7 +148,7 @@ class _JournalHistoryScreenState extends State<JournalHistoryScreen> {
                       Text(
                         "✦ Gratitude",
                         style: textTheme.labelLarge?.copyWith(
-                          color: colorScheme.primary,
+                          color: scheme.text,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -140,7 +156,7 @@ class _JournalHistoryScreenState extends State<JournalHistoryScreen> {
                       Text(
                         gratitude,
                         style: textTheme.bodyLarge?.copyWith(
-                          color: colorScheme.onSurface,
+                          color: scheme.text,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -149,7 +165,7 @@ class _JournalHistoryScreenState extends State<JournalHistoryScreen> {
                       Text(
                         "✦ Tasks & Reflections",
                         style: textTheme.labelLarge?.copyWith(
-                          color: colorScheme.primary,
+                          color: scheme.text,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -166,8 +182,8 @@ class _JournalHistoryScreenState extends State<JournalHistoryScreen> {
                                     : Icons.circle_outlined,
                                 size: 16,
                                 color: task.completed
-                                    ? colorScheme.secondary
-                                    : colorScheme.onSurfaceVariant,
+                                    ? scheme.accent
+                                    : scheme.text.withValues(alpha: 0.6),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -175,9 +191,8 @@ class _JournalHistoryScreenState extends State<JournalHistoryScreen> {
                                   task.content,
                                   style: textTheme.bodyMedium?.copyWith(
                                     color: task.completed
-                                        ? colorScheme.onSurfaceVariant
-                                              .withValues(alpha: 0.5)
-                                        : colorScheme.onSurface,
+                                        ? scheme.text.withValues(alpha: 0.5)
+                                        : scheme.text,
                                     decoration: task.completed
                                         ? TextDecoration.lineThrough
                                         : null,

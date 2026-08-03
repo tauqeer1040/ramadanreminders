@@ -1,12 +1,32 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ramadan_reflections/services/widget_service.dart' show WidgetService;
-import 'package:ramadan_reflections/services/analytics_service.dart';
+import 'analytics_protocol.dart';
+import 'analytics_service.dart';
+
+class StreakResult {
+  final int streak;
+  final bool isMilestone;
+  final bool hasPrimeReward;
+  final int? milestoneStreak;
+
+  const StreakResult({
+    required this.streak,
+    this.isMilestone = false,
+    this.hasPrimeReward = false,
+    this.milestoneStreak,
+  });
+}
 
 class StreakService {
   static const _streakKey = 'streak';
   static const _lastActivityDateKey = 'last_activity_date';
   static const _activityDatesKey = 'streak_activity_dates';
   static const _claimedPrimesKey = 'claimed_prime_rewards';
+
+  static AnalyticsProtocol _analytics = AnalyticsService.instance;
+
+  static void injectAnalytics(AnalyticsProtocol a) {
+    _analytics = a;
+  }
 
   static Future<int> getStreak() async {
     final prefs = await SharedPreferences.getInstance();
@@ -17,7 +37,6 @@ class StreakService {
   static Future<List<bool>> getLast7Days() async {
     final prefs = await SharedPreferences.getInstance();
     final dates = prefs.getStringList(_activityDatesKey) ?? [];
-
     final today = DateTime.now();
     final normalizedToday = DateTime(today.year, today.month, today.day);
     final result = List.filled(7, false);
@@ -33,11 +52,10 @@ class StreakService {
     return result;
   }
 
-  static Future<void> checkAndUpdateStreak() async {
+  static Future<StreakResult> checkAndUpdateStreak() async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now();
     final todayStr = today.toIso8601String().split('T')[0];
-
     final lastDateStr = prefs.getString(_lastActivityDateKey);
     int streak = prefs.getInt(_streakKey) ?? 1;
 
@@ -49,34 +67,44 @@ class StreakService {
 
     if (lastDateStr == null) {
       streak = 1;
-    } else if (lastDateStr == todayStr) {
-      // already tracked, no change
-    } else {
+    } else if (lastDateStr != todayStr) {
       final lastDate = DateTime.parse(lastDateStr);
       final normalizedToday = DateTime(today.year, today.month, today.day);
       final yesterday = normalizedToday.subtract(const Duration(days: 1));
-
-      if (lastDate == yesterday) {
-        streak++;
-      } else {
-        streak = 1;
-      }
+      streak = lastDate == yesterday ? streak + 1 : 1;
     }
 
     if (streak < 1) streak = 1;
 
     await prefs.setInt(_streakKey, streak);
     await prefs.setString(_lastActivityDateKey, todayStr);
-    await WidgetService.updateStreakWidget(streak);
 
-    // Log streak milestones at prime numbers and multiples of 7
-    if (streak > 1 && (StreakService.isPrime(streak) || streak % 7 == 0)) {
-      AnalyticsService.instance.logStreakMilestone(streak);
-    }
+    final isMilestone = streak > 1 && (isPrime(streak) || streak % 7 == 0);
+    final hasReward = !isPrime(streak) ? false : () {
+      final claimedKey = streak.toString();
+      final claimed = prefs.getStringList(_claimedPrimesKey) ?? [];
+      if (claimed.contains(claimedKey)) return false;
+      claimed.add(claimedKey);
+      prefs.setStringList(_claimedPrimesKey, claimed);
+      return true;
+    }();
+
+    return StreakResult(
+      streak: streak,
+      isMilestone: isMilestone,
+      hasPrimeReward: hasReward,
+      milestoneStreak: isMilestone ? streak : null,
+    );
   }
 
   static Future<void> recordActivity() async {
-    await checkAndUpdateStreak();
+    final result = await checkAndUpdateStreak();
+    if (result.isMilestone) {
+      _analytics.logEvent('streak_milestone', params: {'streak': result.streak.toString()});
+    }
+    if (result.hasPrimeReward) {
+      _analytics.logEvent('streak_prime_reward_claimed', params: {'streak': result.streak.toString()});
+    }
   }
 
   static bool isPrime(int n) {
@@ -98,7 +126,7 @@ class StreakService {
 
     claimed.add(key);
     await prefs.setStringList(_claimedPrimesKey, claimed);
-    AnalyticsService.instance.logStreakPrimeRewardClaimed(streak);
+    _analytics.logEvent('streak_prime_reward_claimed', params: {'streak': streak.toString()});
     return true;
   }
 }

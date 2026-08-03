@@ -18,11 +18,10 @@ class AnalogyService {
 
     try {
       final uid = user.uid;
-      final analogyUrl = _backendUrl.replaceAll('/api/v2', '/api/generate-analogy');
 
       final response = await http
           .post(
-            Uri.parse(analogyUrl),
+            Uri.parse('$_backendUrl/generate-analogy'),
             headers: await ApiClient.postHeaders(),
             body: jsonEncode({
               'uid': uid,
@@ -75,40 +74,39 @@ class AnalogyService {
     final user = _auth.currentUser;
     if (user == null) return fallbackJournalAnalogies;
 
-    final themes = ['spiritual reflection', 'personal growth', 'gratitude and light'];
-    final results = <String>[];
+    try {
+      final uid = user.uid;
 
-    for (final theme in themes) {
-      try {
-        final uid = user.uid;
-        final analogyUrl = _backendUrl.replaceAll('/api/v2', '/api/generate-analogy');
+      final response = await http
+          .post(
+            Uri.parse('$_backendUrl/generate-analogy'),
+            headers: await ApiClient.postHeaders(),
+            body: jsonEncode({
+              'uid': uid,
+              'question': 'Based on this journal entry, generate 3 short spiritual analogies covering: spiritual reflection, personal growth, and gratitude. Return as a JSON array of strings.',
+              'answer': journalEntry,
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
 
-        final response = await http
-            .post(
-              Uri.parse(analogyUrl),
-              headers: await ApiClient.postHeaders(),
-              body: jsonEncode({
-                'uid': uid,
-                'question': 'Based on this journal entry, provide a deeply spiritual $theme analogy.',
-                'answer': journalEntry,
-              }),
-            )
-            .timeout(const Duration(seconds: 30));
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body) as Map<String, dynamic>;
-          results.add(data['analogy'] as String? ?? fallbackJournalAnalogies[themes.indexOf(theme)]);
-        } else {
-          results.add(fallbackJournalAnalogies[themes.indexOf(theme)]);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final raw = data['analogy'] as String? ?? '';
+        if (raw.isNotEmpty) {
+          final parsed = jsonDecode(raw);
+          if (parsed is List && parsed.length == 3) {
+            return parsed.cast<String>();
+          }
         }
-      } catch (e) {
-        print('AnalogyService journal error: $e');
-        results.add(fallbackJournalAnalogies[themes.indexOf(theme)]);
       }
+    } catch (e) {
+      print('AnalogyService journal error: $e');
     }
 
-    return results;
+    return fallbackJournalAnalogies;
   }
+
+  static const int _maxCacheEntries = 50;
 
   static Future<List<String>> generateJournalInsights(String journalEntry) async {
     final user = _auth.currentUser;
@@ -117,6 +115,10 @@ class AnalogyService {
     final hash = journalEntry.hashCode;
     final cached = _insightsCache[hash];
     if (cached != null) return cached;
+
+    if (_insightsCache.length >= _maxCacheEntries) {
+      _insightsCache.remove(_insightsCache.keys.first);
+    }
 
     try {
       final response = await http

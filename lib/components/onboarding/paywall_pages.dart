@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:superwallkit_flutter/superwallkit_flutter.dart';
+import 'package:ramadan_reflections/services/revenuecat_service.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/duo_button.dart';
 import '../widgets/duo_progress_bar.dart';
@@ -348,7 +348,7 @@ class _PaywallPage2State extends State<PaywallPage2> {
 }
 
 // ── Paywall Step 3 ─────────────────────────────────────────────────────────
-// Pricing + Superwall paywall CTA
+// Pricing + subscribe CTA
 
 class PaywallPage3 extends StatefulWidget {
   final OnboardingData data;
@@ -371,13 +371,11 @@ class _PaywallPage3State extends State<PaywallPage3> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        Superwall.shared.identify(user.uid);
+        RevenueCatService.instance.identify(user.uid);
       }
     } catch (_) {}
 
-    Superwall.shared.registerPlacement('campaign_trigger', feature: () {
-      if (mounted) widget.onNext();
-    });
+    if (mounted) widget.onNext();
   }
 
   @override

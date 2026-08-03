@@ -8,6 +8,20 @@ import '../theme/app_theme.dart';
 import 'journal_editor_screen.dart';
 import 'widgets/mascot_empty_state.dart';
 
+class _CardColorTheme {
+  final Color bg;
+  final Color text;
+  final Color accent;
+  const _CardColorTheme({required this.bg, required this.text, required this.accent});
+}
+
+const List<_CardColorTheme> _cardColorSchemes = [
+  _CardColorTheme(bg: Color(0xFFD6DF7E), text: Color(0xFF13441A), accent: Color(0xFF187B25)),
+  _CardColorTheme(bg: Color(0xFFFAA49A), text: Color(0xFF4E1106), accent: Color(0xFFC4391D)),
+  _CardColorTheme(bg: Color(0xFFA0C4FF), text: Color(0xFF00154F), accent: Color(0xFF0052FF)),
+  _CardColorTheme(bg: Color(0xFFFFF0B2), text: Color(0xFF4E2E00), accent: Color(0xFFA86200)),
+];
+
 class JournalListScreen extends StatefulWidget {
   const JournalListScreen({super.key});
 
@@ -284,6 +298,7 @@ class _JournalListScreenState extends State<JournalListScreen> {
           final journal = _filteredJournals[index];
           final date = journal['date'] ?? '';
           final isSelected = _selectedDates.contains(date);
+          final scheme = _cardColorSchemes[index % _cardColorSchemes.length];
           return GestureDetector(
             onTap: () => _onTapJournal(index),
             onLongPress: () => _onLongPressJournal(index),
@@ -293,12 +308,12 @@ class _JournalListScreenState extends State<JournalListScreen> {
               decoration: BoxDecoration(
                 color: isSelected
                     ? AppTheme.neonPurple.withValues(alpha: 0.25)
-                    : cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                    : scheme.bg,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: isSelected
                       ? AppTheme.neonPurple.withValues(alpha: 0.6)
-                      : cs.outlineVariant.withValues(alpha: 0.5),
+                      : scheme.text.withValues(alpha: 0.3),
                   width: isSelected ? 2 : 1,
                 ),
               ),
@@ -314,7 +329,7 @@ class _JournalListScreenState extends State<JournalListScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: isSelected ? AppTheme.neonPurple : cs.onSurface,
+                            color: isSelected ? AppTheme.neonPurple : scheme.text,
                           ),
                         ),
                       ),
@@ -337,7 +352,7 @@ class _JournalListScreenState extends State<JournalListScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 14,
-                      color: cs.onSurface,
+                      color: scheme.text,
                       height: 1.4,
                     ),
                   ),

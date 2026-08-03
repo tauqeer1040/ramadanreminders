@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Taucity — I build apps</title>
+  <meta name="description" content="I build apps. Meowmin, an AI-powered Ramadan journal companion, and more on the way." />
+  <meta name="og:title" content="Taucity — I build apps" />
+  <meta name="og:description" content="Meowmin, an AI-powered Ramadan journal companion, and more on the way." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #ffffff;
+      color: #333333;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 40px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      min-height: 100vh;
+    }
+    @media (min-width: 640px) {
+      .wrap { padding-top: 96px; }
+    }
+
+    .intro { font-size: 22px; font-weight: 300; color: #1f2937; line-height: 1.6; display: flex; align-items: center; justify-content: space-between; gap: 40px; width: 100%; }
+    .intro .intro-text { flex: 1; min-width: 0; }
+    .intro .intro-splash { flex-shrink: 0; }
+    .intro .intro-splash img {
+      width: 220px; max-width: 100%; height: auto; display: block;
+      border-radius: 24px; border: 1px solid #e5e7eb;
+      box-shadow: 0 12px 32px rgba(157, 80, 255, 0.18);
+      transform: rotate(3deg);
+    }
+    @media (max-width: 640px) {
+      .intro { flex-direction: column; align-items: flex-start; gap: 24px; }
+      .intro .intro-splash img { width: 100%; transform: none; }
+    }
+    .intro .name-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 28px; }
+    .intro img.avatar {
+      width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+      box-shadow: 0 0 0 2px #fff, 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .apps-strip { display: flex; gap: 12px; margin-top: 8px; }
+    .apps-strip a { position: relative; display: inline-block; }
+    .apps-strip img {
+      width: 40px; height: 40px; border-radius: 12px; object-fit: cover;
+      border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      transition: transform 0.2s ease;
+    }
+    .apps-strip img:hover { transform: rotate(0deg) scale(1.08); }
+    .apps-strip img.r { transform: rotate(6deg); }
+    .apps-strip img.rl { transform: rotate(-6deg); }
+    .apps-strip .tip {
+      position: absolute; top: -34px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.85); color: #fff; font-size: 12px;
+      padding: 4px 10px; border-radius: 10px; white-space: nowrap;
+      opacity: 0; pointer-events: none; transition: opacity 0.15s ease;
+    }
+    .apps-strip a:hover .tip { opacity: 1; }
+
+    .section-title {
+      font-size: 14px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #6b7280; margin: 56px 0 20px;
+    }
+
+    .app-card {
+      display: flex; gap: 16px; align-items: flex-start;
+      background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 16px;
+      padding: 20px; margin-bottom: 16px; text-decoration: none; color: inherit;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .app-card:hover { border-color: #9d50ff; box-shadow: 0 8px 24px rgba(157, 80, 255, 0.12); }
+    .app-card .logo {
+      width: 56px; height: 56px; border-radius: 14px; object-fit: cover;
+      border: 1px solid #e5e7eb; background: #fff; flex-shrink: 0;
+    }
+    .app-card h3 { font-size: 18px; font-weight: 600; color: #111827; margin-bottom: 4px; }
+    .app-card p { font-size: 14px; color: #6b7280; line-height: 1.55; }
+    .app-card .url { font-size: 13px; color: #9d50ff; font-weight: 500; margin-top: 8px; }
+
+    .app-card.coming { background: #ffffff; border-style: dashed; opacity: 0.75; }
+    .app-card.coming h3 { color: #6b7280; }
+
+    .divider { border: 0; border-top: 1px dotted #d1d5db; margin: 56px 0; width: 100%; }
+
+    .contact { font-size: 17px; color: #1f2937; line-height: 2; }
+    .contact a, .contact .accent { color: #2563eb; text-decoration: none; font-weight: 500; }
+    .contact a:hover { color: #9333ea; }
+
+    .footer { margin-top: auto; padding-top: 56px; font-size: 13px; color: #9ca3af; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+    .footer img.footer-logo {
+      width: 72px; height: 72px; object-fit: cover;
+      border-radius: 18px; border: 1px solid #e5e7eb;
+      box-shadow: 0 6px 16px rgba(157, 80, 255, 0.15);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="intro">
+      <div class="intro-text">
+        <div class="name-row">
+          Hi, my name is Tauqeer
+          <img class="avatar" src="meowmin-logo.png" alt="Avatar" />
+        </div>
+        <div>
+          I build apps.
+          <span class="apps-strip">
+          <a href="https://meowmin.netlify.app" target="_blank" rel="noopener noreferrer">
+            <img class="rl" src="meowmin-splash.webp" alt="Meowmin" />
+            <span class="tip">Meowmin — AI Ramadan journal</span>
+          </a>
+          <a href="#" onclick="return false;" aria-disabled="true">
+            <img class="r" src="placeholder-app.png" alt="Coming soon" />
+            <span class="tip">Coming soon</span>
+          </a>
+          <a href="#" onclick="return false;" aria-disabled="true">
+            <img class="rl" src="taucity-logo.svg" alt="Meowstian" />
+            <span class="tip">Meowstian</span>
+          </a>
+          <a href="#" onclick="return false;" aria-disabled="true">
+            <img class="r" src="taucity-logo.svg" alt="Meom" />
+            <span class="tip">Meom</span>
+          </a>
+          <a href="#" onclick="return false;" aria-disabled="true">
+            <img class="rl" src="taucity-logo.svg" alt="Timeless" />
+            <span class="tip">Timeless</span>
+          </a>
+          <a href="#" onclick="return false;" aria-disabled="true">
+            <img class="r" src="taucity-logo.svg" alt="Hyderabad Trivia" />
+            <span class="tip">Hyderabad Trivia</span>
+          </a>
+          </span>
+        </div>
+      </div>
+      <div class="intro-splash">
+        <img src="meowmin-splash.webp" alt="Meowmin splash" />
+      </div>
+    </div>
+
+    <h2 class="section-title">My Apps</h2>
+
+    <a class="app-card" href="https://meowmin.netlify.app" target="_blank" rel="noopener noreferrer">
+      <img class="logo" src="meowmin-splash.webp" alt="Meowmin logo" />
+      <div>
+        <h3>Meowmin</h3>
+        <p>An AI-powered Ramadan journal companion. Write a daily reflection and get personalized Islamic insights, keep your tasbih, read the Quran, and track prayer times.</p>
+        <p class="url">meowmin.netlify.app →</p>
+      </div>
+    </a>
+
+    <a class="app-card coming" href="#" onclick="return false;" aria-disabled="true">
+      <div class="logo" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#e5e7eb,#d1d5db);">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></svg>
+      </div>
+      <div>
+        <h3>Coming soon</h3>
+        <p>More apps are in the works. Check back later.</p>
+      </div>
+    </a>
+
+    <hr class="divider" />
+
+    <div class="contact">
+      <span>Want to say hi? <a href="mailto:tauqeer1040@gmail.com">Click here.</a></span>
+    </div>
+
+    <div class="footer">
+      <img class="footer-logo" src="meowmin-splash.webp" alt="Meowmin splash" />
+      <div>&copy; 2026 Taucity. All rights reserved.</div>
+    </div>
+  </div>
+</body>
+</html>

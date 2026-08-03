@@ -16,7 +16,6 @@ class EmotionFlowerPainter extends CustomPainter {
 
   static const List<double> _radii     = [0.86, 0.76, 0.65, 0.53, 0.40, 0.25];
   static const List<double> _opacities = [0.15, 0.30, 0.45, 0.65, 0.85, 1.00];
-  static const List<double> _phases    = [0.000, 1.047, 2.094, 3.142, 4.189, 5.236];
 
   static const List<List<double>> _keyframes = [
     // [points, innerRadiusRatio, pointRounding, valleyRounding]
@@ -55,8 +54,6 @@ class EmotionFlowerPainter extends CustomPainter {
     canvas.translate(size.width / 2, size.height / 2);
 
     for (int i = 0; i < 6; i++) {
-      final phase = _phases[i];
-
       // Traveling ripple effect across layers
       final ripplePhase = animTime * 1.5 - (i * 0.8);
       final layerBreath = breathScale + sin(ripplePhase) * 0.03;

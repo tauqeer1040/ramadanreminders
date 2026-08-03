@@ -152,7 +152,12 @@ class _StatsCardState extends State<StatsCard>
       duration: const Duration(milliseconds: 700),
     );
     _fade = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+    JournalService.localJournalsVersion.addListener(_onJournalsChanged);
     _load();
+  }
+
+  void _onJournalsChanged() {
+    refresh();
   }
 
   void _load() {
@@ -168,6 +173,7 @@ class _StatsCardState extends State<StatsCard>
 
   @override
   void dispose() {
+    JournalService.localJournalsVersion.removeListener(_onJournalsChanged);
     _fadeCtrl.dispose();
     super.dispose();
   }
@@ -219,7 +225,7 @@ class _StatsCardState extends State<StatsCard>
 
   Widget _skeleton() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
+      margin: EdgeInsets.zero,
       height: 220,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
@@ -246,7 +252,7 @@ class _StatsCardState extends State<StatsCard>
 
   Widget _bentoGrid(BuildContext context, _StatsData data) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
           // Row 1: C1: Streak + Breakdown + Analytics | C2: Entries + Subscription + Activity

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import './reflect_card.dart';
 
-/// A Skeletonizer-based shimmer that perfectly mirrors the shape of a ReflectCard.
 class InsightCardShimmer extends StatelessWidget {
   const InsightCardShimmer({super.key});
 
@@ -20,57 +19,54 @@ class InsightCardShimmer extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.auto_awesome, size: 26),
-                const SizedBox(width: 8),
+                ClipOval(
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    color: cs.surfaceContainerHighest,
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Loading AI Insights...',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: cs.onSurface,
-                    ),
+                    'Reading your journal entry and reflecting on what you wrote...',
+                    style: textTheme.bodyLarge?.copyWith(height: 1.6),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              children: [
-                Chip(label: const Text('TAGS')),
-                Chip(label: const Text('LOADING')),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Loading personalized reflection just for you...',
-              style: textTheme.titleMedium,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Fetching the latest journal entries and processing through our AI models. This may take a few seconds during first load. SubhanAllah, your spiritual journey is being analyzed.',
-              style: textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: cs.tertiaryContainer,
-                borderRadius: BorderRadius.circular(16),
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'A meaningful excerpt from your journal will appear here...',
+                style: textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Searching for the perfect verse to match your current state of heart...',
-                    style: textTheme.bodyMedium,
+                    'A Quranic verse will be waiting here for you...',
+                    style: textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   const Align(
                     alignment: Alignment.centerRight,
-                    child: Text('Surah : Ayah'),
+                    child: Text('— Surah : Ayah'),
                   ),
                 ],
               ),

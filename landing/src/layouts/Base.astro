@@ -1,0 +1,153 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  noindex?: boolean;
+}
+
+const {
+  title = 'Meowmin — Your AI-powered Ramadan journal companion',
+  description = 'A daily spiritual companion. Write a reflection, get personalized Islamic insights, keep your tasbih, read the Quran, and track prayer times — all in one calm, beautiful app.',
+  image = '/screenshots/home.webp',
+  noindex = false,
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const pageTitle = Astro.url.pathname === '/'
+  ? 'Meowmin — Your AI-powered Ramadan journal companion'
+  : `${title} · Meowmin`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/webp" href="/favicon.webp" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex" />}
+
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Meowmin" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL(image, Astro.site)} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={new URL(image, Astro.site)} />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'WebApplication',
+      name: 'Meowmin',
+      url: 'https://meowmin.sh',
+      applicationCategory: 'LifestyleApplication',
+      operatingSystem: 'Web, Android, iOS',
+      description,
+      inLanguage: 'en',
+    })} />
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav style="padding-top: 15px;" class="bg-[#f9fafb]">
+      <div class="max-w-7xl mx-auto px-6 lg:px-8">
+        <div class="flex justify-between items-center h-16">
+          <div class="flex items-center">
+            <a href="/">
+              <img src="/logo.png" alt="Meowmin" class="h-10 w-auto" />
+            </a>
+          </div>
+          <div class="hidden md:flex items-center space-x-6 lg:space-x-8">
+            <a href="/#how" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">How it works</a>
+            <a href="/#features" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">Features</a>
+            <a href="/blog" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">Blog</a>
+            <a href="/privacy" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">Privacy</a>
+            <a href="/app" class="bg-brand text-white px-5 lg:px-6 rounded-full hover:bg-brand-dark transition text-sm lg:text-base whitespace-nowrap font-semibold" style="padding-top: calc(0.55rem + 3px); padding-bottom: calc(0.55rem + 3px);">
+              Open the App
+            </a>
+          </div>
+          <button id="mobile-menu-btn" class="md:hidden p-2" aria-label="Open menu">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <!-- Mobile menu -->
+      <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-gray-100 px-6 pb-4">
+        <div class="flex flex-col space-y-3 pt-3">
+          <a href="/#how" class="text-gray-700 hover:text-gray-900 transition text-sm">How it works</a>
+          <a href="/#features" class="text-gray-700 hover:text-gray-900 transition text-sm">Features</a>
+          <a href="/blog" class="text-gray-700 hover:text-gray-900 transition text-sm">Blog</a>
+          <a href="/privacy" class="text-gray-700 hover:text-gray-900 transition text-sm">Privacy</a>
+          <a href="/app" class="bg-brand text-white px-5 py-2.5 rounded-full hover:bg-brand-dark transition text-sm text-center whitespace-nowrap w-fit font-semibold">Open the App</a>
+        </div>
+      </div>
+    </nav>
+
+    <slot />
+
+    <!-- Footer -->
+    <footer class="text-white py-12 sm:py-16 px-6 sm:px-8 rounded-t-[3rem]" style="background-color: #9d50ff;">
+      <div class="max-w-6xl mx-auto">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10 sm:mb-12">
+          <!-- Product -->
+          <div>
+            <h3 class="font-semibold text-xs sm:text-sm uppercase tracking-wider mb-4 text-white/80">Product</h3>
+            <ul class="space-y-2 sm:space-y-3 text-sm sm:text-base">
+              <li><a href="/" class="hover:text-white/70 transition">Home</a></li>
+              <li><a href="/app" class="hover:text-white/70 transition">Web App</a></li>
+              <li><a href="https://play.google.com/store/apps/details?id=com.taucity.meowmin" target="_blank" class="hover:text-white/70 transition">Android App</a></li>
+            </ul>
+          </div>
+          <!-- Explore -->
+          <div>
+            <h3 class="font-semibold text-xs sm:text-sm uppercase tracking-wider mb-4 text-white/80">Explore</h3>
+            <ul class="space-y-2 sm:space-y-3 text-sm sm:text-base">
+              <li><a href="/#how" class="hover:text-white/70 transition">How it works</a></li>
+              <li><a href="/#features" class="hover:text-white/70 transition">Features</a></li>
+              <li><a href="/blog" class="hover:text-white/70 transition">Blog</a></li>
+            </ul>
+          </div>
+          <!-- Company -->
+          <div>
+            <h3 class="font-semibold text-xs sm:text-sm uppercase tracking-wider mb-4 text-white/80">Company</h3>
+            <ul class="space-y-2 sm:space-y-3 text-sm sm:text-base">
+              <li><a href="/privacy" class="hover:text-white/70 transition">Privacy Policy</a></li>
+              <li><a href="mailto:tauqeer1040@gmail.com" class="hover:text-white/70 transition">Contact</a></li>
+            </ul>
+          </div>
+          <!-- CTA -->
+          <div>
+            <h3 class="font-semibold text-xs sm:text-sm uppercase tracking-wider mb-4 text-white/80">Get started</h3>
+            <a href="/app" class="inline-block bg-white text-brand font-semibold px-6 py-3 rounded-full hover:bg-white/90 transition">Open the App</a>
+          </div>
+        </div>
+        <div class="border-t border-white/30 pt-6 sm:pt-8">
+          <p class="text-xs sm:text-sm text-white/80 text-center">&copy; {new Date().getFullYear()} Meowmin. All Rights Reserved</p>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {
+        document.getElementById('mobile-menu')?.classList.toggle('hidden');
+      });
+    </script>
+  </body>
+</html>

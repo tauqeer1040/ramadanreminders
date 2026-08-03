@@ -4,6 +4,8 @@ import 'package:in_app_review/in_app_review.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:ramadan_reflections/services/revenuecat_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 import 'onboarding_screen.dart';
 import '../components/widgets/duo_button.dart';
@@ -32,6 +34,8 @@ class AboutScreen extends StatelessWidget {
             const _AppHeader(),
             const SizedBox(height: 24),
             const _ActionButtons(),
+            const SizedBox(height: 12),
+            const _SubscribeButton(),
             const SizedBox(height: 12),
             const _JoinWhatsAppButton(),
             const SizedBox(height: 32),
@@ -92,7 +96,7 @@ class _AppHeader extends StatelessWidget {
           ),
           child: ClipOval(
             child: Image.asset(
-              'assets/photos/mascot/hi.webp',
+              'assets/photos/mascot/face.png',
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => Container(
                 color: AppTheme.neonPurple.withValues(alpha: 0.2),
@@ -215,6 +219,44 @@ class _ActionButtons extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SubscribeButton extends StatelessWidget {
+  const _SubscribeButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return DuoButton(
+      onPressed: () {
+        HapticFeedback.lightImpact();
+        try {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            RevenueCatService.instance.identify(user.uid);
+          }
+        } catch (_) {}
+      },
+      backgroundColor: const Color(0xFFFF6B1A),
+      depthColor: const Color(0xFFCC4400),
+      radius: 16,
+      height: 56,
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.workspace_premium_rounded, color: AppTheme.starWhite, size: 22),
+          SizedBox(width: 10),
+          Text(
+            'Subscribe Premium',
+            style: TextStyle(
+              color: AppTheme.starWhite,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -492,7 +534,7 @@ class _PrivacyPolicyLink extends StatelessWidget {
                 _section('How We Use Data'),
                 _p('• Journal text is processed by AI (OpenRouter) to generate insights and suggested tasks\n• Location is used locally for adhan prayer times — never uploaded or shared\n• Email is used only for account identification'),
                 _section('Data Sharing'),
-                _p('We do not sell your data. Journal content is sent to OpenRouter for AI analysis. Payments are processed by Superwall and Google Play — we never see your payment details.'),
+                _p('We do not sell your data. Journal content is sent to OpenRouter for AI analysis. Payments are processed by RevenueCat — we never see your payment details.'),
                 _section('Data Deletion'),
                 _p('You can delete your account and all associated data from Profile → Delete Account. Data is permanently removed within 30 days.'),
                 _section('Contact'),

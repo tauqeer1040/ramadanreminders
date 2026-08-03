@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'journal_list_screen.dart';
 import 'journal_editor_screen.dart';
-import '../services/journal_service.dart';
 
 class JournalSection extends StatelessWidget {
   const JournalSection({super.key});

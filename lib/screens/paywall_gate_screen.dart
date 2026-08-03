@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:superwallkit_flutter/superwallkit_flutter.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
+import 'package:ramadan_reflections/services/revenuecat_service.dart';
+import 'package:ramadan_reflections/services/revenuecat_provider.dart';
 import '../theme/app_theme.dart';
 import '../components/widgets/duo_button.dart';
 import '../services/trial_service.dart';
 
-class PaywallGateScreen extends StatefulWidget {
+class PaywallGateScreen extends ConsumerStatefulWidget {
   final bool isDismissable;
   final VoidCallback onSubscribe;
   final VoidCallback onDismiss;
@@ -20,12 +22,13 @@ class PaywallGateScreen extends StatefulWidget {
   });
 
   @override
-  State<PaywallGateScreen> createState() => _PaywallGateScreenState();
+  ConsumerState<PaywallGateScreen> createState() => _PaywallGateScreenState();
 }
 
-class _PaywallGateScreenState extends State<PaywallGateScreen> {
+class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
   int _remainingSeconds = 0;
   Timer? _timer;
+  bool _presentingPaywall = false;
 
   @override
   void initState() {
@@ -41,8 +44,8 @@ class _PaywallGateScreenState extends State<PaywallGateScreen> {
   }
 
   Future<void> _loadRemaining() async {
-    final ms = await TrialService.getRemainingMs();
-    if (mounted) setState(() => _remainingSeconds = (ms / 1000).ceil().clamp(0, 99999));
+    final status = await TrialService.getStatus();
+    if (mounted) setState(() => _remainingSeconds = (status.graceMs / 1000).ceil().clamp(0, 99999));
   }
 
   String _formatTime(int totalSeconds) {
@@ -51,17 +54,46 @@ class _PaywallGateScreenState extends State<PaywallGateScreen> {
     return '${min}m ${sec}s';
   }
 
-  void _showPaywall() {
+  Future<void> _showPaywall() async {
+    if (_presentingPaywall) return;
+    _presentingPaywall = true;
     HapticFeedback.mediumImpact();
+
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        Superwall.shared.identify(user.uid);
+      final result = await RevenueCatService.instance.presentPaywall(
+        displayCloseButton: widget.isDismissable,
+      );
+
+      if (result == PaywallResult.purchased || result == PaywallResult.restored) {
+        if (mounted) {
+          ref.read(revenueCatProvider.notifier).refresh();
+          widget.onSubscribe();
+        }
       }
-    } catch (_) {}
-    Superwall.shared.registerPlacement('campaign_trigger', feature: () {
-      if (mounted) widget.onSubscribe();
-    });
+    } finally {
+      _presentingPaywall = false;
+    }
+  }
+
+  Future<void> _restorePurchases() async {
+    HapticFeedback.lightImpact();
+    try {
+      await RevenueCatService.instance.restorePurchases();
+      if (mounted) {
+        ref.read(revenueCatProvider.notifier).refresh();
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Purchases restored successfully')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No purchases found to restore')),
+        );
+      }
+    }
   }
 
   @override
@@ -92,7 +124,6 @@ class _PaywallGateScreenState extends State<PaywallGateScreen> {
               child: Column(
                 children: [
                   const SizedBox(height: 60),
-                  // Mascot
                   Container(
                     width: 120,
                     height: 120,
@@ -108,7 +139,7 @@ class _PaywallGateScreenState extends State<PaywallGateScreen> {
                     ),
                     child: ClipOval(
                       child: Image.asset(
-                        'assets/photos/mascot/hi.webp',
+                        'assets/photos/mascot/face.png',
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
                           color: AppTheme.neonPurple.withValues(alpha: 0.2),
@@ -135,51 +166,46 @@ class _PaywallGateScreenState extends State<PaywallGateScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
-                  // Pricing card
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                     decoration: BoxDecoration(
-                      color: AppTheme.starGold.withValues(alpha: 0.08),
+                      color: const Color(0xFFFF6D00).withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: AppTheme.starGold.withValues(alpha: 0.2),
+                        color: const Color(0xFFFF6D00).withValues(alpha: 0.2),
                       ),
                     ),
-                    child: Column(
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        Text(
+                          '\$1',
+                          style: TextStyle(
+                            color: Color(0xFFFF6D00),
+                            fontSize: 40,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '\$1',
+                              '3-Day Trial',
                               style: TextStyle(
-                                color: AppTheme.starGold,
-                                fontSize: 40,
-                                fontWeight: FontWeight.w900,
+                                color: AppTheme.starWhite,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
-                            SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '3-Day Trial',
-                                  style: TextStyle(
-                                    color: AppTheme.starWhite,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                Text(
-                                  'Then \$59/yr or \$9/mo',
-                                  style: TextStyle(
-                                    color: AppTheme.ghostSilver,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              'Then \$79.99/yr or \$9.99/mo',
+                              style: TextStyle(
+                                color: AppTheme.ghostSilver,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
@@ -187,27 +213,37 @@ class _PaywallGateScreenState extends State<PaywallGateScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  // Subscribe button
                   SizedBox(
                     width: double.infinity,
                     child: DuoButton(
                       onPressed: _showPaywall,
-                      backgroundColor: AppTheme.starGold,
-                      depthColor: AppTheme.starGold.withValues(alpha: 0.6),
+                      backgroundColor: const Color(0xFFFF6D00),
+                      depthColor: const Color(0xFFE65100),
                       radius: 16,
                       height: 56,
                       child: const Text(
                         'Start Your \$1 Trial',
                         style: TextStyle(
-                          color: Colors.black,
+                          color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: _restorePurchases,
+                    child: Text(
+                      'Restore Purchases',
+                      style: TextStyle(
+                        color: AppTheme.ghostSilver.withValues(alpha: 0.7),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 20),
-                  // Dismiss / grace timer
                   if (widget.isDismissable) ...[
                     GestureDetector(
                       onTap: widget.onDismiss,

@@ -1,7 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/favorites_service.dart';
-import '../theme/app_theme.dart';
+import '../core/app_background.dart';
+
+class _CardColorTheme {
+  final Color bg;
+  final Color text;
+  final Color accent;
+  const _CardColorTheme({required this.bg, required this.text, required this.accent});
+}
+
+const List<_CardColorTheme> _cardColorSchemes = [
+  _CardColorTheme(bg: Color(0xFFD6DF7E), text: Color(0xFF13441A), accent: Color(0xFF187B25)),
+  _CardColorTheme(bg: Color(0xFFFAA49A), text: Color(0xFF4E1106), accent: Color(0xFFC4391D)),
+  _CardColorTheme(bg: Color(0xFFA0C4FF), text: Color(0xFF00154F), accent: Color(0xFF0052FF)),
+  _CardColorTheme(bg: Color(0xFFFFF0B2), text: Color(0xFF4E2E00), accent: Color(0xFFA86200)),
+];
 
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
@@ -61,7 +75,8 @@ class _FavoritesPageState extends State<FavoritesPage> {
             ),
         ],
       ),
-      body: _loading
+      body: AppBackground(
+        child: _loading
           ? const Center(child: CircularProgressIndicator())
           : _favorites.isEmpty
               ? Center(
@@ -89,15 +104,17 @@ class _FavoritesPageState extends State<FavoritesPage> {
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   itemCount: _favorites.length,
-                  itemBuilder: (context, index) {
+                    itemBuilder: (context, index) {
                     final item = _favorites[index];
-                    return _buildCard(item, cs, tt);
+                    return _buildCard(item, index, tt);
                   },
                 ),
+      ),
     );
   }
 
-  Widget _buildCard(FavoriteItem item, ColorScheme cs, TextTheme tt) {
+  Widget _buildCard(FavoriteItem item, int index, TextTheme tt) {
+    final scheme = _cardColorSchemes[index % _cardColorSchemes.length];
     return Dismissible(
       key: ValueKey(FavoritesService.itemKey(item)),
       direction: DismissDirection.endToStart,
@@ -105,17 +122,20 @@ class _FavoritesPageState extends State<FavoritesPage> {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 24),
         decoration: BoxDecoration(
-          color: cs.error,
+          color: scheme.text.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(20),
         ),
-        child: const Icon(Icons.delete, color: Colors.white),
+        child: Icon(Icons.delete, color: scheme.text),
       ),
       onDismissed: (_) => _remove(item),
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
         elevation: 0,
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        color: scheme.bg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: scheme.text.withValues(alpha: 0.3)),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -123,40 +143,40 @@ class _FavoritesPageState extends State<FavoritesPage> {
             children: [
               Row(
                 children: [
-                  Icon(
-                    item.type == FavoriteType.insight
-                        ? Icons.auto_awesome
-                        : Icons.menu_book_rounded,
-                    size: 20,
-                    color: AppTheme.starGold,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    item.type == FavoriteType.insight ? 'Insight' : 'Quran Verse',
-                    style: tt.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurface,
+                    Icon(
+                      item.type == FavoriteType.insight
+                          ? Icons.auto_awesome
+                          : Icons.menu_book_rounded,
+                      size: 20,
+                      color: scheme.accent,
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    _formatDate(item.savedAt),
-                    style: tt.labelSmall?.copyWith(color: cs.onSurface.withValues(alpha: 0.5)),
-                  ),
+                    const SizedBox(width: 8),
+                    Text(
+                      item.type == FavoriteType.insight ? 'Insight' : 'Quran Verse',
+                      style: tt.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: scheme.text,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      _formatDate(item.savedAt),
+                      style: tt.labelSmall?.copyWith(color: scheme.text.withValues(alpha: 0.5)),
+                    ),
                 ],
               ),
               if (item.type == FavoriteType.insight) ...[
                 const SizedBox(height: 12),
                 if (item.greeting != null)
-                  Text(item.greeting!, style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: cs.onSurface)),
+                  Text(item.greeting!, style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: scheme.text)),
                 const SizedBox(height: 6),
-                Text(item.insight ?? '', style: tt.bodyMedium?.copyWith(height: 1.5, color: cs.onSurface)),
+                Text(item.insight ?? '', style: tt.bodyMedium?.copyWith(height: 1.5, color: scheme.text)),
                 if (item.quote != null) ...[
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: cs.tertiaryContainer.withValues(alpha: 0.3),
+                      color: scheme.accent.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -164,13 +184,13 @@ class _FavoritesPageState extends State<FavoritesPage> {
                       children: [
                         Text(
                           item.quote!,
-                          style: tt.bodySmall?.copyWith(fontStyle: FontStyle.italic, height: 1.5, color: cs.onSurface),
+                          style: tt.bodySmall?.copyWith(fontStyle: FontStyle.italic, height: 1.5, color: scheme.text),
                         ),
                         if (item.reference != null) ...[
                           const SizedBox(height: 6),
                           Align(
                             alignment: Alignment.centerRight,
-                            child: Text('— ${item.reference}', style: tt.labelSmall?.copyWith(fontWeight: FontWeight.bold, color: cs.onSurface)),
+                            child: Text('— ${item.reference}', style: tt.labelSmall?.copyWith(fontWeight: FontWeight.bold, color: scheme.text)),
                           ),
                         ],
                       ],
@@ -179,13 +199,13 @@ class _FavoritesPageState extends State<FavoritesPage> {
                 ],
               ] else ...[
                 const SizedBox(height: 12),
-                Text(item.arabic ?? '', style: TextStyle(fontSize: 22, fontFamily: 'Amiri', height: 1.6, color: cs.primary)),
+                Text(item.arabic ?? '', style: TextStyle(fontSize: 22, fontFamily: 'Amiri', height: 1.6, color: scheme.text)),
                 const SizedBox(height: 8),
-                Text(item.transliteration ?? '', style: tt.bodySmall?.copyWith(color: cs.onSurface.withValues(alpha: 0.7))),
+                Text(item.transliteration ?? '', style: tt.bodySmall?.copyWith(color: scheme.text.withValues(alpha: 0.7))),
                 const SizedBox(height: 8),
-                Text('"${item.english ?? ""}"', style: tt.bodyMedium?.copyWith(fontStyle: FontStyle.italic, height: 1.5, color: cs.onSurface)),
+                Text('"${item.english ?? ""}"', style: tt.bodyMedium?.copyWith(fontStyle: FontStyle.italic, height: 1.5, color: scheme.text)),
                 const SizedBox(height: 8),
-                Text('${item.surah} : ${item.ayahNumber}', style: tt.labelMedium?.copyWith(fontWeight: FontWeight.bold, color: cs.secondary)),
+                Text('${item.surah} : ${item.ayahNumber}', style: tt.labelMedium?.copyWith(fontWeight: FontWeight.bold, color: scheme.accent)),
               ],
             ],
           ),

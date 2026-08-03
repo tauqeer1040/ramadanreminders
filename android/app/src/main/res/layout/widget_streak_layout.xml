@@ -12,8 +12,8 @@
 
     <ImageView
         android:id="@+id/widget_mascot"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
+        android:layout_width="96dp"
+        android:layout_height="96dp"
         android:src="@drawable/widget_mascot"
         android:contentDescription="Mascot"
         android:layout_marginBottom="8dp"/>

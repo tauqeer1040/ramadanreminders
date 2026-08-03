@@ -65,7 +65,7 @@ class _AppHeader extends StatelessWidget {
           ),
           child: ClipOval(
             child: Image.asset(
-              'assets/photos/mascot/hi.webp',
+              'assets/photos/mascot/face.png',
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => Container(
                 color: AppTheme.neonPurple.withValues(alpha: 0.2),
@@ -421,7 +421,7 @@ class _PrivacyPolicyLink extends StatelessWidget {
                 _section('How We Use Data'),
                 _p('• Journal text is processed by AI (OpenRouter) to generate insights and suggested tasks\n• Location is used locally for adhan prayer times — never uploaded or shared\n• Email is used only for account identification'),
                 _section('Data Sharing'),
-                _p('We do not sell your data. Journal content is sent to OpenRouter for AI analysis. Payments are processed by Superwall and Google Play — we never see your payment details.'),
+                _p('We do not sell your data. Journal content is sent to OpenRouter for AI analysis. Payments are processed by RevenueCat — we never see your payment details.'),
                 _section('Data Deletion'),
                 _p('You can delete your account and all associated data from Profile → Delete Account. Data is permanently removed within 30 days.'),
                 _section('Contact'),
