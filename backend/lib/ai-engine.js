@@ -147,6 +147,14 @@ async function pollPendingJournals() {
         clearJournalCache(journal.id);
       } catch (error) {
         console.error(`[POLLER ERROR] ${journal.id}: ${error.message}`);
+        require('./error-log').logError({
+          type: 'ai_poll_journal',
+          message: error.message,
+          stack: error.stack,
+          uid: journal.user_id,
+          route: 'internal/poll-ai',
+          method: 'POST',
+        });
         const attemptNumber = Number(journal.ai_attempts || 0) + 1;
         const retryDelayMinutes = getRetryDelayMinutes(attemptNumber);
         await db.execute({
@@ -165,6 +173,11 @@ async function pollPendingJournals() {
     }
   } catch (error) {
     console.error('[POLLER DB ERROR]', error.message);
+    require('./error-log').logError({
+      type: 'ai_poll_db',
+      message: error.message,
+      stack: error.stack,
+    });
   } finally {
     isProcessing = false;
   }

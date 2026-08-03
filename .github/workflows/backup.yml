@@ -1,0 +1,54 @@
+name: Nightly database backup
+
+on:
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Dump database
+        run: node scripts/backup-dump.mjs
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
+      - name: Upload to R2
+        run: |
+          latest=$(ls -t backup/meowmin-*.json.gz | head -1)
+          echo "uploading $latest"
+          npx wrangler r2 object put "meowmin-backups/$latest" --file "$latest"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Prune old backups (keep 30)
+        run: |
+          npx wrangler r2 object list meowmin-backups > /tmp/objects.txt
+          grep -oE 'meowmin-[0-9]{8}-[0-9]{6}\.json\.gz' /tmp/objects.txt | sort -r | tail -n +31 | while read -r key; do
+            echo "deleting $key"
+            npx wrangler r2 object delete "meowmin-backups/$key" >/dev/null
+          done
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

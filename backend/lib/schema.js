@@ -112,6 +112,24 @@ const CREATE_STATEMENTS = [
       processed_at INTEGER NOT NULL
     )
   `,
+  `
+    CREATE TABLE IF NOT EXISTS error_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      type TEXT,
+      message TEXT,
+      stack TEXT,
+      uid TEXT,
+      route TEXT,
+      method TEXT,
+      request_body TEXT
+    )
+  `,
+];
+
+const ERROR_LOG_INDEXES = [
+  'CREATE INDEX IF NOT EXISTS idx_error_log_occurred_at ON error_log(occurred_at)',
+  'CREATE INDEX IF NOT EXISTS idx_error_log_type ON error_log(type)',
 ];
 
 const USER_TAG_MAP_INDEXES = [
@@ -272,7 +290,7 @@ async function initDB() {
     ...missingColumnAlters(state, 'user_task_tag_maps', TAG_MAP_CREATE_COLUMNS, TAG_MAP_ALTER_COLUMNS),
   ];
 
-  await db.batch([...CREATE_STATEMENTS, ...USER_TAG_MAP_INDEXES, ...alterations], 'write');
+  await db.batch([...CREATE_STATEMENTS, ...USER_TAG_MAP_INDEXES, ...ERROR_LOG_INDEXES, ...alterations], 'write');
 
   if (state.names.has('journals')) {
     await db.execute(`

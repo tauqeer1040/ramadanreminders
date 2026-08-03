@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const { verifyAuth, verifyAppVersion } = require('./middleware/auth');
+const { logError } = require('./lib/error-log');
 
 const app = express();
 app.use(helmet());
@@ -32,6 +33,21 @@ app.use((req, res, next) => {
     next();
   }
 });
+// Final error middleware for uncaught errors / next(err) paths.
+app.use((err, req, res, next) => {
+  logError({
+    type: 'uncaught',
+    message: err.message,
+    stack: err.stack,
+    uid: req.uid,
+    route: req.path,
+    method: req.method,
+    body: req.body,
+  });
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: err.message });
+});
+
 app.use(express.json());
 app.use((req, res, next) => {
   console.log(`[API] ${req.method} ${req.url}`);
@@ -85,5 +101,42 @@ require('./routes/superwall')(app);
 require('./routes/trial')(app);
 require('./routes/subscription')(app);
 require('./routes/internal')(app);
+
+// Capture 5xx responses (routes catch their own errors and return them as
+// JSON, so an error middleware alone never fires for those). Only the first
+// body-serialization per response is intercepted.
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode >= 500) {
+      const message = body && typeof body === 'object' ? body.error : undefined;
+      logError({
+        type: 'http_5xx',
+        message: message || `HTTP ${res.statusCode}`,
+        uid: req.uid,
+        route: req.path,
+        method: req.method,
+        body: req.body,
+      });
+    }
+    return originalJson(body);
+  };
+  next();
+});
+
+// Final error middleware for uncaught errors / next(err) paths.
+app.use((err, req, res, next) => {
+  logError({
+    type: 'uncaught',
+    message: err.message,
+    stack: err.stack,
+    uid: req.uid,
+    route: req.path,
+    method: req.method,
+    body: req.body,
+  });
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: err.message });
+});
 
 module.exports = app;

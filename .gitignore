@@ -67,3 +67,6 @@ public/
 .wrangler/
 backend/local.db
 backend/.server.pid
+
+# Database dumps (never commit)
+backup/

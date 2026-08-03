@@ -14,6 +14,13 @@ function createServer() {
     })
     .catch((error) => {
       console.error('[App BOOT ERROR]', error);
+      try {
+        require('./lib/error-log').logError({
+          type: 'boot',
+          message: error.message,
+          stack: error.stack,
+        });
+      } catch (e) { /* DB may itself be down */ }
       if (isWorker()) throw error;
       process.exit(1);
     });

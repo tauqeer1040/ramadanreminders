@@ -9,7 +9,7 @@
     "subrequest_limit": 1000
   },
   "vars": {
-    "ALLOWED_ORIGINS": "http://localhost:3000,http://localhost:3007,https://meowmin.netlify.app,https://meowmin.taucity.xyz,https://meowmin.pages.dev",
+    "ALLOWED_ORIGINS": "http://localhost:3000,http://localhost:3007,https://meowmin.netlify.app,https://meowmin.taucity.xyz,https://meowmin.pages.dev,https://taucity.xyz,https://www.taucity.xyz",
     "PORT": "3007"
   }
 }
