@@ -9,16 +9,16 @@ interface Props {
 }
 
 const {
-  title = 'Meowmin — Your AI-powered Ramadan journal companion',
-  description = 'A daily spiritual companion. Write a reflection, get personalized Islamic insights, keep your tasbih, read the Quran, and track prayer times — all in one calm, beautiful app.',
+  title = 'Meowmin AI Diary',
+  description = 'Write your daily diary. Meowmin AI finds Quran stories, verses, and Prophetic wisdom that match your day. Had a hard day? Here is what the Quran says about it.',
   image = '/screenshots/home.webp',
   noindex = false,
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const pageTitle = Astro.url.pathname === '/'
-  ? 'Meowmin — Your AI-powered Ramadan journal companion'
-  : `${title} · Meowmin`;
+  ? 'Meowmin AI Diary — Write your diary, get Quran stories that match your day'
+  : `${title} · Meowmin AI Diary`;
 ---
 
 <!doctype html>
@@ -34,7 +34,7 @@ const pageTitle = Astro.url.pathname === '/'
 
     <!-- Open Graph / Social Media -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Meowmin" />
+    <meta property="og:site_name" content="Meowmin AI Diary" />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
@@ -43,6 +43,11 @@ const pageTitle = Astro.url.pathname === '/'
     <meta name="twitter:title" content={pageTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={new URL(image, Astro.site)} />
+
+    <!-- Hidden SEO text for crawlers -->
+    <p class="sr-only">
+      Meowmin AI Diary is a free daily diary app that helps you read the Quran in a focused and personal way. Write about your day and Meowmin AI finds real Quran verses, Surah stories, and Hadith that match what you experienced. Had an angry day? Meowmin shows you what the Quran says about anger and patience. The Prophet Muhammad once had a day like yours — Meowmin finds that story for you. Meowmin AI Diary makes the Quran relevant to your everyday life by matching your diary entries with the right verses and stories from the Quran and Islamic tradition.
+    </p>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -53,13 +58,14 @@ const pageTitle = Astro.url.pathname === '/'
 
     <script type="application/ld+json" set:html={JSON.stringify({
       '@context': 'https://schema.org',
-      '@type': 'WebApplication',
-      name: 'Meowmin',
-      url: 'https://meowmin.sh',
+      '@type': 'MobileApplication',
+      name: 'Meowmin AI Diary',
+      url: 'https://meowmin.taucity.xyz',
       applicationCategory: 'LifestyleApplication',
       operatingSystem: 'Web, Android, iOS',
-      description,
+      description: 'Write your daily diary. Meowmin AI finds Quran stories, verses, and Prophetic wisdom that match your day. Had a hard day? Here is what the Quran says about it.',
       inLanguage: 'en',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     })} />
   </head>
   <body>
@@ -77,6 +83,7 @@ const pageTitle = Astro.url.pathname === '/'
             <a href="/#features" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">Features</a>
             <a href="/blog" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">Blog</a>
             <a href="/privacy" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">Privacy</a>
+            <a href="/terms" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">Terms</a>
             <a href="/app" class="bg-brand text-white px-5 lg:px-6 rounded-full hover:bg-brand-dark transition text-sm lg:text-base whitespace-nowrap font-semibold" style="padding-top: calc(0.55rem + 3px); padding-bottom: calc(0.55rem + 3px);">
               Open the App
             </a>
@@ -95,6 +102,7 @@ const pageTitle = Astro.url.pathname === '/'
           <a href="/#features" class="text-gray-700 hover:text-gray-900 transition text-sm">Features</a>
           <a href="/blog" class="text-gray-700 hover:text-gray-900 transition text-sm">Blog</a>
           <a href="/privacy" class="text-gray-700 hover:text-gray-900 transition text-sm">Privacy</a>
+          <a href="/terms" class="text-gray-700 hover:text-gray-900 transition text-sm">Terms</a>
           <a href="/app" class="bg-brand text-white px-5 py-2.5 rounded-full hover:bg-brand-dark transition text-sm text-center whitespace-nowrap w-fit font-semibold">Open the App</a>
         </div>
       </div>
@@ -129,6 +137,7 @@ const pageTitle = Astro.url.pathname === '/'
             <h3 class="font-semibold text-xs sm:text-sm uppercase tracking-wider mb-4 text-white/80">Company</h3>
             <ul class="space-y-2 sm:space-y-3 text-sm sm:text-base">
               <li><a href="/privacy" class="hover:text-white/70 transition">Privacy Policy</a></li>
+              <li><a href="/terms" class="hover:text-white/70 transition">Terms of Service</a></li>
               <li><a href="mailto:tauqeer1040@gmail.com" class="hover:text-white/70 transition">Contact</a></li>
             </ul>
           </div>
