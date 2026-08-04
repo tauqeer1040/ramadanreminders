@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -42,9 +43,59 @@ class AuthService {
           'isAnonymous': '${currentUser?.isAnonymous}',
           'email': currentUser?.email ?? 'none',
           'providerCount': '${currentUser?.providerData.length ?? 0}',
+          'platform': kIsWeb ? 'web' : 'native',
         },
       );
 
+      // ── Web: use Firebase Auth's signInWithPopup (no google_sign_in plugin needed) ──
+      if (kIsWeb) {
+        debug.logEvent('WEB', 'Using Firebase signInWithPopup for web');
+        final provider = GoogleAuthProvider();
+        provider.addScope('email');
+        provider.addScope('profile');
+
+        UserCredential? userCredential;
+        try {
+          userCredential = await _auth.signInWithPopup(provider);
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'popup-blocked' || e.code == 'popup-closed-by-user') {
+            debug.logEvent('CANCELLED', 'Popup blocked or closed: ${e.code}');
+            return null;
+          }
+          rethrow;
+        }
+
+        if (userCredential.user != null) {
+          // Ensure user exists in backend
+          try {
+            await UserService.syncUser(userCredential.user!);
+          } catch (e) {
+            debug.logEvent('SYNC_ERR', 'Backend sync failed: $e');
+          }
+          await CryptoService.fetchAndStoreKey();
+          try {
+            await JournalRemoteStorage.pullAllJournalsToLocal();
+            JournalService.notifyJournalsChanged();
+          } catch (e) {
+            debug.logEvent('SYNC_ERR', 'Journal pull failed: $e');
+          }
+          AnalyticsService.instance.logEvent('sign_in', params: {'method': 'google_web'});
+          try {
+            await RevenueCatService.instance.identify(userCredential.user!.uid);
+          } catch (e) {
+            debug.logEvent('RC_ERR', 'RevenueCat identify failed: $e');
+          }
+          debug.logSignInSuccess(details: {
+            'uid': userCredential.user!.uid,
+            'email': userCredential.user!.email ?? 'none',
+            'displayName': userCredential.user!.displayName ?? 'none',
+            'platform': 'web',
+          });
+        }
+        return userCredential;
+      }
+
+      // ── Native: use google_sign_in plugin ──
       final googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
         debug.logEvent('CANCELLED', 'User cancelled Google sign-in');

@@ -18,7 +18,7 @@ module.exports = function (app) {
       });
 
       if (!userResult.rows.length) {
-        return res.json({ trialActive: true, daysRemaining: DEFAULT_TRIAL_DAYS, graceMs: DEFAULT_GRACE_MS });
+        return res.json({ trialActive: true, daysRemaining: DEFAULT_TRIAL_DAYS, graceMs: DEFAULT_GRACE_MS, subscriptionStatus: 'none' });
       }
 
       const row = userResult.rows[0];

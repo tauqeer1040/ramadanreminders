@@ -1,8 +1,8 @@
 const { z } = require('zod');
 
 const upsertUserSchema = z.object({
-  displayName: z.string().optional(),
-  email: z.string().optional(),
+  displayName: z.string().nullish(),
+  email: z.string().nullish(),
 });
 
 const syncJournalsSchema = z.object({
