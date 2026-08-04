@@ -1,7 +1,7 @@
 {
   "name": "ramadan-journal-backend",
   "version": "1.0.0",
-  "description": "Backend service for Ramadan App Journal Analysis",
+  "description": "Backend service for Meowmin AI Diary",
   "main": "db2.js",
   "scripts": {
     "start": "bash server.sh start",

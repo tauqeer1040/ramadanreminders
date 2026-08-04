@@ -1203,7 +1203,7 @@ String _tweetFor(int index, _StatsData data) {
       if (e >= 100) return "You've written $e entries! A century of thoughts, reflections, and growth. Your journal is a treasure. ✨📝";
       if (e >= 50) return "You've written $e entries! Your journal is thriving — half a hundred moments captured. Every page tells a story. 📝";
       if (e >= 10) return "You've written $e entries! Your journal is growing into something meaningful. Each entry is a snapshot of your journey.";
-      return "You've written $e entr${e == 1 ? 'y' : 'ies'} so far. Keep going — each one captures a moment of your Ramadan journey. 📝";
+      return "You've written $e entr${e == 1 ? 'y' : 'ies'} so far. Keep going — each one captures a moment of your journey. 📝";
     case 2:
       if (w == 0) return "You haven't written any words yet. But every masterpiece starts with a single word. ✍️";
       if (w >= 10000) return "You've written ${_fmtNum(w)} words! That's a short novel's worth of reflections. Your voice has volume and depth. 📚✨";

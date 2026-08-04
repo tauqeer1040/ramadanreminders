@@ -92,7 +92,7 @@ class MyApp extends ConsumerWidget {
     }
 
     return MaterialApp(
-      title: 'Meowmin Ai Diary',
+      title: 'Meowmin AI Diary',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(scheme),
       themeMode: ThemeMode.dark,
