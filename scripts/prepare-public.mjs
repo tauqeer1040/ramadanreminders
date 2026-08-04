@@ -1,7 +1,7 @@
 // Assembles the Cloudflare Pages static output directory (public/) from the
 // Flutter web build, the Astro landing site, and the backend shop assets.
 //
-//   - landing/dist            -> public/       (Astro site, includes /app copy)
+//   - sites/meowmin/dist      -> public/       (Astro site, includes /app copy)
 //   - build/web               -> public/app    (fresh Flutter web output, overlays)
 //   - backend/public/assets   -> public/assets (shop image assets)
 //   - writes public/_headers and public/_redirects
@@ -35,7 +35,7 @@ function copy(src, dest) {
 }
 
 // 1. Landing site (Astro). Overlays public/, so run first.
-copy(path.join(root, 'landing', 'dist'), publicDir);
+copy(path.join(root, 'sites', 'meowmin', 'dist'), publicDir);
 
 // 2. Flutter web build -> public/app (authoritative, overrides landing copy).
 copy(path.join(root, 'build', 'web'), path.join(publicDir, 'app'));

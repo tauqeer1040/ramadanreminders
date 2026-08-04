@@ -64,6 +64,8 @@ backend/*firebase-adminsdk*.json
 # Cloudflare Pages local dev
 .dev.vars
 public/
+!sites/meowmin/public/
+!sites/meowmin/public/screenshots/
 .wrangler/
 backend/local.db
 backend/.server.pid

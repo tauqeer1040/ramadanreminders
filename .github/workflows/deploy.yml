@@ -33,7 +33,7 @@ jobs:
         run: npm ci
 
       - name: Install landing deps
-        working-directory: landing
+        working-directory: sites/meowmin
         run: npm ci
 
       - name: Install backend deps
@@ -41,7 +41,7 @@ jobs:
         run: npm ci
 
       - name: Build landing site
-        working-directory: landing
+        working-directory: sites/meowmin
         run: npm run build
 
       - name: Bundle worker
@@ -57,7 +57,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy taucity landing to Cloudflare Pages
-        run: npx wrangler pages deploy company --project-name taucity --branch main
+        run: npx wrangler pages deploy sites/taucity --project-name taucity --branch main
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
