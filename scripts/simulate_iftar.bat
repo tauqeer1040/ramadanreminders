@@ -1,6 +1,6 @@
 @echo off
 echo Simulating Iftar Approaching...
-adb shell cmd notification post -t "Iftar Approaching" -S bigtext "com.example.ramadan_app" "🌇 The fast is ending soon. Make dua"
+adb shell cmd notification post -t "Iftar Approaching" -S bigtext "com.taucity.meowmin" "🌇 The fast is ending soon. Make dua"
 if %ERRORLEVEL% EQU 0 (
     echo Notification sent successfully!
 ) else (
