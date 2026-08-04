@@ -58,14 +58,19 @@ class WelcomePage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           if (onSkipToLogin != null)
-            TextButton(
-              onPressed: onSkipToLogin,
-              child: Text(
-                "I already have an account",
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface.withValues(alpha: 0.6),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: GestureDetector(
+                onTap: onSkipToLogin,
+                child: Text(
+                  "I already have an account",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: cs.onSurface.withValues(alpha: 0.45),
+                    decoration: TextDecoration.underline,
+                    decorationColor: cs.onSurface.withValues(alpha: 0.25),
+                  ),
                 ),
               ),
             ),
