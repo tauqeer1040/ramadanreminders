@@ -45,7 +45,7 @@ class DefaultFirebaseOptions {
     appId: '1:1001153353947:web:753ebed9db2b11515614fe',
     messagingSenderId: '1001153353947',
     projectId: 'meowmin-34db1',
-    authDomain: 'meowmin.taucity.xyz',
+    authDomain: 'meowmin-34db1.firebaseapp.com',
     storageBucket: 'meowmin-34db1.firebasestorage.app',
     measurementId: 'G-EJYEJ2XFT7',
   );
@@ -81,7 +81,7 @@ class DefaultFirebaseOptions {
     appId: '1:1001153353947:web:207924e5b74c94265614fe',
     messagingSenderId: '1001153353947',
     projectId: 'meowmin-34db1',
-    authDomain: 'meowmin.taucity.xyz',
+    authDomain: 'meowmin-34db1.firebaseapp.com',
     storageBucket: 'meowmin-34db1.firebasestorage.app',
     measurementId: 'G-HMX736JRG9',
   );
