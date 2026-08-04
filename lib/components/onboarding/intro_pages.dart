@@ -10,8 +10,9 @@ import '../widgets/duo_button.dart';
 
 class WelcomePage extends StatelessWidget {
   final VoidCallback onNext;
+  final VoidCallback? onSkipToLogin;
 
-  const WelcomePage({required this.onNext, super.key});
+  const WelcomePage({required this.onNext, this.onSkipToLogin, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +56,19 @@ class WelcomePage extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          if (onSkipToLogin != null)
+            TextButton(
+              onPressed: onSkipToLogin,
+              child: Text(
+                "I already have an account",
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface.withValues(alpha: 0.6),
+                ),
+              ),
+            ),
           const SizedBox(height: 48),
         ],
       ),

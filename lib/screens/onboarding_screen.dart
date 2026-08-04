@@ -72,6 +72,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
   }
 
+  void _skipToLogin() {
+    final loginIndex = OnboardingStep.all.length - 1;
+    _currentIndex = loginIndex;
+    _currentStep = OnboardingStep.fromIndex(_currentIndex);
+    _logPageView();
+    _pageController.animateToPage(
+      loginIndex,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOutCubicEmphasized,
+    );
+  }
+
   // ignore: unused_element
   Future<void> _finishOnboarding() async {
     AnalyticsService.instance.logEvent('onboarding_complete');
@@ -224,7 +236,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       _logPageView();
                     },
                     children: OnboardingStep.all.map(
-                      (step) => step.buildPage(_data, _goToNext, _goBack),
+                      (step) => step.buildPage(_data, _goToNext, _goBack, onSkipToLogin: _skipToLogin),
                     ).toList(),
                   ),
                 ),
