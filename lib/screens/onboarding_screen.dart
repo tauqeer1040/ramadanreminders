@@ -57,6 +57,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOutCubicEmphasized,
       );
+    } else {
+      _finishOnboarding();
     }
   }
 
@@ -84,7 +86,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // ignore: unused_element
   Future<void> _finishOnboarding() async {
     AnalyticsService.instance.logEvent('onboarding_complete');
     AnalyticsService.instance.setUserProperty('onboarding_completed', 'true');

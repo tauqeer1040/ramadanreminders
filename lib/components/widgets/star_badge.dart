@@ -42,7 +42,7 @@ class StarBadge extends StatelessWidget {
                     width: 36,
                     height: 36,
                     child: Lottie.asset(
-                      'assets/photos/elements/Streak Fire.json',
+                      'assets/photos/elements/streak_fire.json',
                       fit: BoxFit.contain,
                     ),
                   ),

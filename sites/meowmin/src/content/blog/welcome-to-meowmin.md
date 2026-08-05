@@ -1,13 +1,15 @@
 ---
 title: Welcome to Meowmin
-description: A short introduction to Meowmin, your AI-powered Ramadan journal companion.
+description: A short introduction to Meowmin AI Diary, your AI-powered diary companion.
 pubDate: 2026-08-01
-tags: ["journal", "introduction"]
+tags: ["diary", "introduction"]
 ---
 
-Welcome to Meowmin — a calm, beautiful companion for building a closer connection with Allah through daily reflection.
+Welcome to Meowmin AI Diary — a calm, beautiful companion for building a closer connection with Allah through daily reflection.
 
-## Why a journal?
+## Why a diary?
+
+Writing a few honest sentences about your day is one of the simplest ways to build consistency in worship. It helps you notice your patterns, stay grateful, and keep your intentions clear.
 
 Writing a few honest sentences about your day is one of the simplest ways to build consistency in worship. It helps you notice your patterns, stay grateful, and keep your intentions clear.
 

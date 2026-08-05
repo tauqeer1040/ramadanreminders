@@ -26,9 +26,6 @@ import '../theme/app_theme.dart';
 import 'stats_card.dart';
 import 'widgets/duo_button.dart';
 import 'widgets/auth_debug_card.dart';
-import 'action_prompt_card.dart';
-import 'package:ramadan_reflections/services/revenuecat_service.dart';
-import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -247,7 +244,7 @@ class _ProfilePage1State extends State<ProfilePage1>
     final granted = await NotificationService.requestPermissions();
     if (mounted) setState(() => _notificationsGranted = granted);
     if (granted && mounted) {
-      NotificationService.scheduleDailyNotifications();
+      if (!kIsWeb) NotificationService.scheduleDailyNotifications();
       await _incrementStars(100);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -327,7 +324,7 @@ class _ProfilePage1State extends State<ProfilePage1>
                                 child: Transform.scale(
                                   scale: 2,
                                   alignment: Alignment.bottomCenter,
-                                  child: Lottie.asset('assets/photos/elements/Music fly.json', fit: BoxFit.cover),
+                                  child: Lottie.asset('assets/photos/elements/music_fly.json', fit: BoxFit.cover),
                                 ),
                               ),
                             ),
@@ -412,6 +409,16 @@ class _ProfilePage1State extends State<ProfilePage1>
 
             // ── Notifications ───────────────────────────────────────────────
             if (!_notificationsGranted) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Users who enable reminders are 2x more consistent 🌙',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.starWhite.withValues(alpha: 0.5),
+                  ),
+                ),
+              ),
               _buildNotificationCard(),
               const SizedBox(height: 24),
             ],
@@ -443,22 +450,6 @@ class _ProfilePage1State extends State<ProfilePage1>
                 ),
               ),
 
-            // ── Notification Prompt ────────────────────────────────────────
-            if (!_notificationsGranted)
-              ActionPromptCard(
-                title: 'Set the reminder',
-                subtitle:
-                    'Never miss your morning routine!\nSet a reminder to stay on track',
-                buttonText: 'Set Now +100 ⭐',
-                onPressed: _toggleNotifications,
-                backgroundColor: const Color(0xFFFFE0B2),
-                foregroundColor: const Color(0xFF4E342E),
-                icon: const Icon(
-                  Icons.notifications_active_rounded,
-                  size: 64,
-                  color: Color(0xFFFF7043),
-                ),
-              ),
             const SizedBox(height: 16),
 
             // ── Share ──────────────────────────────────────────────────────
@@ -523,42 +514,24 @@ class _ProfilePage1State extends State<ProfilePage1>
   }
 
   Widget _buildNotificationCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: _cardDecoration(borderColor: AppTheme.starGold.withValues(alpha: 0.3)),
+    return DuoButton(
+      onPressed: _toggleNotifications,
+      backgroundColor: const Color(0xFFFFC107),
+      depthColor: const Color(0xFFE6A800),
+      radius: 16,
+      height: 56,
       child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppTheme.starGold.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: const [
+          Icon(Icons.notifications_active_rounded, size: 20, color: Color(0xFF1A1A1A)),
+          SizedBox(width: 10),
+          Text(
+            'Enable Reminders +100 ⭐',
+            style: TextStyle(
+              color: Color(0xFF1A1A1A),
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
             ),
-            child: const Icon(Icons.notifications_active_rounded, color: AppTheme.starGold, size: 22),
-          ),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Enable Reminders',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.starWhite),
-                ),
-                SizedBox(height: 3),
-                Text(
-                  'Get daily prayer & reflection reminders 🌙',
-                  style: TextStyle(fontSize: 12, color: AppTheme.ghostSilver),
-                ),
-              ],
-            ),
-          ),
-          Switch(
-            value: false,
-            onChanged: (_) => _toggleNotifications(),
-            activeThumbColor: AppTheme.starGold,
-            activeTrackColor: AppTheme.starGold.withValues(alpha: 0.3),
           ),
         ],
       ),

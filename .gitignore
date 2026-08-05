@@ -72,3 +72,5 @@ backend/.server.pid
 
 # Database dumps (never commit)
 backup/
+.playwright-mcp/
+opencode.json

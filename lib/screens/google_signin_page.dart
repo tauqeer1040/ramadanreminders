@@ -19,17 +19,23 @@ class GoogleSignInPage extends StatefulWidget {
 
 class _GoogleSignInPageState extends State<GoogleSignInPage> {
   bool _loading = false;
+  bool _loggedIn = false;
+  String _userName = '';
 
   Future<void> _signIn() async {
     AnalyticsService.instance.logEvent('onboarding_google_sign_in', params: {'action': 'started'});
     setState(() => _loading = true);
     try {
-      await AuthService.signInWithGoogle();
+      final cred = await AuthService.signInWithGoogle();
       AnalyticsService.instance.logEvent('onboarding_google_sign_in', params: {'action': 'completed'});
-      if (mounted) widget.onFinish();
+      if (mounted) {
+        setState(() {
+          _loggedIn = true;
+          _userName = cred?.user?.displayName ?? cred?.user?.email ?? '';
+        });
+      }
     } catch (_) {
       AnalyticsService.instance.logEvent('onboarding_google_sign_in', params: {'action': 'failed'});
-      // error handled inside signInWithGoogle
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -46,7 +52,7 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
         children: [
           const Spacer(flex: 1),
           Text(
-            "Save your diaries and progress",
+            _loggedIn ? "You're all set!" : "Save your diaries and progress",
             textAlign: TextAlign.center,
             style: tt.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
@@ -55,7 +61,9 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
           ),
           const SizedBox(height: 12),
           Text(
-            "Your data is private and safe.\nOnly you can see your reflections.",
+            _loggedIn
+                ? "Signed in${_userName.isNotEmpty ? ' as $_userName' : ''}.\nTap Continue to enter the app."
+                : "Your data is private and safe.\nOnly you can see your reflections.",
             textAlign: TextAlign.center,
             style: tt.bodyLarge?.copyWith(
               color: cs.onSurface.withValues(alpha: 0.7),
@@ -63,17 +71,17 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
           ),
           const SizedBox(height: 32),
 
-          // Google sign-in button
+          // Google sign-in button / logged-in state
           SizedBox(
             width: double.infinity,
             height: 56,
             child: Material(
-              color: Colors.white,
+              color: _loggedIn ? const Color(0xFFE8F5E9) : Colors.white,
               borderRadius: BorderRadius.circular(28),
               elevation: 2,
               shadowColor: Colors.black.withValues(alpha: 0.3),
               child: InkWell(
-                onTap: _loading ? null : _signIn,
+                onTap: (_loading || _loggedIn) ? null : _signIn,
                 borderRadius: BorderRadius.circular(28),
                 child: Center(
                   child: _loading
@@ -84,16 +92,19 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Image.asset(
-                            'assets/photos/elements/googlelogo.png',
-                            width: 22,
-                            height: 22,
-                          ),
+                          if (_loggedIn)
+                            const Icon(Icons.check_circle_rounded, color: Color(0xFF4CAF50), size: 22)
+                          else
+                            Image.asset(
+                              'assets/photos/elements/googlelogo.png',
+                              width: 22,
+                              height: 22,
+                            ),
                           const SizedBox(width: 14),
-                          const Text(
-                            "Sign in with Google",
+                          Text(
+                            _loggedIn ? "Signed in with Google" : "Sign in with Google",
                             style: TextStyle(
-                              color: Color(0xFF1F1F1F),
+                              color: _loggedIn ? const Color(0xFF2E7D32) : const Color(0xFF1F1F1F),
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),

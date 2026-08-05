@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://meowmin.taucity.xyz/sitemap-index.xml

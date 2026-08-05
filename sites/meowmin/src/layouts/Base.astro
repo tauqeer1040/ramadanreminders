@@ -44,11 +44,6 @@ const pageTitle = Astro.url.pathname === '/'
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={new URL(image, Astro.site)} />
 
-    <!-- Hidden SEO text for crawlers -->
-    <p class="sr-only">
-      Meowmin AI Diary is a free daily diary app that helps you read the Quran in a focused and personal way. Write about your day and Meowmin AI finds real Quran verses, Surah stories, and Hadith that match what you experienced. Had an angry day? Meowmin shows you what the Quran says about anger and patience. The Prophet Muhammad once had a day like yours — Meowmin finds that story for you. Meowmin AI Diary makes the Quran relevant to your everyday life by matching your diary entries with the right verses and stories from the Quran and Islamic tradition.
-    </p>
-
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -73,9 +68,11 @@ const pageTitle = Astro.url.pathname === '/'
     <nav style="padding-top: 15px;" class="bg-[#f9fafb]">
       <div class="max-w-7xl mx-auto px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">
-          <div class="flex items-center">
-            <a href="/">
-              <img src="/logo.png" alt="Meowmin" class="h-10 w-auto" />
+          <div class="flex items-center gap-2">
+            <a href="/" class="flex items-center gap-2">
+              <img src="/images/face.png" alt="" class="h-9 w-auto" aria-hidden="true" />
+              <span class="font-bold text-lg text-gray-900">Meowmin AI Diary</span>
+              <img src="/images/meowmin.png" alt="" class="h-8 w-auto hidden sm:block" aria-hidden="true" />
             </a>
           </div>
           <div class="hidden md:flex items-center space-x-6 lg:space-x-8">
@@ -154,6 +151,12 @@ const pageTitle = Astro.url.pathname === '/'
     </footer>
 
     <script>
+      // Inject sr-only SEO text into body for Googlebot
+      const srText = document.createElement('p');
+      srText.className = 'sr-only';
+      srText.textContent = 'Meowmin AI Diary is a free daily diary app that helps you read the Quran in a focused and personal way. Write about your day and Meowmin AI finds real Quran verses, Surah stories, and Hadith that match what you experienced. Had an angry day? Meowmin shows you what the Quran says about anger and patience. The Prophet Muhammad once had a day like yours — Meowmin finds that story for you. Meowmin AI Diary makes the Quran relevant to your everyday life by matching your diary entries with the right verses and stories from the Quran and Islamic tradition.';
+      document.body.prepend(srText);
+
       document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {
         document.getElementById('mobile-menu')?.classList.toggle('hidden');
       });

@@ -7,14 +7,14 @@ const posts = (await getCollection('blog')).sort(
 );
 
 const title = 'Blog';
-const description = 'Notes on journaling, reflection, and building a daily spiritual habit.';
+  const description = 'Notes on diary-keeping, reflection, and building a daily spiritual habit.';
 ---
 
 <Base title={title} description={description}>
   <section class="py-12 sm:py-16 px-6 lg:px-8">
     <div class="max-w-4xl mx-auto">
       <h1 class="text-4xl sm:text-5xl font-bold text-gray-900 mb-3">Blog</h1>
-      <p class="text-lg text-gray-600 mb-12">Notes on journaling, reflection, and building a daily spiritual habit.</p>
+      <p class="text-lg text-gray-600 mb-12">Notes on diary-keeping, reflection, and building a daily spiritual habit.</p>
 
       {posts.length === 0 && (
         <p class="text-gray-500">No posts yet — check back soon.</p>

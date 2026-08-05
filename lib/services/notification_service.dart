@@ -1,6 +1,10 @@
+import 'dart:js_interop';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:web/web.dart' as web;
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
@@ -27,8 +31,11 @@ class NotificationService {
 
     await _notificationsPlugin.initialize(settings: initializationSettings);
   }
-
   static Future<bool> requestPermissions() async {
+    if (kIsWeb) {
+      final jsResult = await web.Notification.requestPermission().toDart;
+      return jsResult == 'granted';
+    }
     final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
         _notificationsPlugin
             .resolvePlatformSpecificImplementation<
@@ -41,11 +48,15 @@ class NotificationService {
   }
 
   static Future<bool> checkPermissions() async {
+    if (kIsWeb) {
+      return web.Notification.permission == 'granted';
+    }
     final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
         _notificationsPlugin
             .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin
             >();
+
     final bool? granted = await androidImplementation
         ?.areNotificationsEnabled();
     return granted ?? false;

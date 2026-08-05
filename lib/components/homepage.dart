@@ -146,7 +146,7 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
                                           child: Transform.scale(
                                             scale: 2,
                                             alignment: Alignment.bottomCenter,
-                                            child: Lottie.asset('assets/photos/elements/Music fly.json', fit: BoxFit.cover),
+                                            child: Lottie.asset('assets/photos/elements/music_fly.json', fit: BoxFit.cover),
                                           ),
                                         ),
                                       ),

@@ -7,9 +7,7 @@ import '../services/journal_service.dart';
 import '../services/streak_service.dart';
 import '../services/favorites_service.dart';
 import '../services/auth_service.dart';
-import '../screens/main_screen.dart';
 import '../theme/app_theme.dart';
-import '../components/profilepage.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data model
@@ -300,7 +298,7 @@ class _StatsCardState extends State<StatsCard>
     const fg = Color(0xFFF1F1F1);
 
     return GestureDetector(
-      onTap: () => MainScreen.switchTab(context, 3),
+      onTap: () => _showStatDetail(context, data, 0),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(22),
         child: BackdropFilter(
@@ -358,7 +356,7 @@ class _StatsCardState extends State<StatsCard>
                       width: 56,
                       height: 56,
                       child: Lottie.asset(
-                        'assets/photos/elements/Streak Fire.json',
+                        'assets/photos/elements/streak_fire.json',
                         fit: BoxFit.contain,
                         errorBuilder: (_, __, ___) => const Icon(
                           Icons.local_fire_department_rounded,
@@ -395,9 +393,7 @@ class _StatsCardState extends State<StatsCard>
     ];
 
     return GestureDetector(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const ProfilePage1()),
-      ),
+      onTap: () => _showStatDetail(context, data, 1),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
@@ -484,7 +480,7 @@ class _StatsCardState extends State<StatsCard>
     final recent = data.journals.take(4).toList();
 
     return GestureDetector(
-      onTap: widget.onTapEntries,
+      onTap: () => _showStatDetail(context, data, 1),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(22),
         child: BackdropFilter(
@@ -902,7 +898,9 @@ class _StatsCardState extends State<StatsCard>
     const subText = 'All features unlocked';
     const showBolt = false;
 
-    return Container(
+    return GestureDetector(
+      onTap: () => _showSubscriptionSheet(context),
+      child: Container(
       height: 72,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       decoration: BoxDecoration(
@@ -956,12 +954,9 @@ class _StatsCardState extends State<StatsCard>
           ),
         ],
       ),
+      ),
     );
   }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // Stat detail bottom sheet (preserved from original)
-  // ───────────────────────────────────────────────────────────────────────────
 
   void _showStatDetail(BuildContext context, _StatsData data, int index) {
     showModalBottomSheet(
@@ -973,6 +968,79 @@ class _StatsCardState extends State<StatsCard>
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (ctx) => _StatStorySheet(data: data, initialIndex: index),
+    );
+  }
+
+  void _showSubscriptionSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            height: MediaQuery.of(context).size.height * 0.35,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+            ),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 10, bottom: 4),
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFA5D6A7).withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: const Icon(Icons.check_circle_rounded, color: Color(0xFFA5D6A7), size: 30),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Free Plan',
+                  style: TextStyle(
+                    color: AppTheme.starWhite,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    'All features unlocked — no subscription needed. Write, reflect, and grow without limits.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppTheme.starWhite.withValues(alpha: 0.6),
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
