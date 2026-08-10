@@ -216,4 +216,51 @@ class InsightService {
 
     return [];
   }
+
+  /// Fetches the AI insight cards for a single journal from the backend.
+  /// Returns an empty list when the journal has no completed AI insights
+  /// (unsynced, pending, or failed) or the user is anonymous.
+  static Future<List<InsightCard>> fetchJournalInsightCards(String journalId) async {
+    final user = _auth.currentUser;
+    if (user == null || user.isAnonymous || journalId.isEmpty) return [];
+
+    try {
+      final response = await http.get(
+        Uri.parse('$_backendUrl/journal/${Uri.encodeComponent(journalId)}'),
+        headers: await ApiClient.authHeaders(),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) return [];
+
+      final payload = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+      final summary = payload['insight']?['summary'] as String?;
+      if (summary == null || summary.isEmpty) return [];
+
+      final parsed = Map<String, dynamic>.from(jsonDecode(summary) as Map);
+      final cardsRaw = parsed['cards'];
+      if (cardsRaw is! List) return [];
+
+      return cardsRaw
+          .map((e) => InsightCard.fromJson(Map<String, dynamic>.from(e as Map)))
+          .where((c) => c.type.isNotEmpty)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Returns cached insight cards without hitting the network.
+  /// Used to ensure scratch cards always have content to display.
+  static Future<List<InsightCard>> getCachedInsights({int limit = 3}) async {
+    final cached = await _loadCachedDailyContent();
+    if (cached == null) return [];
+    final cardsRaw = cached['insightCards'];
+    if (cardsRaw is List) {
+      return cardsRaw
+          .map((e) => InsightCard.fromJson(Map<String, dynamic>.from(e as Map)))
+          .take(limit)
+          .toList();
+    }
+    return [];
+  }
 }
