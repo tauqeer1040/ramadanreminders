@@ -57,7 +57,7 @@ class MyApp extends ConsumerWidget {
           onSurface: AppTheme.starWhite,
           onSurfaceVariant: AppTheme.ghostSilver,
         ),
-        scaffoldBackgroundColor: scheme.surface,
+        scaffoldBackgroundColor: Colors.black,
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,
           elevation: 0,

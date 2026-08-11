@@ -98,5 +98,5 @@ flutter_launcher_icons:
   web:
     generate: true
     image_path: "assets/photos/mascot/face.webp"
-    background_color: "#9D50FF"
-    theme_color: "#9D50FF"
+    background_color: "#000000"
+    theme_color: "#000000"
