@@ -83,3 +83,4 @@ bash.exe.stackdump
 get_path.dart
 c:*out.txt
 open-vm-browser.ps1
+logs/
