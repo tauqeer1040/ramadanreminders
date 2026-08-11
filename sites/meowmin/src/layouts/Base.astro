@@ -9,16 +9,16 @@ interface Props {
 }
 
 const {
-  title = 'Meowmin AI Diary',
-  description = 'Write your daily diary. Meowmin AI finds Quran stories, verses, and Prophetic wisdom that match your day. Had a hard day? Here is what the Quran says about it.',
+  title = 'Meowmin',
+  description = 'Meowmin is a free daily diary app. Write about your day and get personalized Quran verses, Surah stories, and Hadith that match your experience.',
   image = '/screenshots/home.webp',
   noindex = false,
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const pageTitle = Astro.url.pathname === '/'
-  ? 'Meowmin AI Diary — Write your diary, get Quran stories that match your day'
-  : `${title} · Meowmin AI Diary`;
+  ? 'Meowmin — The Quran, mirrored in your day'
+  : `${title} · Meowmin`;
 ---
 
 <!doctype html>
@@ -26,19 +26,21 @@ const pageTitle = Astro.url.pathname === '/'
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/webp" href="/favicon.webp" />
+    <link rel="icon" type="image/png" href="/images/face.png" />
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     {noindex && <meta name="robots" content="noindex" />}
 
-    <!-- Open Graph / Social Media -->
+    <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Meowmin AI Diary" />
+    <meta property="og:site_name" content="Meowmin" />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <meta property="og:image" content={new URL(image, Astro.site)} />
+
+    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={pageTitle} />
     <meta name="twitter:description" content={description} />
@@ -47,45 +49,56 @@ const pageTitle = Astro.url.pathname === '/'
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800;900&display=swap"
       rel="stylesheet"
     />
+    <!-- Critical preloads -->
+    <link rel="preload" as="image" href="/screenshots/home.webp" />
+    <link rel="preload" as="image" href="/images/face.png" />
+
+    <!-- Preload Flutter app bundle (1.1 MB brotli) while user reads the landing page -->
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://www.googleapis.com" />
+    <link rel="preconnect" href="https://api.revenuecat.com" />
+    <link rel="preconnect" href="https://firebaseapp.com" />
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" />
+    <link rel="preload" href="/app/main.dart.js" as="script" />
 
     <script type="application/ld+json" set:html={JSON.stringify({
       '@context': 'https://schema.org',
       '@type': 'MobileApplication',
-      name: 'Meowmin AI Diary',
+      name: 'Meowmin',
       url: 'https://meowmin.taucity.xyz',
       applicationCategory: 'LifestyleApplication',
       operatingSystem: 'Web, Android, iOS',
-      description: 'Write your daily diary. Meowmin AI finds Quran stories, verses, and Prophetic wisdom that match your day. Had a hard day? Here is what the Quran says about it.',
+      description: 'Meowmin is a free daily diary app. Write about your day and get personalized Quran verses, Surah stories, and Hadith that match your experience.',
       inLanguage: 'en',
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     })} />
   </head>
   <body>
     <!-- Navbar -->
-    <nav style="padding-top: 15px;" class="bg-[#f9fafb]">
+    <nav style="padding-top: 15px;" class="fixed top-0 left-0 right-0 z-50 bg-gray-900/70 backdrop-blur-xl border-b border-white/10">
       <div class="max-w-7xl mx-auto px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">
           <div class="flex items-center gap-2">
             <a href="/" class="flex items-center gap-2">
-              <img src="/images/face.png" alt="" class="h-9 w-auto" aria-hidden="true" />
-              <span class="font-bold text-lg text-gray-900">Meowmin AI Diary</span>
-              <img src="/images/meowmin.png" alt="" class="h-8 w-auto hidden sm:block" aria-hidden="true" />
+              <img src="/images/face.png" alt="Meowmin" class="h-9 w-auto" />
+              <img src="/images/meowmin.webp" alt="Meowmin" class="h-8 w-auto" />
             </a>
           </div>
           <div class="hidden md:flex items-center space-x-6 lg:space-x-8">
-            <a href="/#how" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">How it works</a>
-            <a href="/#features" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">Features</a>
-            <a href="/blog" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">Blog</a>
-            <a href="/privacy" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">Privacy</a>
-            <a href="/terms" class="text-gray-700 hover:text-gray-900 transition text-sm lg:text-base">Terms</a>
-            <a href="/app" class="bg-brand text-white px-5 lg:px-6 rounded-full hover:bg-brand-dark transition text-sm lg:text-base whitespace-nowrap font-semibold" style="padding-top: calc(0.55rem + 3px); padding-bottom: calc(0.55rem + 3px);">
-              Open the App
+            <a href="/#how" class="text-white/80 hover:text-white transition text-sm lg:text-base">How it works</a>
+            <a href="/#features" class="text-white/80 hover:text-white transition text-sm lg:text-base">Features</a>
+            <a href="/blog" class="text-white/80 hover:text-white transition text-sm lg:text-base">Blog</a>
+            <a href="/privacy" class="text-white/80 hover:text-white transition text-sm lg:text-base">Privacy</a>
+            <a href="/terms" class="text-white/80 hover:text-white transition text-sm lg:text-base">Terms</a>
+            <a href="/app" class="inline-flex items-center gap-2 bg-brand text-white px-5 lg:px-6 rounded-2xl text-sm lg:text-base whitespace-nowrap font-semibold shadow-lg shadow-brand/20 hover:bg-brand-dark transition-all duration-200">
+              Open Meowmin
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
             </a>
           </div>
-          <button id="mobile-menu-btn" class="md:hidden p-2" aria-label="Open menu">
+          <button id="mobile-menu-btn" class="md:hidden p-2 text-white" aria-label="Open menu">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
             </svg>
@@ -93,22 +106,38 @@ const pageTitle = Astro.url.pathname === '/'
         </div>
       </div>
       <!-- Mobile menu -->
-      <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-gray-100 px-6 pb-4">
+      <div id="mobile-menu" class="hidden md:hidden bg-gray-900/90 backdrop-blur-xl border-t border-white/10 px-6 pb-4">
         <div class="flex flex-col space-y-3 pt-3">
-          <a href="/#how" class="text-gray-700 hover:text-gray-900 transition text-sm">How it works</a>
-          <a href="/#features" class="text-gray-700 hover:text-gray-900 transition text-sm">Features</a>
-          <a href="/blog" class="text-gray-700 hover:text-gray-900 transition text-sm">Blog</a>
-          <a href="/privacy" class="text-gray-700 hover:text-gray-900 transition text-sm">Privacy</a>
-          <a href="/terms" class="text-gray-700 hover:text-gray-900 transition text-sm">Terms</a>
-          <a href="/app" class="bg-brand text-white px-5 py-2.5 rounded-full hover:bg-brand-dark transition text-sm text-center whitespace-nowrap w-fit font-semibold">Open the App</a>
+          <a href="/#how" class="text-white/80 hover:text-white transition text-sm">How it works</a>
+          <a href="/#features" class="text-white/80 hover:text-white transition text-sm">Features</a>
+          <a href="/blog" class="text-white/80 hover:text-white transition text-sm">Blog</a>
+          <a href="/privacy" class="text-white/80 hover:text-white transition text-sm">Privacy</a>
+          <a href="/terms" class="text-white/80 hover:text-white transition text-sm">Terms</a>
+          <a href="/app" class="inline-flex items-center justify-center gap-2 bg-brand text-white px-5 py-2.5 rounded-2xl text-sm text-center whitespace-nowrap w-fit font-semibold shadow-lg shadow-brand/20 hover:bg-brand-dark transition-all duration-200">
+            Open Meowmin
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+          </a>
         </div>
       </div>
     </nav>
 
+    <!-- Spacer for fixed navbar -->
+    <div class="h-[calc(2rem+4rem)]"></div>
+
     <slot />
 
+    <!-- Fixed floating CTA with frosted glass -->
+    <div class="fixed bottom-0 left-0 right-0 z-50 p-4 sm:p-5 pointer-events-none" style="backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); background: rgba(255, 255, 255, 0.45); border-top: 0.5px solid rgba(0, 0, 0, 0.06);">
+      <div class="max-w-xl mx-auto pointer-events-auto">
+        <a href="/app" class="flex items-center justify-center gap-2 w-full bg-brand text-white py-3.5 rounded-2xl font-semibold text-lg shadow-lg shadow-brand/20 hover:bg-brand-dark transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]">
+          <span>Open Meowmin</span>
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+        </a>
+      </div>
+    </div>
+
     <!-- Footer -->
-    <footer class="text-white py-12 sm:py-16 px-6 sm:px-8 rounded-t-[3rem]" style="background-color: #9d50ff;">
+    <footer class="text-white py-12 sm:py-16 px-6 sm:px-8 rounded-t-[3rem] mb-20" style="background-color: #111;">
       <div class="max-w-6xl mx-auto">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10 sm:mb-12">
           <!-- Product -->
@@ -141,10 +170,14 @@ const pageTitle = Astro.url.pathname === '/'
           <!-- CTA -->
           <div>
             <h3 class="font-semibold text-xs sm:text-sm uppercase tracking-wider mb-4 text-white/80">Get started</h3>
-            <a href="/app" class="inline-block bg-white text-brand font-semibold px-6 py-3 rounded-full hover:bg-white/90 transition">Open the App</a>
+            <a href="/app" class="inline-flex items-center gap-2 bg-brand text-white font-semibold px-6 py-3 rounded-2xl shadow-lg shadow-brand/20 hover:bg-brand-dark transition-all duration-200">
+              Open Meowmin
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+            </a>
           </div>
         </div>
-        <div class="border-t border-white/30 pt-6 sm:pt-8">
+        <div class="border-t border-white/30 pt-6 sm:pt-8 flex flex-col items-center gap-3">
+          <img src="/images/meowmin.webp" alt="Meowmin" class="h-8 w-auto" />
           <p class="text-xs sm:text-sm text-white/80 text-center">&copy; {new Date().getFullYear()} Meowmin. All Rights Reserved</p>
         </div>
       </div>
@@ -154,7 +187,7 @@ const pageTitle = Astro.url.pathname === '/'
       // Inject sr-only SEO text into body for Googlebot
       const srText = document.createElement('p');
       srText.className = 'sr-only';
-      srText.textContent = 'Meowmin AI Diary is a free daily diary app that helps you read the Quran in a focused and personal way. Write about your day and Meowmin AI finds real Quran verses, Surah stories, and Hadith that match what you experienced. Had an angry day? Meowmin shows you what the Quran says about anger and patience. The Prophet Muhammad once had a day like yours — Meowmin finds that story for you. Meowmin AI Diary makes the Quran relevant to your everyday life by matching your diary entries with the right verses and stories from the Quran and Islamic tradition.';
+      srText.textContent = 'Meowmin is a free daily diary app that helps you build a closer connection with Allah through personalized Quran guidance. Write about your day and Meowmin finds real Quran verses, Surah stories, and Hadith that match what you experienced. Had an angry day? Get the verse about patience. Had a grateful day? Get the verse about shukr. Meowmin makes the Quran relevant to your everyday life by matching your diary entries with the right verses and stories from the Quran and Islamic tradition.';
       document.body.prepend(srText);
 
       document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {

@@ -3,12 +3,6 @@ import Base from '../layouts/Base.astro';
 
 const features = [
   {
-    title: 'AI-powered diary',
-    subtitle: 'Write a daily reflection and get personalized Islamic insights.',
-    image: '/screenshots/diary.webp',
-    alt: 'Meowmin AI diary',
-  },
-  {
     title: 'Personalized insights',
     subtitle: 'Qur\u2019anic guidance and reflections tailored to your day.',
     image: '/screenshots/insights.webp',
@@ -26,37 +20,83 @@ const features = [
     image: '/screenshots/shop.webp',
     alt: 'Meowmin shop',
   },
+  {
+    title: 'AI-powered diary',
+    subtitle: 'Write a daily reflection and get personalized Islamic insights.',
+    image: '/screenshots/diary.webp',
+    alt: 'Meowmin AI diary',
+  },
 ];
 ---
 
-<Base>
+<Base title="The Quran, mirrored in your day" description="Write about your day and get an Islamic Story and Surah that matches it. Meowmin finds real Quran verses, Surah stories, and Hadith that match what you experienced.">
+  <style>
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-up {
+      animation: fadeUp 0.6s ease-out forwards;
+      opacity: 0;
+    }
+    .delay-100 { animation-delay: 0.1s; }
+    .delay-200 { animation-delay: 0.2s; }
+    .delay-300 { animation-delay: 0.3s; }
+    .delay-400 { animation-delay: 0.4s; }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    .animate-float {
+      animation: float 4s ease-in-out infinite;
+    }
+    .font-display {
+      font-family: var(--font-display);
+    }
+    .hero-headline {
+      font-size: clamp(2.75rem, 5.5vw, 5rem);
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      font-weight: 800;
+    }
+    .section-headline {
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      line-height: 1.15;
+      letter-spacing: -0.015em;
+      font-weight: 800;
+    }
+  </style>
+
   <!-- Hero -->
-  <section class="pt-8 sm:pt-12 pb-16 sm:pb-20 px-6 lg:px-8">
+  <section class="pt-8 sm:pt-14 pb-16 sm:pb-24 px-6 lg:px-8">
     <div class="max-w-6xl mx-auto">
-      <div class="flex flex-col-reverse lg:flex-row items-center" style="gap: 80px;">
+      <div class="flex flex-col-reverse lg:flex-row items-center gap-12 lg:gap-20">
         <!-- Left: text -->
-        <div class="flex-shrink-0 text-center lg:text-left flex flex-col items-center lg:items-start w-full lg:max-w-[600px]">
-          <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 mb-4 sm:mb-6 leading-tight w-full lg:max-w-none">
-            Meowmin AI Diary
+        <div class="flex-shrink-0 text-center lg:text-left flex flex-col items-center lg:items-start w-full lg:max-w-[580px]">
+          <h1 class="hero-headline font-display text-gray-900 mb-6 animate-fade-up delay-100">
+            Write about your day, get an Islamic Story and Surah that matches it
           </h1>
-          <p class="text-lg sm:text-xl text-gray-600 mb-4 sm:mb-6">
-            Write your diary. Your AI cat friend picks Quran stories that match your day.
-          </p>
-          <p class="text-base text-gray-500 mb-8 sm:mb-10">
-            Had an angry day? Here is what Surah Al-Baqarah says about patience. The Prophet once had a day just like yours — Meowmin finds that story for you. Write a diary, get real Quran verses and Hadith that fit what you are going through.
-          </p>
-          <div class="inline-flex flex-col items-center">
-            <a href="/app" class="inline-flex items-center space-x-2 bg-brand text-white pl-[27px] pr-8 py-4 rounded-full hover:bg-brand-dark transition transform hover:scale-105 mb-4 font-semibold">
-              <span>Open the Web App</span>
+          <div class="flex items-start gap-3 mb-6 animate-fade-up delay-300" style="max-width: 480px;">
+            <img src="/images/face.png" alt="" class="h-10 w-auto mt-0.5 flex-shrink-0" />
+            <p class="text-lg text-gray-600 leading-relaxed">
+              Ever feel the Quran speaks to your heart, but not to your day? Meowmin closes that gap &mdash; angry day, worried day, grateful day, you get the verse that matches what you lived.
+            </p>
+          </div>
+          <div class="flex flex-col items-center lg:items-start animate-fade-up delay-400">
+            <a href="/app" class="inline-flex items-center gap-2 bg-brand text-white px-8 py-4 rounded-2xl hover:bg-brand-dark transition-all duration-200 shadow-lg shadow-brand/20 mb-3 font-semibold text-lg">
+              Open Meowmin
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
             </a>
-            <p class="text-sm text-gray-500" style="margin-top: -8px;">Free to start · No credit card required</p>
+            <p class="text-xs text-gray-400 mt-1 animate-fade-up delay-400">
+              Free to use · No credit card required
+            </p>
           </div>
         </div>
         <!-- Right: app screenshot in phone frame -->
-        <div class="flex-shrink-0">
-          <div class="relative mx-auto" style="width: 320px;">
-            <div class="absolute -inset-6 rounded-[3rem] bg-gradient-to-br from-brand/20 to-gold/20 blur-2xl"></div>
-            <div class="relative rounded-[2.5rem] border-[10px] border-gray-900 bg-gray-900 shadow-2xl overflow-hidden" style="max-width: 320px;">
+        <div class="flex-shrink-0 animate-float">
+          <div class="relative mx-auto" style="width: 300px;">
+            <div class="absolute -inset-12 rounded-[3rem] bg-gradient-to-br from-brand/10 to-gold/10 blur-3xl"></div>
+            <div class="relative rounded-[2.5rem] border-[10px] border-gray-900 bg-gray-900 shadow-2xl overflow-hidden" style="max-width: 300px;">
               <img src="/screenshots/home.webp" alt="Meowmin home screen" class="w-full h-auto block" loading="eager" />
             </div>
           </div>
@@ -65,48 +105,111 @@ const features = [
     </div>
   </section>
 
-  <!-- What is Meowmin AI Diary -->
-  <section class="py-12 sm:py-16 px-6 lg:px-8 bg-gray-50">
-    <div class="max-w-3xl mx-auto text-center">
-      <h2 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">What is Meowmin AI Diary?</h2>
-      <p class="text-gray-600 text-lg leading-relaxed">
-        Meowmin AI Diary is a free daily diary app that helps you read the Quran in a focused and personal way.
-        Write about your day and Meowmin AI finds real Quran verses, Surah stories, and Hadith that match what you experienced.
-        Had an angry day? Meowmin shows you what the Quran says about anger and patience.
-        The Prophet Muhammad once had a day like yours — Meowmin finds that story for you.
-        Meowmin AI Diary makes the Quran relevant to your everyday life by matching your diary entries with the right verses and stories from the Quran and Islamic tradition.
-      </p>
-    </div>
-  </section>
-
   <!-- How it works -->
-  <section id="how" class="py-16 sm:py-20 px-6 lg:px-8">
+  <section id="how" class="py-20 sm:py-28 px-6 lg:px-8" style="background-color: #FAF7F2;">
     <div class="max-w-6xl mx-auto">
       <div class="flex flex-col lg:flex-row items-start gap-12 lg:gap-20">
         <div class="flex-1 w-full">
-          <h2 class="text-4xl sm:text-5xl font-bold mb-16 text-gray-900" style="line-height: 1.3;">
+          <h2 class="section-headline font-display text-gray-900 mb-16">
             How it works
           </h2>
           <div class="space-y-12 w-full">
             <!-- Step 1 -->
             <div class="relative pb-12 w-full">
-              <span class="absolute top-0 right-0 text-6xl font-bold text-gray-200">01</span>
-              <h3 class="text-3xl font-semibold mb-2.5 text-gray-900 relative z-10 pr-20 lg:pr-24">Write your diary</h3>
-              <p class="text-gray-600 text-lg relative z-10 pr-20 lg:pr-24">Write about your day — how you felt, what happened, what was hard.</p>
+              <span class="absolute top-0 right-0 text-5xl sm:text-6xl font-bold text-gray-200">01</span>
+              <h3 class="text-2xl sm:text-3xl font-semibold mb-3 text-gray-900 relative z-10 pr-20 lg:pr-24">Write your diary</h3>
+              <p class="text-gray-500 text-lg relative z-10 pr-20 lg:pr-24">Write about your day — how you felt, what happened, what was hard.</p>
               <div class="absolute left-0 right-0 bottom-0 border-b border-gray-200"></div>
             </div>
             <!-- Step 2 -->
             <div class="relative pb-12 w-full">
-              <span class="absolute top-0 right-0 text-6xl font-bold text-gray-200">02</span>
-              <h3 class="text-3xl font-semibold mb-2.5 text-gray-900 relative z-10 pr-20 lg:pr-24">Meowmin finds Quran stories for you</h3>
-              <p class="text-gray-600 text-lg relative z-10 pr-20 lg:pr-24">Your AI cat friend reads what you wrote and picks real Quran verses and Hadith that match your day.</p>
+              <span class="absolute top-0 right-0 text-5xl sm:text-6xl font-bold text-gray-200">02</span>
+              <h3 class="text-2xl sm:text-3xl font-semibold mb-3 text-gray-900 relative z-10 pr-20 lg:pr-24">Meowmin finds your verse</h3>
+              <p class="text-gray-500 text-lg relative z-10 pr-20 lg:pr-24">Your AI cat friend reads what you wrote and picks real Quran verses and Hadith that match your day.</p>
               <div class="absolute left-0 right-0 bottom-0 border-b border-gray-200"></div>
             </div>
             <!-- Step 3 -->
             <div class="relative w-full">
-              <span class="absolute top-0 right-0 text-6xl font-bold text-gray-200">03</span>
-              <h3 class="text-3xl font-semibold mb-2.5 text-gray-900 relative z-10 pr-20 lg:pr-24">Read Quran that fits your life</h3>
-              <p class="text-gray-600 text-lg relative z-10 pr-20 lg:pr-24">Every day you write, you learn a new part of the Quran that actually matters to what you are going through.</p>
+              <span class="absolute top-0 right-0 text-5xl sm:text-6xl font-bold text-gray-200">03</span>
+              <h3 class="text-2xl sm:text-3xl font-semibold mb-3 text-gray-900 relative z-10 pr-20 lg:pr-24">Read what fits your life</h3>
+              <p class="text-gray-500 text-lg relative z-10 pr-20 lg:pr-24">No random aayahs. Every day you write, you get the verse that speaks to exactly what you're going through.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- The Thread: narrative examples -->
+      <div class="mt-20 sm:mt-28">
+        <h3 class="font-display text-3xl sm:text-4xl font-bold text-gray-900 text-center mb-3">Your day has a verse</h3>
+        <p class="text-gray-500 text-lg text-center mb-14">Every feeling you carry, every moment you live &mdash; there's an aayah that meets you there. <span class="text-gray-400">Every verse, chosen for your day &mdash; never random, always for you.</span></p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
+          <!-- Example 1: Anger -->
+          <div class="flex flex-col items-center">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 w-full text-center min-h-[120px] flex items-center justify-center">
+              <p class="text-gray-700 leading-relaxed">Lost my temper in traffic. Sat in the car after, feeling guilty.</p>
+            </div>
+            <div class="my-5 flex-shrink-0 flex items-center justify-center">
+              <svg width="36" height="56" viewBox="0 0 36 56" fill="none" class="hidden md:block"><path d="M18 0 C6 10 30 18 18 28 C6 38 30 46 18 56" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+              <svg width="56" height="36" viewBox="0 0 56 36" fill="none" class="md:hidden"><path d="M0 18 C10 6 18 30 28 18 C38 6 46 30 56 18" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+            </div>
+            <div class="bg-brand/10 rounded-2xl p-6 border border-brand/20 w-full text-center min-h-[120px] flex flex-col items-center justify-center gap-3">
+              <p class="text-gray-800 italic text-lg leading-relaxed">&hellip;and when they are angry, they forgive.</p>
+              <span class="text-brand text-sm font-semibold">42:37</span>
+            </div>
+          </div>
+          <!-- Example 2: Worry -->
+          <div class="flex flex-col items-center">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 w-full text-center min-h-[120px] flex items-center justify-center">
+              <p class="text-gray-700 leading-relaxed">Checked my bank balance three times before bed. Still couldn't sleep.</p>
+            </div>
+            <div class="my-5 flex-shrink-0 flex items-center justify-center">
+              <svg width="36" height="56" viewBox="0 0 36 56" fill="none" class="hidden md:block"><path d="M18 0 C30 10 6 18 18 28 C30 38 6 46 18 56" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+              <svg width="56" height="36" viewBox="0 0 56 36" fill="none" class="md:hidden"><path d="M0 18 C10 30 18 6 28 18 C38 30 46 6 56 18" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+            </div>
+            <div class="bg-brand/10 rounded-2xl p-6 border border-brand/20 w-full text-center min-h-[120px] flex flex-col items-center justify-center gap-3">
+              <p class="text-gray-800 italic text-lg leading-relaxed">&hellip;and whoever puts their trust in Allah, He will be enough for them.</p>
+              <span class="text-brand text-sm font-semibold">65:3</span>
+            </div>
+          </div>
+          <!-- Example 3: Gratitude -->
+          <div class="flex flex-col items-center">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 w-full text-center min-h-[120px] flex items-center justify-center">
+              <p class="text-gray-700 leading-relaxed">My daughter held my hand crossing the street today. Small thing, but it made my whole week.</p>
+            </div>
+            <div class="my-5 flex-shrink-0 flex items-center justify-center">
+              <svg width="36" height="56" viewBox="0 0 36 56" fill="none" class="hidden md:block"><path d="M18 0 C6 10 30 18 18 28 C6 38 30 46 18 56" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+              <svg width="56" height="36" viewBox="0 0 56 36" fill="none" class="md:hidden"><path d="M0 18 C10 6 18 30 28 18 C38 6 46 30 56 18" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+            </div>
+            <div class="bg-brand/10 rounded-2xl p-6 border border-brand/20 w-full text-center min-h-[120px] flex flex-col items-center justify-center gap-3">
+              <p class="text-gray-800 italic text-lg leading-relaxed">If you are grateful, I will surely increase you.</p>
+              <span class="text-brand text-sm font-semibold">14:7</span>
+            </div>
+          </div>
+          <!-- Example 4: Loneliness -->
+          <div class="flex flex-col items-center">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 w-full text-center min-h-[120px] flex items-center justify-center">
+              <p class="text-gray-700 leading-relaxed">Came home to an empty apartment. Turned on the TV just to hear voices.</p>
+            </div>
+            <div class="my-5 flex-shrink-0 flex items-center justify-center">
+              <svg width="36" height="56" viewBox="0 0 36 56" fill="none" class="hidden md:block"><path d="M18 0 C30 10 6 18 18 28 C30 38 6 46 18 56" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+              <svg width="56" height="36" viewBox="0 0 56 36" fill="none" class="md:hidden"><path d="M0 18 C10 30 18 6 28 18 C38 30 46 6 56 18" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+            </div>
+            <div class="bg-brand/10 rounded-2xl p-6 border border-brand/20 w-full text-center min-h-[120px] flex flex-col items-center justify-center gap-3">
+              <p class="text-gray-800 italic text-lg leading-relaxed">&hellip;Indeed, I am with you both. I hear and I see.</p>
+              <span class="text-brand text-sm font-semibold">20:46</span>
+            </div>
+          </div>
+          <!-- Example 5: Grief -->
+          <div class="flex flex-col items-center">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 w-full text-center min-h-[120px] flex items-center justify-center">
+              <p class="text-gray-700 leading-relaxed">Buried my father last week. Some days I forget he's gone, then it hits me all over again.</p>
+            </div>
+            <div class="my-5 flex-shrink-0 flex items-center justify-center">
+              <svg width="36" height="56" viewBox="0 0 36 56" fill="none" class="hidden md:block"><path d="M18 0 C6 10 30 18 18 28 C6 38 30 46 18 56" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+              <svg width="56" height="36" viewBox="0 0 56 36" fill="none" class="md:hidden"><path d="M0 18 C10 6 18 30 28 18 C38 6 46 30 56 18" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+            </div>
+            <div class="bg-brand/10 rounded-2xl p-6 border border-brand/20 w-full text-center min-h-[120px] flex flex-col items-center justify-center gap-3">
+              <p class="text-gray-800 italic text-lg leading-relaxed">&hellip;Indeed, with hardship comes ease.</p>
+              <span class="text-brand text-sm font-semibold">94:6</span>
             </div>
           </div>
         </div>
@@ -115,21 +218,46 @@ const features = [
   </section>
 
   <!-- Features -->
-  <section id="features" class="py-16 sm:py-20 px-6 lg:px-8">
+  <section id="features" class="py-20 sm:py-28 px-6 lg:px-8">
     <div class="max-w-6xl mx-auto">
-      <h2 class="text-3xl sm:text-4xl md:text-5xl font-bold text-center mb-3 sm:mb-4">Simple, but powerful</h2>
-      <p class="text-lg sm:text-xl text-gray-600 text-center mb-12 sm:mb-16 max-w-3xl mx-auto">
+      <h2 class="section-headline font-display text-center mb-4">Simple, but powerful</h2>
+      <p class="text-lg sm:text-xl text-gray-500 text-center mb-14 sm:mb-18 max-w-3xl mx-auto">
         Everything you need to build a closer connection with Allah, without the complexity.
       </p>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-16">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
         {features.map((f) => (
           <div class="flex flex-col items-center">
             <img src={f.image} alt={f.alt} class="w-[92%] h-auto rounded-3xl shadow-sm" loading="lazy" />
-            <h3 class="text-xl font-semibold text-center mt-4">{f.title}</h3>
-            <p class="text-gray-600 text-center mt-1">{f.subtitle}</p>
+            <h3 class="text-xl font-semibold text-center mt-5">{f.title}</h3>
+            <p class="text-gray-500 text-center mt-2">{f.subtitle}</p>
           </div>
         ))}
       </div>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="py-20 sm:py-28 px-6 lg:px-8" style="background-color: #FAF7F2;">
+    <div class="max-w-2xl mx-auto text-center">
+      <h2 class="section-headline font-display text-gray-900 mb-6">Start your Quran diary today</h2>
+      <p class="text-gray-500 text-lg mb-10" style="max-width: 480px; margin-left: auto; margin-right: auto;">
+        Write about your day. Get the Quran verse that matches it. Build a consistent spiritual habit.
+      </p>
+      <a href="/app" class="inline-flex items-center gap-2 bg-brand text-white px-8 py-4 rounded-2xl hover:bg-brand-dark transition-all duration-200 shadow-lg shadow-brand/20 font-semibold text-lg">
+        Open Meowmin
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+      </a>
+      <p class="text-sm text-gray-400 mt-6">
+        <a href="/privacy" class="underline hover:text-gray-900">Privacy Policy</a> · <a href="/terms" class="underline hover:text-gray-900">Terms of Service</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- Developer Info -->
+  <section class="py-10 px-6 lg:px-8 border-t border-gray-200">
+    <div class="max-w-3xl mx-auto text-center text-sm text-gray-400">
+      <p><strong class="text-gray-600">Developer:</strong> Tauqeer · <a href="mailto:tauqeer1040@gmail.com" class="underline hover:text-gray-900">tauqeer1040@gmail.com</a></p>
+      <p class="mt-1"><a href="/privacy" class="underline hover:text-gray-900">Privacy Policy</a> · <a href="/terms" class="underline hover:text-gray-900">Terms of Service</a></p>
     </div>
   </section>
 </Base>
