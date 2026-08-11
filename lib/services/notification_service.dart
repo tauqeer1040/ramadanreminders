@@ -1,4 +1,5 @@
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -31,10 +32,26 @@ class NotificationService {
 
     await _notificationsPlugin.initialize(settings: initializationSettings);
   }
+  // Web Notifications are unavailable on iOS Safari (and most Safari installs)
+  // — `window.Notification` is undefined there. Feature-detect the runtime
+  // global and treat as not granted rather than throwing a JS TypeError.
+  static bool get _webNotificationsSupported {
+    try {
+      return globalContext.has('Notification');
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<bool> requestPermissions() async {
     if (kIsWeb) {
-      final jsResult = await web.Notification.requestPermission().toDart;
-      return jsResult == 'granted';
+      if (!_webNotificationsSupported) return false;
+      try {
+        final result = await web.Notification.requestPermission().toDart;
+        return result.toDart == 'granted';
+      } catch (_) {
+        return false;
+      }
     }
     final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
         _notificationsPlugin
@@ -49,7 +66,12 @@ class NotificationService {
 
   static Future<bool> checkPermissions() async {
     if (kIsWeb) {
-      return web.Notification.permission == 'granted';
+      if (!_webNotificationsSupported) return false;
+      try {
+        return web.Notification.permission == 'granted';
+      } catch (_) {
+        return false;
+      }
     }
     final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
         _notificationsPlugin

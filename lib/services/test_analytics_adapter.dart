@@ -53,6 +53,51 @@ class TestAnalyticsAdapter implements AnalyticsProtocol {
   Future<void> logTabViewed(String tabName) async {
     events.add(AnalyticsEvent('tab_viewed', {'tab_name': tabName}));
   }
+
+  @override
+  Future<void> logAppOpen() async {
+    events.add(const AnalyticsEvent('app_open', {}));
+  }
+
+  @override
+  Future<void> logSessionStart() async {
+    events.add(const AnalyticsEvent('session_start', {}));
+  }
+
+  @override
+  Future<void> logOnboardingCompleted() async {
+    events.add(const AnalyticsEvent('onboarding_completed', {}));
+  }
+
+  @override
+  Future<void> logInsightGenerated({required bool success}) async {
+    events.add(AnalyticsEvent('insight_generated', {'success': success.toString()}));
+  }
+
+  @override
+  Future<void> logStreakRecorded(int streak) async {
+    events.add(AnalyticsEvent('streak_recorded', {'streak': streak.toString()}));
+  }
+
+  @override
+  Future<void> logFeatureUsed(String featureName) async {
+    events.add(AnalyticsEvent('feature_used', {'feature': featureName}));
+  }
+
+  @override
+  Future<void> logFavoriteAdded(String itemId) async {
+    events.add(AnalyticsEvent('favorite_added', {'item_id': itemId}));
+  }
+
+  @override
+  Future<void> logSearchPerformed(String query) async {
+    events.add(AnalyticsEvent('search_performed', {'query_length': query.length.toString()}));
+  }
+
+  @override
+  Future<void> logShareContent(String contentType) async {
+    events.add(AnalyticsEvent('share_content', {'content_type': contentType}));
+  }
 }
 
 class AnalyticsEvent {

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:confetti/confetti.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:confetti/confetti.dart' deferred as confetti;
+import 'package:fl_chart/fl_chart.dart' deferred as fl_chart;
 import '../controller/tasbih_controller.dart';
 
-void showTasbihStatsSheet(BuildContext context, TasbihController controller) {
+void showTasbihStatsSheet(BuildContext context, TasbihController controller) async {
+  await Future.wait([confetti.loadLibrary(), fl_chart.loadLibrary()]);
+  if (!context.mounted) return;
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -27,12 +29,12 @@ class _TasbihStatsSheet extends StatefulWidget {
 
 class _TasbihStatsSheetState extends State<_TasbihStatsSheet> {
   int _dragCount = 0;
-  late final ConfettiController _confettiController;
+  late final dynamic _confettiController;
 
   @override
   void initState() {
     super.initState();
-    _confettiController = ConfettiController(
+    _confettiController = confetti.ConfettiController(
       duration: const Duration(seconds: 1),
     );
   }
@@ -113,24 +115,24 @@ class _TasbihStatsSheetState extends State<_TasbihStatsSheet> {
                         SizedBox(
                           width: 200,
                           height: 200,
-                          child: RadarChart(
-                            RadarChartData(
-                              radarShape: RadarShape.polygon,
+                          child: fl_chart.RadarChart(
+                            fl_chart.RadarChartData(
+                              radarShape: fl_chart.RadarShape.polygon,
                               dataSets: [
-                                RadarDataSet(
+                                fl_chart.RadarDataSet(
                                   fillColor: cs.primary.withValues(alpha: 0.1),
                                   borderColor: cs.primary,
                                   borderWidth: 2,
                                   entryRadius: 6,
                                   dataEntries: dhikrs.map((d) {
-                                    return RadarEntry(
+                                    return fl_chart.RadarEntry(
                                       value: d.total.toDouble(),
                                     );
                                   }).toList(),
                                 ),
                               ],
                               radarBackgroundColor: Colors.transparent,
-                              borderData: FlBorderData(show: false),
+                              borderData: fl_chart.FlBorderData(show: false),
                               radarBorderData: const BorderSide(
                                 color: Colors.transparent,
                               ),
@@ -350,7 +352,7 @@ class _TasbihStatsSheetState extends State<_TasbihStatsSheet> {
                                   ? 0.4
                                   : (_dragCount == 2 ? 0.7 : 1.0)),
                         child: Image.asset(
-                          'assets/photos/mascot/dua2.png',
+                          'assets/photos/mascot/dua2.webp',
                           height: 140,
                           fit: BoxFit.contain,
                         ),
@@ -362,9 +364,9 @@ class _TasbihStatsSheetState extends State<_TasbihStatsSheet> {
             ),
             Align(
               alignment: Alignment.bottomCenter,
-              child: ConfettiWidget(
+              child: confetti.ConfettiWidget(
                 confettiController: _confettiController,
-                blastDirectionality: BlastDirectionality.explosive,
+                blastDirectionality: confetti.BlastDirectionality.explosive,
                 emissionFrequency: 0.01, // Single burst feel
                 numberOfParticles: 35, // Satisfying but not overwhelming
                 maxBlastForce: 45, // Pops up nicely

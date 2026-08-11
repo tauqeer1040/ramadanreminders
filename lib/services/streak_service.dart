@@ -105,6 +105,10 @@ class StreakService {
     if (result.hasPrimeReward) {
       _analytics.logEvent('streak_prime_reward_claimed', params: {'streak': result.streak.toString()});
     }
+    // Log streak for analytics
+    try {
+      _analytics.logStreakRecorded(result.streak);
+    } catch (_) {}
   }
 
   static bool isPrime(int n) {

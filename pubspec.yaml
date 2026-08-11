@@ -84,16 +84,19 @@ flutter:
     - family: Amiri
       fonts:
         - asset: assets/fonts/Amiri-Regular.ttf
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-latin.woff2
 
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/photos/mascot/face.png"
+  image_path: "assets/photos/mascot/face.webp"
   min_sdk_android: 21
   adaptive_icon_background: "#004D40"
-  adaptive_icon_foreground: "assets/photos/mascot/face.png"
+  adaptive_icon_foreground: "assets/photos/mascot/face.webp"
   web:
     generate: true
-    image_path: "assets/photos/mascot/face.png"
-    background_color: "#CC4400"
-    theme_color: "#CC4400"
+    image_path: "assets/photos/mascot/face.webp"
+    background_color: "#9D50FF"
+    theme_color: "#9D50FF"

@@ -139,7 +139,7 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
                     ),
                     child: ClipOval(
                       child: Image.asset(
-                        'assets/photos/mascot/face.png',
+                        'assets/photos/mascot/face.webp',
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
                           color: AppTheme.neonPurple.withValues(alpha: 0.2),

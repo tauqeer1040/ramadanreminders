@@ -293,7 +293,7 @@ class _ShopScreenState extends State<ShopScreen> {
                         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                         child: ClipOval(
                           child: Image.asset(
-                            'assets/photos/mascot/face.png',
+                            'assets/photos/mascot/face.webp',
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: Theme.of(context).colorScheme.onSurface, size: 28),
                           ),
@@ -307,7 +307,7 @@ class _ShopScreenState extends State<ShopScreen> {
                     child: GestureDetector(
                       onTap: () {},
                       child: Image.asset(
-                        'assets/photos/elements/meowmin.png',
+                        'assets/photos/elements/meowmin.webp',
                         width: 120,
                         height: 80,
                         fit: BoxFit.contain,

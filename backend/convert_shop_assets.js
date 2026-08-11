@@ -4,8 +4,8 @@
  * Usage: node convert_shop_assets.js
  *
  * Expects source images in:
- *   ../assets/photos/images/*.png, *.jpeg
- *   ../assets/photos/images/scratchCards/*.jpg
+ *   ../assets/photos/images/*.webp, *.jpeg
+ *   ../assets/photos/images/scratchCards/*.webp
  *
  * Outputs to:
  *   ./public/assets/shop/thumbs/{id}.webp   (200px tall)
@@ -22,28 +22,28 @@ const OUT_DIR = path.join(__dirname, 'public', 'assets', 'shop');
 
 const items = [
   // flowers
-  { id: 'shop_1', file: 'Delicate Translucent Flower.png' },
+  { id: 'shop_1', file: 'Delicate Translucent Flower.webp' },
   { id: 'shop_2', file: 'DelicateOrangeFlowerinBloom.jpeg' },
-  { id: 'shop_3', file: 'Ethereal Flower in Motion.png' },
-  { id: 'shop_4', file: 'Ethereal Flower.png' },
-  { id: 'shop_5', file: 'Ethereal Flower(1).png' },
-  { id: 'shop_6', file: 'Ethereal Glowing Flower.png' },
-  { id: 'shop_7', file: 'Ethereal Translucent Flower.png' },
+  { id: 'shop_3', file: 'Ethereal Flower in Motion.webp' },
+  { id: 'shop_4', file: 'Ethereal Flower.webp' },
+  { id: 'shop_5', file: 'Ethereal Flower(1).webp' },
+  { id: 'shop_6', file: 'Ethereal Glowing Flower.webp' },
+  { id: 'shop_7', file: 'Ethereal Translucent Flower.webp' },
   { id: 'shop_8', file: 'EtherealFlower.jpeg' },
   { id: 'shop_9', file: 'EtherealFlower-1-.jpeg' },
   { id: 'shop_10', file: 'ethreialbloom1.jpeg' },
-  { id: 'shop_11', file: 'Radiant Flower Glow.png' },
+  { id: 'shop_11', file: 'Radiant Flower Glow.webp' },
   { id: 'shop_12', file: 'Z5u14ZbqstJ9-Dkw_EtherealFlower-1-.jpeg' },
   // scratch cards
-  { id: 'shop_13', file: 'scratch.jpg' },
-  { id: 'shop_14', file: 'scratch (2).jpg' },
-  { id: 'shop_15', file: 'scratch (3).jpg' },
-  { id: 'shop_16', file: 'scratch (4).jpg' },
-  { id: 'shop_17', file: 'scratch (5).jpg' },
-  { id: 'shop_18', file: 'scratch (6).jpg' },
-  { id: 'shop_19', file: 'scratch (7).jpg' },
-  { id: 'shop_20', file: 'scratch (8).jpg' },
-  { id: 'shop_21', file: 'scratch (9).jpg' },
+  { id: 'shop_13', file: 'scratch.webp' },
+  { id: 'shop_14', file: 'scratch (2).webp' },
+  { id: 'shop_15', file: 'scratch (3).webp' },
+  { id: 'shop_16', file: 'scratch (4).webp' },
+  { id: 'shop_17', file: 'scratch (5).webp' },
+  { id: 'shop_18', file: 'scratch (6).webp' },
+  { id: 'shop_19', file: 'scratch (7).webp' },
+  { id: 'shop_20', file: 'scratch (8).webp' },
+  { id: 'shop_21', file: 'scratch (9).webp' },
 ];
 
 async function convert() {

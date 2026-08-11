@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_card_swiper/flutter_card_swiper.dart';
@@ -273,7 +274,7 @@ class _FirstJournalPageState extends State<FirstJournalPage>
                               GestureDetector(
                                 onTap: () => _focusNode.requestFocus(),
                                 child: Image.asset(
-                                  'assets/photos/mascot/name.png',
+                                  'assets/photos/mascot/name.webp',
                                   height: 200,
                                   fit: BoxFit.contain,
                                 ),
@@ -1560,26 +1561,28 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
           textAlign: TextAlign.center,
         ),
         const Spacer(),
-        DuoButton(
-          onPressed: () async {
-            HapticFeedback.heavyImpact();
-            await _inAppReview.openStoreListing();
-          },
-          backgroundColor: cs.primary,
-          depthColor: cs.primary.withOpacity(0.8),
-          radius: 16,
-          height: 60,
-          sfxType: DuoSfxType.positive,
-          child: Text(
-            "Rate on Google Play",
-            style: TextStyle(
-              fontSize: 18,
-              color: cs.onSurface,
-              fontWeight: FontWeight.bold,
+        if (!kIsWeb) ...[
+          DuoButton(
+            onPressed: () async {
+              HapticFeedback.heavyImpact();
+              await _inAppReview.openStoreListing();
+            },
+            backgroundColor: cs.primary,
+            depthColor: cs.primary.withOpacity(0.8),
+            radius: 16,
+            height: 60,
+            sfxType: DuoSfxType.positive,
+            child: Text(
+              "Rate on Google Play",
+              style: TextStyle(
+                fontSize: 18,
+                color: cs.onSurface,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-        ),
-        const Spacer(),
+          const Spacer(),
+        ],
         DuoButton(
           onPressed: _continueEnabled
               ? () {
@@ -1654,7 +1657,9 @@ class _SetupPageState extends State<SetupPage> {
     widget.data.notificationsEnabled = granted;
 
     if (granted) {
-      NotificationService.scheduleDailyNotifications();
+      if (!kIsWeb) {
+        await NotificationService.scheduleDailyNotifications();
+      }
       widget.onStarsEarned?.call(10);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

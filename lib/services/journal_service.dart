@@ -41,6 +41,18 @@ class JournalService {
     return JournalLocalStorage.loadTodayJournal(today);
   }
 
+  /// Return encrypted journals for safe list rendering.  Call [decryptText]
+  /// only when opening a specific entry.
+  static Future<List<Map<String, String>>> getEncryptedLocalJournals() =>
+      JournalLocalStorage.getEncryptedJournals();
+
+  /// Decrypt a single journal entry on demand.
+  static Future<String?> decryptJournal(String encrypted) =>
+      JournalLocalStorage.decryptText(encrypted);
+
+  /// Warm the in-memory encrypted cache (call after crypto is ready).
+  static Future<void> warmEncryptedCache() => JournalLocalStorage.warmCache();
+
   static Future<List<Map<String, String>>> getAllLocalJournals() => JournalLocalStorage.getAllTexts();
   static Future<void> deleteLocalJournal(String id) async {
     await JournalLocalStorage.deleteEntry(id);

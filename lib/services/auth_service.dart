@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'user_service.dart';
 import 'auth_debug_service.dart';
 import 'analytics_service.dart';
+import 'browser_detector.dart';
 import 'crypto_service.dart';
 import 'journal_remote_storage.dart';
 import 'journal_service.dart';
@@ -47,50 +48,40 @@ class AuthService {
         },
       );
 
-      // ── Web: use Firebase Auth's signInWithPopup (no google_sign_in plugin needed) ──
+      // ── Web: Firebase Auth's signInWithPopup, with a redirect fallback for
+      // iOS Safari (ITP frequently breaks popup auth) and blocked popups. ──
       if (kIsWeb) {
-        debug.logEvent('WEB', 'Using Firebase signInWithPopup for web');
-        final provider = GoogleAuthProvider();
-        provider.addScope('email');
-        provider.addScope('profile');
+        final provider = GoogleAuthProvider()
+          ..addScope('email')
+          ..addScope('profile');
+
+        // iOS Safari blocks popup-based auth — go straight to the redirect
+        // flow, which completes in completeRedirectSignIn() after the page
+        // reloads.
+        if (BrowserDetector.info.isIOSafari) {
+          debug.logEvent('WEB', 'Using Firebase signInWithRedirect (iOS Safari)');
+          await _auth.signInWithRedirect(provider);
+          return null;
+        }
 
         UserCredential? userCredential;
         try {
+          debug.logEvent('WEB', 'Using Firebase signInWithPopup for web');
           userCredential = await _auth.signInWithPopup(provider);
         } on FirebaseAuthException catch (e) {
-          if (e.code == 'popup-blocked' || e.code == 'popup-closed-by-user') {
-            debug.logEvent('CANCELLED', 'Popup blocked or closed: ${e.code}');
+          if (e.code == 'popup-blocked' ||
+              e.code == 'popup-closed-by-user' ||
+              e.code == 'operation-not-supported-in-this-environment' ||
+              e.code == 'unauthorized-domain') {
+            debug.logEvent('FALLBACK', 'Popup unavailable, using redirect: ${e.code}');
+            await _auth.signInWithRedirect(provider);
             return null;
           }
           rethrow;
         }
 
         if (userCredential.user != null) {
-          // Ensure user exists in backend
-          try {
-            await UserService.syncUser(userCredential.user!);
-          } catch (e) {
-            debug.logEvent('SYNC_ERR', 'Backend sync failed: $e');
-          }
-          await CryptoService.fetchAndStoreKey();
-          try {
-            await JournalRemoteStorage.pullAllJournalsToLocal();
-            JournalService.notifyJournalsChanged();
-          } catch (e) {
-            debug.logEvent('SYNC_ERR', 'Journal pull failed: $e');
-          }
-          AnalyticsService.instance.logEvent('sign_in', params: {'method': 'google_web'});
-          try {
-            await RevenueCatService.instance.identify(userCredential.user!.uid);
-          } catch (e) {
-            debug.logEvent('RC_ERR', 'RevenueCat identify failed: $e');
-          }
-          debug.logSignInSuccess(details: {
-            'uid': userCredential.user!.uid,
-            'email': userCredential.user!.email ?? 'none',
-            'displayName': userCredential.user!.displayName ?? 'none',
-            'platform': 'web',
-          });
+          await _completeGoogleSignIn(userCredential.user!, analyticsMethod: 'google_web');
         }
         return userCredential;
       }
@@ -168,17 +159,7 @@ class AuthService {
       }
 
       if (userCredential.user != null) {
-        await UserService.syncUser(userCredential.user!);
-        await CryptoService.fetchAndStoreKey();
-        await JournalRemoteStorage.pullAllJournalsToLocal();
-        JournalService.notifyJournalsChanged();
-        AnalyticsService.instance.logEvent('sign_in', params: {'method': 'google'});
-        await RevenueCatService.instance.identify(userCredential.user!.uid);
-        debug.logSignInSuccess(details: {
-          'uid': userCredential.user!.uid,
-          'email': userCredential.user!.email ?? 'none',
-          'displayName': userCredential.user!.displayName ?? 'none',
-        });
+        await _completeGoogleSignIn(userCredential.user!, analyticsMethod: 'google');
       }
       return userCredential;
     } on PlatformException catch (e, stack) {
@@ -198,6 +179,66 @@ class AuthService {
       print("Stacktrace: $stack");
       print("==============================================================");
       debug.logSignInError(e, stackTrace: stack.toString());
+      return null;
+    }
+  }
+
+  /// Post-Google-sign-in housekeeping shared by popup, redirect, and boot
+  /// resume: backend sync, crypto key, journal pull, analytics, RevenueCat.
+  static Future<void> _completeGoogleSignIn(
+    User user, {
+    required String analyticsMethod,
+  }) async {
+    final debug = AuthDebugService();
+    try {
+      await UserService.syncUser(user);
+    } catch (e) {
+      debug.logEvent('SYNC_ERR', 'Backend sync failed: $e');
+    }
+    try {
+      await CryptoService.fetchAndStoreKey();
+    } catch (e) {
+      debug.logEvent('SYNC_ERR', 'Crypto key fetch failed: $e');
+    }
+    try {
+      await JournalRemoteStorage.pullAllJournalsToLocal();
+      JournalService.notifyJournalsChanged();
+    } catch (e) {
+      debug.logEvent('SYNC_ERR', 'Journal pull failed: $e');
+    }
+    AnalyticsService.instance.logEvent('sign_in', params: {'method': analyticsMethod});
+    try {
+      await RevenueCatService.instance.identify(user.uid);
+    } catch (e) {
+      debug.logEvent('RC_ERR', 'RevenueCat identify failed: $e');
+    }
+    debug.logSignInSuccess(details: {
+      'uid': user.uid,
+      'email': user.email ?? 'none',
+      'displayName': user.displayName ?? 'none',
+      'platform': kIsWeb ? 'web' : 'native',
+    });
+  }
+
+  /// On web, completes a Google sign-in that went through the redirect flow
+  /// (iOS Safari / blocked popup). Returns the credential if a redirect
+  /// sign-in finished, otherwise null. Safe to call on any platform.
+  static Future<UserCredential?> completeRedirectSignIn() async {
+    if (!kIsWeb) return null;
+    final debug = AuthDebugService();
+    try {
+      final result = await _auth.getRedirectResult();
+      final user = result.user;
+      if (user != null) {
+        debug.logEvent('REDIRECT_OK', 'Redirect sign-in completed for ${user.uid}');
+        await _completeGoogleSignIn(user, analyticsMethod: 'google_web');
+      }
+      return result;
+    } on FirebaseAuthException catch (e) {
+      debug.logEvent('REDIRECT_ERR', 'getRedirectResult failed: ${e.code}');
+      return null;
+    } catch (e) {
+      debug.logEvent('REDIRECT_ERR', 'getRedirectResult failed: $e');
       return null;
     }
   }

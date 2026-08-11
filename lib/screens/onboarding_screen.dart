@@ -104,6 +104,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_complete', true);
     await prefs.setString('onboarding_displayName', _data.displayName ?? '');
+    // Verify the flag was written (defensive against platform bugs)
+    await prefs.reload();
+    assert(prefs.getBool('onboarding_complete') == true, 'onboarding_complete failed to persist');
     if (_data.age != null) await prefs.setInt('onboarding_age', _data.age!);
     if (_data.phoneHours != null) {
       await prefs.setInt('onboarding_phoneHours', _data.phoneHours!);
@@ -219,7 +222,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         backgroundColor: cs.surface,
         resizeToAvoidBottomInset: false,
         body: AppBackground(
-          backgroundImage: 'assets/photos/elements/onboarding.png',
+          backgroundImage: 'assets/photos/elements/onboarding.webp',
           overlayOpacity: 0.35,
           child: SafeArea(
             child: Column(

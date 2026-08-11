@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:share_plus/share_plus.dart' deferred as share_plus;
 import '../services/journal_service.dart';
 import '../theme/app_theme.dart';
 import 'journal_list_screen.dart';
@@ -101,9 +101,10 @@ class _JournalEntryRowState extends State<_JournalEntryRow> {
                 icon: Icons.share_rounded,
                 label: 'Share',
                 color: Colors.white,
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(ctx);
-                  Share.share(text);
+                  await share_plus.loadLibrary();
+                  share_plus.Share.share(text);
                 },
               ),
               _menuItem(

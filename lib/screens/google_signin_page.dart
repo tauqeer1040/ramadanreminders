@@ -96,7 +96,7 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
                             const Icon(Icons.check_circle_rounded, color: Color(0xFF4CAF50), size: 22)
                           else
                             Image.asset(
-                              'assets/photos/elements/googlelogo.png',
+                              'assets/photos/elements/googlelogo.webp',
                               width: 22,
                               height: 22,
                             ),

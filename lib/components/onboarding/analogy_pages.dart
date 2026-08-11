@@ -442,7 +442,7 @@ class _AnalogyRevealPageState extends State<AnalogyRevealPage> {
                     const SizedBox(height: 32),
                     Text("Your first analogy", style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 24),
-                    Image.asset('assets/photos/mascot/name.png', height: 200, fit: BoxFit.contain),
+                    Image.asset('assets/photos/mascot/name.webp', height: 200, fit: BoxFit.contain),
                     const SizedBox(height: 24),
                     Container(
                       width: double.infinity,

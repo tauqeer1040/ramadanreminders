@@ -145,7 +145,7 @@ class _QuranPageState extends State<QuranPage>
 
   Future<void> _fetchFreshDataSilently() async {
     if (FirebaseAuth.instance.currentUser != null) {
-      InsightService.fetchPersonalizedInsights(limit: 3, forceRefresh: true).then((cards) {
+      InsightService.fetchPersonalizedInsights(limit: 3, forceRefresh: false).then((cards) {
         if (mounted && cards.isNotEmpty) {
           setState(() {
             _insightCards = cards;
@@ -319,7 +319,7 @@ class _QuranPageState extends State<QuranPage>
   Widget _faceAvatar(_CardColorTheme theme, {double size = 32}) {
     return ClipOval(
       child: Image.asset(
-        'assets/photos/mascot/face.png',
+        'assets/photos/mascot/face.webp',
         width: size,
         height: size,
         fit: BoxFit.cover,
@@ -337,7 +337,7 @@ class _QuranPageState extends State<QuranPage>
           children: [
             ClipOval(
               child: Image.asset(
-                'assets/photos/mascot/face.png',
+                'assets/photos/mascot/face.webp',
                 width: 32,
                 height: 32,
                 fit: BoxFit.cover,
@@ -691,7 +691,7 @@ class _QuranPageState extends State<QuranPage>
                             backgroundColor: cs.primaryContainer,
                             child: ClipOval(
                               child: Image.asset(
-                                'assets/photos/mascot/face.png',
+                                'assets/photos/mascot/face.webp',
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
                               ),
@@ -705,7 +705,7 @@ class _QuranPageState extends State<QuranPage>
                         child: GestureDetector(
                           onTap: () {},
                         child: Image.asset(
-                          'assets/photos/elements/meowmin.png',
+                          'assets/photos/elements/meowmin.webp',
                           width: 120,
                           height: 80,
                           fit: BoxFit.contain,
@@ -839,16 +839,67 @@ class _QuranPageState extends State<QuranPage>
                                 return card;
                               },
                             )
-                          : const MascotEmptyState(
-                              message: 'Start journaling to unlock\nyour daily insight cards.',
-                              actionLabel: 'Write a journal entry',
-                            ),
+                          : _scratchCardImages.isNotEmpty
+                              ? _buildExposedScratchCards()
+                              : const MascotEmptyState(
+                                  message: 'Start journaling to unlock\nyour daily insight cards.',
+                                  actionLabel: 'Write a journal entry',
+                                ),
                 ),
               ),
             ),
             const SizedBox(height: 32),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildExposedScratchCards() {
+    return SizedBox(
+      height: 620,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _scratchCardImages.length,
+        itemBuilder: (context, index) {
+          final scratchImage = _scratchCardImages[index];
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(32),
+              child: GestureDetector(
+                onDoubleTapDown: (details) {
+                  _showHeart();
+                  HapticFeedback.mediumImpact();
+                },
+                child: Stack(
+                  children: [
+                    scratchImage.startsWith('http')
+                        ? Image.network(
+                            scratchImage,
+                            fit: BoxFit.cover,
+                            width: 280,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 280,
+                              color: Colors.grey[200],
+                              child: const Center(child: Icon(Icons.image_not_supported)),
+                            ),
+                          )
+                        : Image.asset(
+                            scratchImage,
+                            fit: BoxFit.cover,
+                            width: 280,
+                          ),
+                    for (final heart in _hearts)
+                      IgnorePointer(
+                        child: _HeartWidget(heart: heart),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

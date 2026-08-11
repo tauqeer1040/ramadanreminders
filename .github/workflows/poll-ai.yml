@@ -14,6 +14,6 @@ jobs:
     steps:
       - name: Trigger AI poll
         run: |
-          curl -fsS -m 60 -X POST "https://meowmin.pages.dev/api/v2/internal/poll-ai" \
+          curl -fsS -m 60 -X POST "https://meowmin.taucity.xyz/api/v2/internal/poll-ai" \
             -H "x-internal-secret: ${{ secrets.INTERNAL_POLL_SECRET }}" \
             -o /dev/null -w "poll-ai: %{http_code}\n"

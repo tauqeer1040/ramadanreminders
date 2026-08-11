@@ -265,11 +265,10 @@ class _StreakGraphState extends State<StreakGraph> with SingleTickerProviderStat
                         ),
                       ))
                 : (isCompleted || dayNum == 1)
-                    ? Lottie.asset(
-                        'assets/photos/elements/streak_fire.json',
-                        width: 44,
-                        height: 44,
-                        fit: BoxFit.contain,
+                    ? const Icon(
+                        Icons.local_fire_department_rounded,
+                        color: AppTheme.starGold,
+                        size: 28,
                       )
                     : Container(
                         width: 28,

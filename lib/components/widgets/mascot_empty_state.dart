@@ -27,7 +27,7 @@ class MascotEmptyState extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(60),
               child: Image.asset(
-                'assets/photos/mascot/face.png',
+                'assets/photos/mascot/face.webp',
                 width: mascotSize,
                 height: mascotSize,
                 fit: BoxFit.cover,

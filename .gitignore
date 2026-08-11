@@ -74,3 +74,12 @@ backend/.server.pid
 backup/
 .playwright-mcp/
 opencode.json
+nul
+screenshot-thread-section.png
+analysis*.txt
+analyze*.txt
+out.txt
+bash.exe.stackdump
+get_path.dart
+c:*out.txt
+open-vm-browser.ps1

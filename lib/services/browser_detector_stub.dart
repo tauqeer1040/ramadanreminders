@@ -1,0 +1,27 @@
+/// Native (non-web) stub — always returns BrowserInfo.unknown.
+class BrowserDetector {
+  static BrowserInfo get info => BrowserInfo.unknown;
+}
+
+enum BrowserType { chrome, safari, firefox, edge, samsung, unknown }
+
+class BrowserInfo {
+  final BrowserType type;
+  final String rawUserAgent;
+
+  const BrowserInfo._(this.type, this.rawUserAgent);
+
+  static const unknown = BrowserInfo._(BrowserType.unknown, '');
+
+  bool get isIOS => false;
+  bool get isIOSafari => type == BrowserType.safari;
+  bool get isAndroidChrome => type == BrowserType.chrome;
+  bool get isFirefox => type == BrowserType.firefox;
+  bool get isEdge => type == BrowserType.edge;
+  bool get isSamsung => type == BrowserType.samsung;
+
+  bool get isMobile {
+    final ua = rawUserAgent.toLowerCase();
+    return ua.contains('android') || ua.contains('iphone') || ua.contains('ipad');
+  }
+}

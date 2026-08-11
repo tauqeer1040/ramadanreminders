@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'services/analytics_service.dart';
 import 'services/app_bootstrap.dart';
+import 'services/crash_reporter.dart';
 import 'core/app_navigator.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Prevent GoogleFonts from fetching fonts over the network.
+  // Inter is self-hosted via assets/fonts/Inter-latin.woff2 + pubspec.yaml.
+  GoogleFonts.config.allowRuntimeFetching = false;
 
   FlutterError.onError = (details) {
     final msg = details.exceptionAsString();
@@ -21,9 +25,16 @@ void main() async {
     FlutterError.dumpErrorToConsole(details);
   };
 
-  await AppBootstrap.run();
+  // Report uncaught errors (and web JS errors) to Firebase Analytics.
+  // Installed after the noise filter above so it can chain to it.
+  CrashReporter.init();
 
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
+  // Firebase must be initialized before runApp() so that widgets which
+  // reference FirebaseAnalytics.instance during build don't crash.
+  // Heavy init (auth, RevenueCat, etc.) stays deferred in the splash.
+  await AppBootstrap.initFirebaseOnly();
 
   runApp(const ProviderScope(child: MyApp()));
 }
@@ -57,8 +68,8 @@ class MyApp extends ConsumerWidget {
             TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
           },
         ),
-        textTheme:
-            GoogleFonts.interTextTheme().apply(
+        textTheme: ThemeData().textTheme.apply(
+              fontFamily: 'Inter',
               bodyColor: AppTheme.starWhite,
               displayColor: AppTheme.starWhite,
             ),
@@ -92,12 +103,12 @@ class MyApp extends ConsumerWidget {
     }
 
     return MaterialApp(
-      title: 'Meowmin AI Diary',
+      title: 'Meowmin',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(scheme),
       themeMode: ThemeMode.dark,
       navigatorKey: appNavigatorKey,
-      navigatorObservers: [AnalyticsService.instance.observer],
+      navigatorObservers: const [],
       home: const SplashScreen(),
     );
   }

@@ -8,7 +8,7 @@
 //
 // Each step is optional and warns when its source is missing, so the script
 // can run before a full build. Run: npm run prepare:public
-import { cpSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,26 +40,67 @@ copy(path.join(root, 'sites', 'meowmin', 'dist'), publicDir);
 // 2. Flutter web build -> public/app (authoritative, overrides landing copy).
 copy(path.join(root, 'build', 'web'), path.join(publicDir, 'app'));
 
+// 2a. Remove canvaskit/ — Flutter loads it from gstatic CDN (buildConfig lacks
+//     useLocalCanvasKit), so the local 37 MB folder is never served.
+const canvaskitDir = path.join(publicDir, 'app', 'canvaskit');
+if (pathExists(canvaskitDir)) {
+  rmSync(canvaskitDir, { recursive: true, force: true });
+  console.log('[ok] removed unused canvaskit/ from public/app');
+}
+
+// 2b. Fix base href — Flutter always resets it to "/" but we serve from /app/
+const indexHtml = path.join(publicDir, 'app', 'index.html');
+try {
+  let html = readFileSync(indexHtml, 'utf8');
+  if (html.includes('<base href="/">')) {
+    html = html.replace('<base href="/">', '<base href="/app/">');
+    writeFileSync(indexHtml, html);
+    console.log('[ok] patched base href -> /app/');
+  }
+} catch {
+  // index.html missing — nothing to patch
+}
+
 // 3. Shop assets -> public/assets
 copy(path.join(root, 'backend', 'public', 'assets'), path.join(publicDir, 'assets'));
 
 // 4. _redirects and _headers
+// /app without trailing slash → redirect to /app/
+// /app/* → serve as-is (no redirect, so Flutter assets load correctly)
 writeFileSync(
   path.join(publicDir, '_redirects'),
-  '# Flutter app hosted under /app\n/app  /app/index.html  200\n',
+  [
+    '# Flutter app hosted under /app',
+    '/app  /app/  301',
+  ].join('\n'),
 );
 
 const headers = [
+  '# HTML files must never be cached to avoid stale base href issues',
+  '/app/index.html',
+  '  Cache-Control: no-store, no-cache, must-revalidate',
+  '  Pragma: no-cache',
+  '',
   '# Hashed Flutter assets are immutable; cache for a year.',
   '/app/build/*',
-  '  Cache-Control: public, max-age=31536000, immutable',
-  '/app/canvaskit/*',
   '  Cache-Control: public, max-age=31536000, immutable',
   '/app/assets/*',
   '  Cache-Control: public, max-age=31536000, immutable',
   '# Flutter entry point and service worker must always revalidate.',
-  '/app/*',
-  '  Cache-Control: public, max-age=0, must-revalidate',
+  '# Explicit Content-Type fixes stale CDN cache serving JS as text/html.',
+  '# Surrogate-Control tells CF edge to never cache these responses.',
+  '/app/*.js',
+  '  Cache-Control: no-cache, must-revalidate',
+  '  Surrogate-Control: no-store',
+  '  Content-Type: application/javascript',
+  '/app/*.json',
+  '  Cache-Control: no-cache, must-revalidate',
+  '  Surrogate-Control: no-store',
+  '  Content-Type: application/json',
+  '/app/*.wasm',
+  '  Cache-Control: no-cache, must-revalidate',
+  '  Surrogate-Control: no-store',
+  '  Content-Type: application/wasm',
   '',
 ].join('\n');
 writeFileSync(path.join(publicDir, '_headers'), headers);

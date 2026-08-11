@@ -396,7 +396,7 @@ class _NamePageState extends State<NamePage> {
               children: [
                 SizedBox(height: isKeyboardVisible ? 16 : 40),
                 Image.asset(
-                  "assets/photos/mascot/name.png",
+                  "assets/photos/mascot/name.webp",
                   height: isKeyboardVisible ? 100 : 200,
                   fit: BoxFit.contain,
                 ),

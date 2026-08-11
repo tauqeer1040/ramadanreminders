@@ -40,7 +40,7 @@ class JourneyHeader extends StatelessWidget {
                       ],
                     ).createShader(bounds),
                     child: Text(
-                      'Meowmin Ai Diary',
+                      'Meowmin',
                       style: textTheme.displaySmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         fontFamily: 'Crimson Text',

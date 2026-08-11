@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/notification_service.dart';
 import '../services/version_check_service.dart';
 import '../services/app_bootstrap.dart';
+import '../services/analytics_service.dart';
 import '../screens/onboarding_screen.dart';
 import '../screens/main_screen.dart';
 
@@ -59,10 +63,25 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   Future<void> _init() async {
-    final timer = Future.delayed(const Duration(milliseconds: 2000));
+    // On web, the HTML splash (animated gif) already played during download —
+    // skip the min-splash timer and transition the instant MainScreen is ready.
+    final timer = kIsWeb
+        ? Future.value()
+        : Future.delayed(const Duration(milliseconds: 800));
+
+    // Log session start for analytics
+    try {
+      AnalyticsService.instance.logSessionStart();
+    } catch (_) {}
+
+    // Start core init in background — don't block the splash transition.
+    // Background services will call run() again (idempotent) to finish any
+    // leftover work.
+    unawaited(AppBootstrap.run());
 
     // ── Mandatory: read onboarding status ──
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
     final needsOnboarding = !(prefs.getBool('onboarding_complete') ?? false);
 
     if (needsOnboarding) {
@@ -76,8 +95,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       await _performScratchMigration();
       await timer;
       if (!mounted) return;
-      _initBackgroundServices();
-      _navigate(const OnboardingScreen());
+      if (kIsWeb) {
+        setState(() {
+          _isTimerDone = true;
+          _targetScreen = OnboardingScreen(onReady: _onTargetReady);
+        });
+      } else {
+        _navigate(const OnboardingScreen());
+      }
     } else {
       // ── Version check (optional, runs in parallel) ──
       VersionCheckService.check().then((result) {
@@ -116,12 +141,29 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   void _checkTransition() {
     if (_isTimerDone && _isTargetReady) {
-      _fadeController.forward();
-      // Delay services init until transition is 100% complete
-      Future.delayed(const Duration(milliseconds: 375), () {
-        _initBackgroundServices();
-      });
+      if (kIsWeb) {
+        // On web, the HTML splash covers the screen until this moment. Remove
+        // it now that the target screen has painted — reveals it directly.
+        _removeWebSplash();
+        Future.delayed(const Duration(milliseconds: 375), () {
+          _initBackgroundServices();
+        });
+      } else {
+        _fadeController.forward();
+        // Delay services init until transition is 100% complete
+        Future.delayed(const Duration(milliseconds: 375), () {
+          _initBackgroundServices();
+        });
+      }
     }
+  }
+
+  void _removeWebSplash() {
+    // Removes the HTML splash via the global function defined in index.html.
+    // If the bridge fails, the 8s failsafe in index.html still clears it.
+    try {
+      globalContext.callMethod('removeSplashFromWeb'.toJS);
+    } catch (_) {}
   }
 
   Future<void> _initBackgroundServices() async {
@@ -174,7 +216,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           if (_targetScreen != null) ...[
             _targetScreen!,
           ],
-          if (!_splashFadedOut) ...[
+          // On web the HTML splash covers the screen — don't double-render the gif.
+          if (!kIsWeb && !_splashFadedOut) ...[
             FadeTransition(
               opacity: _fadeAnimation,
               child: Container(

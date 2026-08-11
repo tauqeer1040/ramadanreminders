@@ -16,27 +16,38 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Meowmin AI Diary — your private AI journal companion.">
+  <meta name="description" content="Meowmin — your private AI journal companion.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="Meowmin AI Diary">
+  <meta name="apple-mobile-web-app-title" content="Meowmin">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png">
 
-  <title>Meowmin AI Diary</title>
+  <title>Meowmin</title>
   <link rel="manifest" href="manifest.json">
   
   
   <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
-  
-  
+
+  <!-- Preconnect: canvaskit WASM, Firebase, RevenueCat (max 4 to avoid Lighthouse warning) -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://www.googleapis.com" />
+  <link rel="preconnect" href="https://api.revenuecat.com" />
+  <link rel="preconnect" href="https://firebaseapp.com" />
+
+  <!-- Preload the main Dart bundle so the browser fetches it immediately -->
+  <link rel="preload" href="main.dart.js" as="script" />
+  <!-- Show the animated splash GIF instantly (no extra request after preload) -->
+  <link rel="preload" as="image" href="assets/assets/splash/gif.webp" fetchpriority="high" />
+
   <style id="splash-screen-style">
     html {
-      height: 100%
+      height: 100%;
+      background-color: #000000;
     }
 
     body {
@@ -94,16 +105,29 @@
   </style>
   <script id="splash-screen-script">
     function removeSplashFromWeb() {
-      document.getElementById("splash")?.remove();
-      document.getElementById("splash-branding")?.remove();
-      document.body.style.background = "transparent";
+      var splash = document.getElementById("splash");
+      if (!splash) return;
+      splash.style.transition = 'opacity 0.3s';
+      splash.style.opacity = '0';
+      setTimeout(function () { splash.remove(); }, 300);
     }
+    // The Flutter app calls removeSplashFromWeb() when the target screen
+    // (home/onboarding) has painted its first frame. Failsafe: never let the
+    // splash outstay its welcome.
+    setTimeout(function () {
+      if (document.getElementById("splash")) {
+        removeSplashFromWeb();
+      }
+    }, 8000);
   </script>
 </head>
 <body>
-  
-  
-  <script src="flutter_bootstrap.js" async=""></script>
 
+  <!-- Branded animated splash — visible from first paint, removed when Flutter's target screen is ready -->
+  <div id="splash" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000000;z-index:9999;">
+    <img src="assets/assets/splash/gif.webp" alt="Loading" style="max-width:100%;max-height:100%;object-fit:contain;" />
+  </div>
+
+  <script src="flutter_bootstrap.js" async=""></script>
 
 </body></html>

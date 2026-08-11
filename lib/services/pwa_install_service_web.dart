@@ -1,61 +1,72 @@
-import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
+import 'dart:async';
+import 'dart:js';
 
-/// Web implementation that captures the browser's `beforeinstallprompt` event
-/// so the app can offer an installable PWA shortcut ("Add to Home Screen").
+/// Web implementation for PWA install functionality.
 class PwaInstallService {
-  static JSAny? _deferredPrompt;
-  static JSFunction? _installListener;
-  static JSFunction? _appInstalledListener;
+  static StreamController<bool>? _controller;
+  static bool _initialized = false;
+  static dynamic _deferredPrompt;
 
-  /// Attach the global listeners. Safe to call more than once.
   static void init() {
-    if (_installListener != null) return;
+    if (_initialized) return;
+    _initialized = true;
 
-    _installListener = _capturePrompt.toJS;
-    globalContext.callMethod(
-      'addEventListener'.toJS,
-      'beforeinstallprompt'.toJS,
-      _installListener,
-    );
-
-    _appInstalledListener = ((JSAny _) => _deferredPrompt = null).toJS;
-    globalContext.callMethod(
-      'addEventListener'.toJS,
-      'appinstalled'.toJS,
-      _appInstalledListener,
-    );
+    try {
+      // Listen for the beforeinstallprompt event
+      context['addEventListener']?.callMethod(
+        'beforeinstallprompt',
+        (event) {
+          event.callMethod('preventDefault');
+          _deferredPrompt = event;
+          _controller?.add(true);
+        },
+      );
+    } catch (_) {}
   }
 
-  static void _capturePrompt(JSAny event) {
-    (event as JSObject).callMethod('preventDefault'.toJS);
-    _deferredPrompt = event;
-  }
-
-  /// Whether a deferred install prompt is available right now.
   static bool get canInstall => _deferredPrompt != null;
 
-  /// Whether the app is already running as an installed PWA.
   static bool get isStandalone {
-    final media =
-        globalContext.callMethod<JSObject>('matchMedia'.toJS,
-            '(display-mode: standalone)'.toJS);
-    final matches = media.getProperty<JSBoolean>('matches'.toJS);
-    return matches.toDart;
-  }
-
-  /// Ask the browser to show the install prompt. Returns false when no
-  /// deferred prompt is available (e.g. already installed or iOS Safari).
-  static Future<bool> promptInstall() async {
-    if (_deferredPrompt == null) return false;
-    final prompt = _deferredPrompt! as JSObject;
     try {
-      prompt.callMethod('prompt'.toJS);
-      return true;
+      final navigator = context['navigator'] as JsObject?;
+      if (navigator == null) return false;
+      return navigator['standalone'] == true ||
+          windowMatchMedia('(display-mode: standalone)');
     } catch (_) {
       return false;
-    } finally {
-      _deferredPrompt = null;
     }
+  }
+
+  static bool windowMatchMedia(String query) {
+    try {
+      final result = context['window']?.callMethod('matchMedia', [query]);
+      return result != null && (result['matches'] == true);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> promptInstall() async {
+    if (_deferredPrompt == null) return false;
+
+    try {
+      await _deferredPrompt.callMethod('prompt');
+      final result = await _deferredPrompt.callMethod('userChoice');
+      _deferredPrompt = null;
+      final outcome = result['outcome'];
+      return outcome == 'accepted';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Stream<bool> get installPromptStream {
+    _controller ??= StreamController<bool>.broadcast();
+    return _controller!.stream;
+  }
+
+  static Future<void> dispose() async {
+    await _controller?.close();
+    _controller = null;
   }
 }

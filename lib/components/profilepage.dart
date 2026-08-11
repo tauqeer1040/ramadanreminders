@@ -17,6 +17,7 @@ import '../services/trial_service.dart';
 import '../services/widget_service.dart';
 import '../services/pwa_install_service.dart';
 import '../services/journal_remote_storage.dart';
+import 'widgets/pwa_install_dialog.dart';
 import '../services/journal_service.dart';
 import '../core/constants.dart';
 import '../screens/manage_account_screen.dart';
@@ -28,6 +29,7 @@ import 'widgets/duo_button.dart';
 import 'widgets/auth_debug_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:share_plus/share_plus.dart' deferred as share_plus;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../screens/about_screen.dart';
@@ -333,7 +335,7 @@ class _ProfilePage1State extends State<ProfilePage1>
                             backgroundColor: cs.primaryContainer,
                             child: ClipOval(
                               child: Image.asset(
-                                'assets/photos/mascot/face.png',
+                                'assets/photos/mascot/face.webp',
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
                               ),
@@ -363,7 +365,7 @@ class _ProfilePage1State extends State<ProfilePage1>
                               );
                             },
                             child: Image.asset(
-                              'assets/photos/elements/meowmin.png',
+                              'assets/photos/elements/meowmin.webp',
                               width: 120,
                               height: 80,
                               fit: BoxFit.contain,
@@ -455,6 +457,13 @@ class _ProfilePage1State extends State<ProfilePage1>
             // ── Share ──────────────────────────────────────────────────────
             DuoButton(
               onPressed: () async {
+                await share_plus.loadLibrary();
+                final url = kIsWeb
+                    ? 'https://meowmin.taucity.xyz'
+                    : 'https://play.google.com/store/apps/details?id=com.taucity.ramadanreflections';
+                share_plus.Share.share(
+                  '🌙 Check out Meowmin! A beautiful journaling companion for your spiritual journey.\n\n$url',
+                );
                 await _incrementStars(100);
               },
               backgroundColor: const Color(0xFFE91E63),
@@ -1042,7 +1051,7 @@ class _ProfilePage1State extends State<ProfilePage1>
     if (!supported) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Long-press your home screen → Widgets → Meowmin Ai Diary to add it.'),
+          content: Text('Long-press your home screen → Widgets → Meowmin to add it.'),
           backgroundColor: Color(0xFF311B92),
         ),
       );
@@ -1118,33 +1127,10 @@ class _ProfilePage1State extends State<ProfilePage1>
       return;
     }
 
-    final shown = await PwaInstallService.promptInstall();
+    // Show browser-specific install guide dialog
     if (!context.mounted) return;
-
-    if (shown) {
-      await _incrementStars(100);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.star_rounded, color: AppTheme.starGold, size: 20),
-              SizedBox(width: 8),
-              Text('Tap Install to add Meowmin to your home screen! +100 ⭐'),
-            ],
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Use your browser menu → "Add to Home Screen" / "Install App" to install Meowmin.',
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+    await showPwaInstallDialog(context);
+    await _incrementStars(100);
   }
 
   String _fmtTrial(int ms) {

@@ -35,6 +35,7 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
   late AnimationController _wobbleCtrl;
   late CurvedAnimation _wobbleAnim;
   Timer? _wobbleTimer;
+  bool _belowFoldReady = false;
 
   @override
   void initState() {
@@ -70,6 +71,10 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
 
     AuthService.authStateChanges.listen((user) {
       if (mounted) setState(() {});
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _belowFoldReady = true);
     });
   }
 
@@ -155,7 +160,7 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
                                       backgroundColor: cs.primaryContainer,
                                       child: ClipOval(
                                         child: Image.asset(
-                                          'assets/photos/mascot/face.png',
+                                          'assets/photos/mascot/face.webp',
                                           fit: BoxFit.cover,
                                           errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
                                         ),
@@ -180,7 +185,7 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
                                         );
                                       },
                                       child: Image.asset(
-                                        'assets/photos/elements/meowmin.png',
+                                        'assets/photos/elements/meowmin.webp',
                                         width: 120,
                                         height: 80,
                                         fit: BoxFit.contain,
@@ -224,14 +229,16 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
                         ),
                       ),
                       const SizedBox(height: 48),
-                      JournalHistorySection(key: _journalKey, maxEntries: 3),
-                      const SizedBox(height: 24),
-                      StreakGraph(streak: state.streakCount, size: 220),
-                      Image.asset(
-                        'assets/photos/mascot/trio3.png',
-                        width: double.infinity,
-                        fit: BoxFit.fitWidth,
-                      ),
+                      if (_belowFoldReady) ...[
+                        JournalHistorySection(key: _journalKey, maxEntries: 3),
+                        const SizedBox(height: 24),
+                        StreakGraph(streak: state.streakCount, size: 220),
+                        Image.asset(
+                          'assets/photos/mascot/trio3.webp',
+                          width: double.infinity,
+                          fit: BoxFit.fitWidth,
+                        ),
+                      ],
                     ],
                   ),
                 ),

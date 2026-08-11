@@ -1,7 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:in_app_review/in_app_review.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:share_plus/share_plus.dart' deferred as share_plus;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../screens/onboarding_screen.dart';
@@ -65,7 +66,7 @@ class _AppHeader extends StatelessWidget {
           ),
           child: ClipOval(
             child: Image.asset(
-              'assets/photos/mascot/face.png',
+              'assets/photos/mascot/face.webp',
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => Container(
                 color: AppTheme.neonPurple.withValues(alpha: 0.2),
@@ -76,7 +77,7 @@ class _AppHeader extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         const Text(
-          'Meowmin Ai Diary',
+          'Meowmin',
           style: TextStyle(
             color: AppTheme.starWhite,
             fontSize: 28,
@@ -125,46 +126,52 @@ class _ActionButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        if (!kIsWeb) ...[
+          DuoButton(
+            onPressed: () async {
+              HapticFeedback.lightImpact();
+              final InAppReview inAppReview = InAppReview.instance;
+              if (await inAppReview.isAvailable()) {
+                inAppReview.requestReview();
+              } else {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Review not available on this device.')),
+                  );
+                }
+              }
+            },
+            backgroundColor: AppTheme.neonPurple,
+            depthColor: const Color(0xFF6A00FF),
+            radius: 16,
+            height: 56,
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.star_rounded, color: AppTheme.starWhite, size: 22),
+                SizedBox(width: 10),
+                Text(
+                  'Leave a Review',
+                  style: TextStyle(
+                    color: AppTheme.starWhite,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         DuoButton(
           onPressed: () async {
             HapticFeedback.lightImpact();
-            final InAppReview inAppReview = InAppReview.instance;
-            if (await inAppReview.isAvailable()) {
-              inAppReview.requestReview();
-            } else {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Review not available on this device.')),
-                );
-              }
-            }
-          },
-          backgroundColor: AppTheme.neonPurple,
-          depthColor: const Color(0xFF6A00FF),
-          radius: 16,
-          height: 56,
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.star_rounded, color: AppTheme.starWhite, size: 22),
-              SizedBox(width: 10),
-              Text(
-                'Leave a Review',
-                style: TextStyle(
-                  color: AppTheme.starWhite,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        DuoButton(
-          onPressed: () {
-            HapticFeedback.lightImpact();
-            Share.share(
-              '🌙 Check out Meowmin Ai Diary! A beautiful journaling companion for your spiritual journey.\n\nDownload: https://play.google.com/store/apps/details?id=com.taucity.ramadanreflections',
+            await share_plus.loadLibrary();
+            final url = kIsWeb
+                ? 'https://meowmin.taucity.xyz'
+                : 'https://play.google.com/store/apps/details?id=com.taucity.ramadanreflections';
+            share_plus.Share.share(
+              '🌙 Check out Meowmin! A beautiful journaling companion for your spiritual journey.\n\n$url',
             );
           },
           backgroundColor: const Color(0xFFE91E63),
@@ -267,7 +274,7 @@ class _OtherAppsSection extends StatelessWidget {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(14),
                           child: Image.asset(
-                            'assets/photos/elements/hyderabad_logo.png',
+                            'assets/photos/elements/hyderabad_logo.webp',
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Container(
                               color: AppTheme.neonPurple.withValues(alpha: 0.1),
@@ -415,7 +422,7 @@ class _PrivacyPolicyLink extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _p('Last updated: May 2026'),
-                _p('Meowmin Ai Diary ("we", "our", "app") respects your privacy. This policy explains how we handle your data.'),
+                _p('Meowmin ("we", "our", "app") respects your privacy. This policy explains how we handle your data.'),
                 _section('Data We Collect'),
                 _p('• Journal entries you write (stored securely on our server)\n• Email and display name (if you sign in with Google)\n• Approximate location (only for prayer time calculation)\n• Device information for push notifications'),
                 _section('How We Use Data'),

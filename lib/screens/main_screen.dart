@@ -126,7 +126,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Quit Meowmin Ai Diary?'),
+        title: const Text('Quit Meowmin?'),
         content: const Text('Are you sure you want to exit the app?'),
         actions: [
           TextButton(
@@ -154,8 +154,8 @@ List<NavigationDestination> _buildNavBarItems(ColorScheme cs) {
       label: "home",
     ),
     NavigationDestination(
-      icon: ImageIcon(AssetImage('assets/photos/elements/icons8-cards-64.png')),
-      selectedIcon: ImageIcon(AssetImage('assets/photos/elements/icons8-cards-64.png')),
+      icon: ImageIcon(AssetImage('assets/photos/elements/icons8-cards-64.webp')),
+      selectedIcon: ImageIcon(AssetImage('assets/photos/elements/icons8-cards-64.webp')),
       label: 'Insights',
     ),
     const NavigationDestination(

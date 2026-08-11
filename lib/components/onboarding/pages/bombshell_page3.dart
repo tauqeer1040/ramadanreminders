@@ -34,7 +34,7 @@ class BombshellPage3 extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Image.asset(
-                      'assets/photos/mascot/reading.png',
+                      'assets/photos/mascot/reading.webp',
                       height: 200,
                       fit: BoxFit.contain,
                     ),

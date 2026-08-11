@@ -9,6 +9,54 @@ class JournalLocalStorage {
   static const String _tasksKey = 'reflection_tasks';
   static const String _favoritesKey = 'favorite_journals';
 
+  // In-memory encrypted cache — holds ciphertext so plaintext never lingers
+  // in Dart memory after a load.  Populated on save and on first access.
+  static final Map<String, String> _encryptedCache = {};
+
+  // --- Encrypted cache API (safe for UI list views) ---
+
+  /// Populate the encrypted cache from disk (call once after crypto is ready).
+  static Future<void> warmCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys();
+    for (final key in keys) {
+      if (key.startsWith(_keyPrefix) && key.endsWith('_text')) {
+        final id = key.replaceFirst(_keyPrefix, '').replaceFirst('_text', '');
+        final stored = prefs.getString(key);
+        if (stored != null && stored.trim().isNotEmpty) {
+          _encryptedCache[id] = stored;
+        }
+      }
+    }
+  }
+
+  /// Return metadata + ciphertext for every journal.  The UI should call
+  /// [decryptText] only when the user opens a specific entry.
+  static Future<List<Map<String, String>>> getEncryptedJournals() async {
+    await _ensureCachePopulated();
+    final List<Map<String, String>> journals = [];
+    for (final entry in _encryptedCache.entries) {
+      if (entry.value.trim().isNotEmpty) {
+        journals.add({'date': entry.key, 'encryptedText': entry.value});
+      }
+    }
+    journals.sort((a, b) => b['date']!.compareTo(a['date']!));
+    return journals;
+  }
+
+  /// Decrypt a single ciphertext string on demand.  Returns the plaintext
+  /// only in the caller's local scope — the caller must not store it.
+  static Future<String?> decryptText(String encrypted) async {
+    if (encrypted.trim().isEmpty) return null;
+    final text = await CryptoService.decrypt(encrypted);
+    return text.trim().isEmpty ? null : text;
+  }
+
+  static Future<void> _ensureCachePopulated() async {
+    if (_encryptedCache.isNotEmpty) return;
+    await warmCache();
+  }
+
   Future<void> saveGratitude(String date, String gratitude) async {
     final prefs = await SharedPreferences.getInstance();
     final encrypted = gratitude.isNotEmpty ? await CryptoService.encrypt(gratitude) : gratitude;
@@ -67,6 +115,7 @@ class JournalLocalStorage {
     final prefs = await SharedPreferences.getInstance();
     final encrypted = text.isNotEmpty ? await CryptoService.encrypt(text) : text;
     await prefs.setString('$_keyPrefix${id}_text', encrypted);
+    _encryptedCache[id] = encrypted;
     if (markForSync) {
       await prefs.setBool('$_keyPrefix${id}_needs_sync', true);
     }
@@ -101,18 +150,13 @@ class JournalLocalStorage {
   }
 
   static Future<List<Map<String, String>>> getAllTexts() async {
-    final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys();
+    await _ensureCachePopulated();
     final List<Map<String, String>> journals = [];
-    for (var key in keys) {
-      if (key.startsWith(_keyPrefix) && key.endsWith('_text')) {
-        final dateStr = key.replaceFirst(_keyPrefix, '').replaceFirst('_text', '');
-        final stored = prefs.getString(key);
-        if (stored != null && stored.trim().isNotEmpty) {
-          final text = await CryptoService.decrypt(stored);
-          if (text.trim().isNotEmpty) {
-            journals.add({'date': dateStr, 'text': text});
-          }
+    for (final entry in _encryptedCache.entries) {
+      if (entry.value.trim().isNotEmpty) {
+        final text = await CryptoService.decrypt(entry.value);
+        if (text.trim().isNotEmpty) {
+          journals.add({'date': entry.key, 'text': text});
         }
       }
     }
@@ -126,6 +170,7 @@ class JournalLocalStorage {
     await prefs.remove('$_keyPrefix${id}_needs_sync');
     await prefs.remove('$_keyPrefix${id}_gratitude');
     await prefs.remove('$_keyPrefix${id}_tasks');
+    _encryptedCache.remove(id);
   }
 
   static Future<void> toggleFavorite(String date) async {
