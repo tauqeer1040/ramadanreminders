@@ -16,6 +16,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const publicDir = path.join(root, 'public');
 
+// Clean public/ before assembling to prevent stale artifacts from accumulating.
+// cpSync is additive — old files from previous builds would persist without this.
+rmSync(publicDir, { recursive: true, force: true });
+console.log('[ok] cleaned public/');
+
 function pathExists(p) {
   try {
     return statSync(p).isDirectory() || statSync(p).isFile();
@@ -48,6 +53,13 @@ if (pathExists(canvaskitDir)) {
   console.log('[ok] removed unused canvaskit/ from public/app');
 }
 
+// 2a1. Remove NOTICES — Dart metadata, never needed at runtime (~1.4 MB).
+const noticesFile = path.join(publicDir, 'app', 'assets', 'NOTICES');
+if (pathExists(noticesFile)) {
+  rmSync(noticesFile, { force: true });
+  console.log('[ok] removed NOTICES (1.4 MB Dart metadata)');
+}
+
 // 2b. Fix base href — Flutter always resets it to "/" but we serve from /app/
 const indexHtml = path.join(publicDir, 'app', 'index.html');
 try {
@@ -59,6 +71,17 @@ try {
   }
 } catch {
   // index.html missing — nothing to patch
+}
+
+// 2c. Copy HTML splash image — Flutter doesn't bundle assets/splash/ into the
+//     build output (it skips .webp in that directory), but index.html references
+//     it directly via <img> and <link rel="preload">.
+const splashSrc = path.join(root, 'assets', 'splash', 'splash.gif');
+const splashDest = path.join(publicDir, 'app', 'assets', 'assets', 'splash', 'splash.gif');
+if (pathExists(splashSrc)) {
+  mkdirSync(path.dirname(splashDest), { recursive: true });
+  cpSync(splashSrc, splashDest);
+  console.log('[ok] copied splash/splash.gif -> public/app/assets/assets/splash/');
 }
 
 // 3. Shop assets -> public/assets
@@ -86,6 +109,19 @@ const headers = [
   '  Cache-Control: public, max-age=31536000, immutable',
   '/app/assets/*',
   '  Cache-Control: public, max-age=31536000, immutable',
+  '',
+  '# Audio files — immutable, large, rarely change.',
+  '/app/assets/assets/tunes/*',
+  '  Cache-Control: public, max-age=31536000, immutable',
+  '',
+  '# Fonts — immutable.',
+  '/app/assets/assets/fonts/*',
+  '  Cache-Control: public, max-age=31536000, immutable',
+  '',
+  '# Images — immutable WebP assets.',
+  '/app/assets/assets/photos/*',
+  '  Cache-Control: public, max-age=31536000, immutable',
+  '',
   '# Flutter entry point and service worker must always revalidate.',
   '# Explicit Content-Type fixes stale CDN cache serving JS as text/html.',
   '# Surrogate-Control tells CF edge to never cache these responses.',

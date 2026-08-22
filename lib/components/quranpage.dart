@@ -839,12 +839,10 @@ class _QuranPageState extends State<QuranPage>
                                 return card;
                               },
                             )
-                          : _scratchCardImages.isNotEmpty
-                              ? _buildExposedScratchCards()
-                              : const MascotEmptyState(
-                                  message: 'Start journaling to unlock\nyour daily insight cards.',
-                                  actionLabel: 'Write a journal entry',
-                                ),
+                          : const MascotEmptyState(
+                              message: 'Start journaling to unlock\nyour daily insight cards.',
+                              actionLabel: 'Write a journal entry',
+                            ),
                 ),
               ),
             ),
@@ -855,54 +853,6 @@ class _QuranPageState extends State<QuranPage>
     );
   }
 
-  Widget _buildExposedScratchCards() {
-    return SizedBox(
-      height: 620,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _scratchCardImages.length,
-        itemBuilder: (context, index) {
-          final scratchImage = _scratchCardImages[index];
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(32),
-              child: GestureDetector(
-                onDoubleTapDown: (details) {
-                  _showHeart();
-                  HapticFeedback.mediumImpact();
-                },
-                child: Stack(
-                  children: [
-                    scratchImage.startsWith('http')
-                        ? Image.network(
-                            scratchImage,
-                            fit: BoxFit.cover,
-                            width: 280,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 280,
-                              color: Colors.grey[200],
-                              child: const Center(child: Icon(Icons.image_not_supported)),
-                            ),
-                          )
-                        : Image.asset(
-                            scratchImage,
-                            fit: BoxFit.cover,
-                            width: 280,
-                          ),
-                    for (final heart in _hearts)
-                      IgnorePointer(
-                        child: _HeartWidget(heart: heart),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
 }
 
 class _CardColorTheme {

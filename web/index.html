@@ -42,7 +42,7 @@
   <!-- Preload the main Dart bundle so the browser fetches it immediately -->
   <link rel="preload" href="main.dart.js" as="script" />
   <!-- Show the animated splash GIF instantly (no extra request after preload) -->
-  <link rel="preload" as="image" href="assets/assets/splash/gif.webp" fetchpriority="high" />
+  <link rel="preload" as="image" href="assets/assets/splash/splash.gif" fetchpriority="high" />
 
   <style id="splash-screen-style">
     html {
@@ -114,18 +114,20 @@
     // The Flutter app calls removeSplashFromWeb() when the target screen
     // (home/onboarding) has painted its first frame. Failsafe: never let the
     // splash outstay its welcome.
+    // Failsafe: only remove splash after 30s (gives Flutter plenty of time on
+    // slow connections). Flutter calls removeSplashFromWeb() much earlier.
     setTimeout(function () {
       if (document.getElementById("splash")) {
         removeSplashFromWeb();
       }
-    }, 8000);
+    }, 30000);
   </script>
 </head>
 <body>
 
   <!-- Branded animated splash — visible from first paint, removed when Flutter's target screen is ready -->
   <div id="splash" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000000;z-index:9999;">
-    <img src="assets/assets/splash/gif.webp" alt="Loading" style="max-width:100%;max-height:100%;object-fit:contain;" />
+    <img src="assets/assets/splash/splash.gif" alt="Loading" style="max-width:100%;max-height:100%;object-fit:contain;" />
   </div>
 
   <script src="flutter_bootstrap.js" async=""></script>

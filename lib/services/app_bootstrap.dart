@@ -14,6 +14,7 @@ import 'user_service.dart';
 import 'streak_service.dart';
 import 'auth_service.dart';
 import 'crypto_service.dart';
+import 'journal_remote_storage.dart';
 import 'analytics_service.dart';
 import 'revenuecat_service.dart';
 import 'pwa_install_service.dart';
@@ -131,6 +132,19 @@ class AppBootstrap {
   /// Called after the splash → homescreen transition completes.
   static Future<void> initBackgroundServices() async {
     await run();
+
+    // Pull a session-restored (returning) user's cloud journals into local
+    // storage so pre-existing entries appear. Explicit Google sign-in already
+    // does this via _completeGoogleSignIn; this covers app-launch restore
+    // (new device, reinstall, or cleared local cache) where no sign-in event
+    // fires. Fire-and-forget: the home screen is already visible, and
+    // notifyJournalsChanged() refreshes it once the pull lands.
+    final restoredUser = FirebaseAuth.instance.currentUser;
+    if (restoredUser != null && !restoredUser.isAnonymous) {
+      JournalRemoteStorage.pullAllJournalsToLocal()
+          .then((_) => JournalService.notifyJournalsChanged())
+          .catchError((e) => debugPrint('[AppBootstrap] journal pull failed: $e'));
+    }
 
     // Warm encrypted cache now that crypto key is available.
     await JournalService.warmEncryptedCache();
