@@ -172,7 +172,7 @@ class InsightService {
       final response = await http.get(
         Uri.parse('$_backendUrl/user/${user.uid}/daily-content?day=${_today()}'),
         headers: await ApiClient.authHeaders(),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final payload = Map<String, dynamic>.from(jsonDecode(response.body) as Map);

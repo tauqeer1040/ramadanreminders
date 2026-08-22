@@ -2,6 +2,14 @@ const db = require('./db');
 const { setCache, getCache } = require('./cache');
 const { buildInsightCardsFromRows, loadSimilarMatchesForJournal } = require('./journals');
 
+const FETCH_TIMEOUT_MS = 5000;
+
+function fetchWithTimeout(url, opts = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 async function enrichSurahCard(card) {
   if (!card || card.type !== 'surah_guidance' || !card.reference) return;
   try {
@@ -9,14 +17,14 @@ async function enrichSurahCard(card) {
     if (!match) return;
     const ayahKey = `${match[1]}:${match[2]}`;
 
-    const textRes = await fetch(
+    const textRes = await fetchWithTimeout(
       `https://api.alquran.cloud/v1/ayah/${ayahKey}/editions/quran-uthmani,en.transliteration,en.sahih`
     );
     if (!textRes.ok) return;
     const textJson = await textRes.json();
     const ayahData = textJson.data;
 
-    const audioRes = await fetch(
+    const audioRes = await fetchWithTimeout(
       `https://api.alquran.cloud/v1/ayah/${ayahData[0].number}/ar.alafasy`
     );
     const audioJson = audioRes.ok ? await audioRes.json() : null;
@@ -55,9 +63,6 @@ async function buildDailyContent(uid, dayKey) {
 
   const latestRows = latestRowsResult.rows;
   if (!latestRows.length) {
-    // IMPORTANT: do not cache the empty result. Caching it would lock the
-    // Insight screen into the empty state for the rest of the day even after a
-    // journal's AI completes. Returning uncached lets the next request recompute.
     return {
       dayKey,
       insightCards: [],
@@ -68,12 +73,23 @@ async function buildDailyContent(uid, dayKey) {
   }
 
   const insightCards = buildInsightCardsFromRows(latestRows, uid);
+  if (!insightCards.length) return {
+    dayKey, insightCards: [], tasks: [],
+    related: { journalId: null, reflectionTags: [], taskTags: [], similarReflections: [], similarTasks: [] },
+    featuredReference: null,
+  };
+
   const latestJournal = latestRows[0];
 
   const surahCard = insightCards.find(c => c.type === 'surah_guidance');
-  await enrichSurahCard(surahCard);
+  await enrichSurahCard(surahCard).catch(() => {});
 
-  const related = await loadSimilarMatchesForJournal(uid, latestJournal.id);
+  let related = { reflectionTags: [], taskTags: [], similarReflections: [], similarTasks: [] };
+  try {
+    related = await loadSimilarMatchesForJournal(uid, latestJournal.id);
+  } catch (e) {
+    console.warn('[buildDailyContent] loadSimilarMatches failed:', e.message);
+  }
 
   const payload = {
     dayKey,

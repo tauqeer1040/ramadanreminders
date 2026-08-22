@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart' deferred as share_plus;
 import '../services/journal_service.dart';
+import '../services/insight_service.dart';
 import '../theme/app_theme.dart';
 import 'journal_list_screen.dart';
 import 'widgets/mascot_empty_state.dart';
@@ -33,11 +34,26 @@ class _JournalEntryRow extends StatefulWidget {
 class _JournalEntryRowState extends State<_JournalEntryRow> {
   bool _isFavorited = false;
   bool _loaded = false;
+  List<InsightCard> _insightCards = [];
+  bool _loadingInsights = false;
 
   @override
   void initState() {
     super.initState();
     _loadFav();
+    _loadInsights();
+  }
+
+  Future<void> _loadInsights() async {
+    if (!mounted) return;
+    setState(() => _loadingInsights = true);
+    final cards = await InsightService.fetchJournalInsightCards(widget.journal['date'] ?? '');
+    if (mounted) {
+      setState(() {
+        _insightCards = cards;
+        _loadingInsights = false;
+      });
+    }
   }
 
   Future<void> _loadFav() async {
@@ -163,6 +179,69 @@ class _JournalEntryRowState extends State<_JournalEntryRow> {
     );
   }
 
+  List<Widget> _buildInsightsSection(TextTheme tt) {
+    if (_loadingInsights) {
+      return [
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Row(children: [
+            SizedBox(width: 10, height: 10, child: CircularProgressIndicator(
+              strokeWidth: 1.5, color: AppTheme.neonPurple.withValues(alpha: 0.5))),
+            const SizedBox(width: 6),
+            Text('Loading AI insights…', style: tt.bodySmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.35), fontSize: 11)),
+          ]),
+        ),
+      ];
+    }
+    if (_insightCards.isEmpty) return [];
+    return [
+      Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(children: [
+          Icon(Icons.auto_awesome_rounded, size: 12,
+            color: AppTheme.neonPurple.withValues(alpha: 0.7)),
+          const SizedBox(width: 4),
+          Text('AI INSIGHTS', style: tt.labelSmall?.copyWith(
+            color: AppTheme.neonPurple.withValues(alpha: 0.7),
+            fontWeight: FontWeight.w700, fontSize: 10, letterSpacing: 0.5)),
+        ]),
+      ),
+      ..._insightCards.take(3).map((card) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          _insightSnippet(card),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: tt.bodySmall?.copyWith(
+            color: Colors.white.withValues(alpha: 0.55), fontSize: 11.5, height: 1.3),
+        ),
+      )),
+    ];
+  }
+
+  String _insightSnippet(InsightCard card) {
+    String? body;
+    switch (card.type) {
+      case 'personalized_insight':
+        body = card.insight?.isNotEmpty == true ? card.insight : card.quote;
+      case 'surah_guidance':
+        body = card.explanation?.isNotEmpty == true ? card.explanation : card.english;
+      case 'story_and_task':
+        body = card.story?.isNotEmpty == true ? card.story : card.lesson;
+      default:
+        body = card.insight;
+    }
+    final title = switch (card.type) {
+      'personalized_insight' => 'A Surah for You',
+      'surah_guidance' => 'An Ayah to Hold Onto',
+      'story_and_task' => 'A Story to Remember',
+      _ => 'Insight',
+    };
+    if (body == null || body.isEmpty) return title;
+    return '$title \u2014 $body';
+  }
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -193,63 +272,69 @@ class _JournalEntryRowState extends State<_JournalEntryRow> {
                 color: Colors.white.withValues(alpha: 0.12),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.18), width: 1),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 44,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.85),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(dayName, style: tt.labelSmall?.copyWith(
-                          color: Colors.black.withValues(alpha: 0.50),
-                          fontWeight: FontWeight.w700, fontSize: 10, letterSpacing: 0.5,
-                        )),
-                        const SizedBox(height: 1),
-                        Text(dayNum, style: tt.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: Colors.black.withValues(alpha: 0.70), fontSize: 22, height: 1,
-                        )),
-                      ],
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 44,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(dayName, style: tt.labelSmall?.copyWith(
+                              color: Colors.black.withValues(alpha: 0.50),
+                              fontWeight: FontWeight.w700, fontSize: 10, letterSpacing: 0.5,
+                            )),
+                            const SizedBox(height: 1),
+                            Text(dayNum, style: tt.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black.withValues(alpha: 0.70), fontSize: 22, height: 1,
+                            )),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (parts.title.isNotEmpty)
+                              Text(parts.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: tt.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white.withValues(alpha: 0.92), fontSize: 14.5, height: 1.2,
+                                ),
+                              ),
+                            if (parts.title.isNotEmpty && parts.body.isNotEmpty) const SizedBox(height: 4),
+                            if (parts.body.isNotEmpty)
+                              Text(parts.body, maxLines: 2, overflow: TextOverflow.ellipsis,
+                                style: tt.bodySmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.48), fontSize: 13, height: 1.4,
+                                ),
+                              )
+                            else if (parts.title.isEmpty)
+                              Text(text, maxLines: 2, overflow: TextOverflow.ellipsis,
+                                style: tt.bodySmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.48), fontSize: 13, height: 1.4,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (_loaded && _isFavorited)
+                        Icon(Icons.star_rounded, size: 16, color: AppTheme.starGold.withValues(alpha: 0.7)),
+                    ],
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (parts.title.isNotEmpty)
-                          Text(parts.title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: tt.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white.withValues(alpha: 0.92), fontSize: 14.5, height: 1.2,
-                            ),
-                          ),
-                        if (parts.title.isNotEmpty && parts.body.isNotEmpty) const SizedBox(height: 4),
-                        if (parts.body.isNotEmpty)
-                          Text(parts.body, maxLines: 2, overflow: TextOverflow.ellipsis,
-                            style: tt.bodySmall?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.48), fontSize: 13, height: 1.4,
-                            ),
-                          )
-                        else if (parts.title.isEmpty)
-                          Text(text, maxLines: 2, overflow: TextOverflow.ellipsis,
-                            style: tt.bodySmall?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.48), fontSize: 13, height: 1.4,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (_loaded && _isFavorited)
-                    Icon(Icons.star_rounded, size: 16, color: AppTheme.starGold.withValues(alpha: 0.7)),
+                  ..._buildInsightsSection(tt),
                 ],
               ),
             ),

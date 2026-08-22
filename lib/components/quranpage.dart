@@ -131,7 +131,7 @@ class _QuranPageState extends State<QuranPage>
 
   Future<void> _loadInsightLocallyOnly() async {
     try {
-      final cached = await InsightService.loadCacheInternal(); // I'll add this getter
+      final cached = await InsightService.loadCacheInternal(); // This getter now includes day context
       if (mounted && cached != null && cached.isNotEmpty) {
         setState(() {
           _insightCards = cached;
@@ -145,14 +145,17 @@ class _QuranPageState extends State<QuranPage>
 
   Future<void> _fetchFreshDataSilently() async {
     if (FirebaseAuth.instance.currentUser != null) {
-      InsightService.fetchPersonalizedInsights(limit: 3, forceRefresh: false).then((cards) {
+      try {
+        final cards = await InsightService.fetchPersonalizedInsights(limit: 3, forceRefresh: false);
         if (mounted && cards.isNotEmpty) {
           setState(() {
             _insightCards = cards;
             _buildDeck();
           });
         }
-      });
+      } catch (_) {
+        // Silently fail as before
+      }
     }
   }
 
