@@ -55,15 +55,16 @@ async function buildDailyContent(uid, dayKey) {
 
   const latestRows = latestRowsResult.rows;
   if (!latestRows.length) {
-    const empty = {
+    // IMPORTANT: do not cache the empty result. Caching it would lock the
+    // Insight screen into the empty state for the rest of the day even after a
+    // journal's AI completes. Returning uncached lets the next request recompute.
+    return {
       dayKey,
       insightCards: [],
       tasks: [],
       related: { journalId: null, reflectionTags: [], taskTags: [], similarReflections: [], similarTasks: [] },
       featuredReference: null,
     };
-    setCache(cacheKey, empty);
-    return empty;
   }
 
   const insightCards = buildInsightCardsFromRows(latestRows, uid);

@@ -176,7 +176,12 @@ class InsightService {
 
       if (response.statusCode == 200) {
         final payload = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
-        await _saveDailyContent(payload);
+        final cards = payload['insightCards'];
+        // Never poison the local cache with an empty day — a journal may
+        // complete later and we want the next fetch to hit the network.
+        if (cards is List && cards.isNotEmpty) {
+          await _saveDailyContent(payload);
+        }
         return payload;
       }
     } catch (_) {}
@@ -204,7 +209,16 @@ class InsightService {
     final user = _auth.currentUser;
     if (user == null) return [];
 
-    final dailyContent = await fetchDailyContent(forceRefresh: forceRefresh);
+    var dailyContent = await fetchDailyContent(forceRefresh: forceRefresh);
+    final initialEmpty = dailyContent == null ||
+        dailyContent['insightCards'] is! List ||
+        (dailyContent['insightCards'] as List).isEmpty;
+    if (initialEmpty && !forceRefresh) {
+      // The local/backend cache may have been empty earlier in the day;
+      // bypass it so a completed journal's insights actually load.
+      dailyContent = await fetchDailyContent(forceRefresh: true);
+    }
+
     final cardsRaw = dailyContent?['insightCards'];
     if (cardsRaw is List) {
       final cards = cardsRaw

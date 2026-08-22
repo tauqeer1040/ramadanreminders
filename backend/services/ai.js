@@ -9,7 +9,6 @@ const OPENROUTER_MODELS = [
   'google/gemma-3-12b-it:free',
   'meta-llama/llama-3.3-70b-instruct:free',
   'nousresearch/hermes-3-llama-3.1-405b:free',
-  'mistralai/mistral-small-3.1-24b-instruct:free',
 ];
 
 function parseAiJson(rawText) {
@@ -25,7 +24,7 @@ async function callFanarRaw(prompt, temperature = 0.2) {
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), 45000);
 
   const res = await fetch(`${FANAR_BASE_URL}/v1/chat/completions`, {
     signal: controller.signal,
@@ -64,8 +63,11 @@ async function callOpenRouterRaw(prompt) {
 
   let lastError = null;
   for (const model of OPENROUTER_MODELS) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
     try {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        signal: controller.signal,
         method: 'POST',
         headers: {
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
@@ -86,6 +88,8 @@ async function callOpenRouterRaw(prompt) {
       return data.choices?.[0]?.message?.content || '';
     } catch (error) {
       lastError = error;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
