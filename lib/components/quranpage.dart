@@ -630,6 +630,69 @@ class _QuranPageState extends State<QuranPage>
   }
 
 
+  Widget _buildDebugInsightsSection() {
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        initiallyExpanded: false,
+        title: Row(
+          children: [
+            Icon(Icons.bug_report, size: 14, color: Colors.white38),
+            const SizedBox(width: 6),
+            Text(
+              'Debug: ${_insightCards.length} insight${_insightCards.length == 1 ? '' : 's'} loaded',
+              style: const TextStyle(fontSize: 11, color: Colors.white38),
+            ),
+          ],
+        ),
+        children: [
+          if (_insightCards.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text('No insight cards loaded.', style: TextStyle(fontSize: 11, color: Colors.white24)),
+            )
+          else
+            ..._insightCards.asMap().entries.map((e) {
+              final i = e.key;
+              final c = e.value;
+              final snippet = c.type == 'personalized_insight'
+                  ? (c.insight ?? c.quote ?? '').toString()
+                  : c.type == 'surah_guidance'
+                      ? '${c.surahName ?? ''} ${c.ayahNumber != null ? '${c.ayahNumber}' : ''} — ${(c.english ?? '').toString()}'
+                      : '${c.taskTitle ?? ''} — ${(c.lesson ?? '').toString()}';
+              return Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '#${i + 1}  ${c.type}',
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white54),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      snippet.length > 200 ? '${snippet.substring(0, 200)}…' : snippet,
+                      style: const TextStyle(fontSize: 11, color: Colors.white60, height: 1.4),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+
   Future<bool> _onSwipe(
     int previousIndex,
     int? currentIndex,
@@ -746,14 +809,17 @@ class _QuranPageState extends State<QuranPage>
             ),
 
             Expanded(
-              child: Center(
-                child: SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.9,
-                  height: 620,
-                  child: _isLoading
-                      ? const InsightCardShimmer()
-                      : _deck.isNotEmpty
-                          ? CardSwiper(
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: SizedBox(
+                        width: MediaQuery.of(context).size.width * 0.9,
+                        height: 620,
+                        child: _isLoading
+                            ? const InsightCardShimmer()
+                            : _deck.isNotEmpty
+                                ? CardSwiper(
                               controller: _swiperController,
                               cardsCount: _deck.length,
                               numberOfCardsDisplayed: _deck.length > 1 ? 2 : 1,
@@ -847,6 +913,10 @@ class _QuranPageState extends State<QuranPage>
                               actionLabel: 'Write a journal entry',
                             ),
                 ),
+                    ),
+                  ),
+                  _buildDebugInsightsSection(),
+                ],
               ),
             ),
             const SizedBox(height: 32),
