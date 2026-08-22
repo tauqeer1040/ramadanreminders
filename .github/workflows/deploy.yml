@@ -44,11 +44,11 @@ jobs:
         working-directory: sites/meowmin
         run: npm run build
 
-      - name: Bundle worker
-        run: npm run build:worker
-
       - name: Assemble public/
         run: node scripts/prepare-public.mjs
+
+      - name: Bundle worker
+        run: npm run build:worker
 
       - name: Deploy to Cloudflare Pages
         run: npx wrangler pages deploy public --project-name meowmin --branch main
