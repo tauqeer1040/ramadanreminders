@@ -1,8 +1,5 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
-import 'package:path_provider/path_provider.dart';
-import 'package:audiotags/audiotags.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -104,18 +101,12 @@ class _ProfilePage1State extends State<ProfilePage1>
   Future<void> _loadCovers() async {
     try {
       final paths = [
-        'assets/tunes/1_A.M_Study_Session_lofi_hip_hop_5min.m4a',
-        'assets/tunes/After_Dark_in_Cairo_Arabic_Melodies_Jazz_Fusion_for_Late_Night_Focus_Study_5min.m4a',
+        'assets/photos/elements/cover_am_session.webp',
+        'assets/photos/elements/cover_after_dark.webp',
       ];
       for (int i = 0; i < paths.length; i++) {
-        final byteData = await rootBundle.load(paths[i]);
-        final tempDir = await getTemporaryDirectory();
-        final file = File('${tempDir.path}/${paths[i].split('/').last}');
-        await file.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
-        final tag = await AudioTags.read(file.path);
-        if (tag?.pictures.isNotEmpty == true) {
-          _covers[i] = tag!.pictures.first.bytes;
-        }
+        final bd = await rootBundle.load(paths[i]);
+        _covers[i] = bd.buffer.asUint8List();
       }
     } catch (e) {
       debugPrint("Error loading covers in profile: $e");

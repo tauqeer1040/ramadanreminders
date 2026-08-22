@@ -4,7 +4,6 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_linux
-  audiotags
   desktop_webview_auth
   dynamic_color
   flutter_secure_storage_linux
