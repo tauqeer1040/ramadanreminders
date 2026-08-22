@@ -1,5 +1,5 @@
 const { pollPendingJournals } = require('../lib/ai-engine');
-const { listErrors } = require('../lib/error-log');
+const { listErrors, logError } = require('../lib/error-log');
 
 module.exports = function (app) {
   const checkSecret = (req) => {
@@ -11,12 +11,13 @@ module.exports = function (app) {
     if (!checkSecret(req)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    try {
-      await pollPendingJournals();
-      res.json({ ok: true });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
+    // Fire-and-forget: the worker already polls on its own interval, so this
+    // endpoint is just a nudge. Return immediately so the CI cron's `curl -m 60`
+    // never times out waiting on a long poll (which previously failed the job).
+    pollPendingJournals().catch((error) => {
+      logError({ type: 'ai_poll_cron', message: error.message, stack: error.stack, route: 'internal/poll-ai' });
+    });
+    return res.status(202).json({ ok: true, triggered: true });
   });
 
   app.get('/api/v2/internal/errors', async (req, res) => {
