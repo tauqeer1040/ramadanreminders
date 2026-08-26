@@ -50,7 +50,7 @@ class RevenueCatNotifier extends StateNotifier<RevenueCatState> {
 
     state = state.copyWith(status: SubscriptionStatus.loading);
 
-    await service.initialize();
+    await service.ensureInitialized();
 
     final info = await service.getCustomerInfo();
     if (info != null) {

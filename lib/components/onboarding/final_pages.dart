@@ -7,11 +7,13 @@ import 'package:text_scroll/text_scroll.dart';
 import 'package:scratcher/scratcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_confetti/flutter_confetti.dart' as fc;
-import 'package:in_app_review/in_app_review.dart';
+import 'package:in_app_review/in_app_review.dart' deferred as iar;
+import 'package:share_plus/share_plus.dart' deferred as share_plus;
 import '../../services/analogy_service.dart';
 import '../../services/journal_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/analytics_service.dart';
+import '../../services/invite_service.dart';
 import 'onboarding_data.dart';
 import '../../utils/image_urls.dart';
 import '../widgets/duo_button.dart';
@@ -1054,6 +1056,70 @@ class _CelebrationPageState extends State<CelebrationPage> {
                   const SizedBox(height: 12),
                   const StreakGraph(streak: 1, size: 130),
                   const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: cs.primary.withValues(alpha: 0.4),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Share your streak 🐾',
+                          style: tt.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Invite a friend — whoever keeps the longer streak shields you both.',
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.75),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        DuoButton(
+                          onPressed: () async {
+                            final url = await InviteService.buildInviteUrl(
+                              name: widget.data.displayName,
+                              cat: widget.data.catName,
+                            );
+                            if (url == null) return;
+                            await share_plus.loadLibrary();
+                            share_plus.Share.share(
+                              '🌙 I just started a reflection streak on Meowmin! Join me and we\'ll shield each other\'s streaks.\n\n$url',
+                            );
+                          },
+                          backgroundColor: const Color(0xFFE91E63),
+                          depthColor: const Color(0xFFAD1457),
+                          radius: 14,
+                          height: 48,
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.share_rounded, size: 18, color: AppTheme.starWhite),
+                              SizedBox(width: 8),
+                              Text(
+                                'Invite a Friend',
+                                style: TextStyle(
+                                  color: AppTheme.starWhite,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
@@ -1377,7 +1443,7 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
   bool _continueEnabled = false;
   int _countdown = 3;
   Timer? _countdownTimer;
-  final InAppReview _inAppReview = InAppReview.instance;
+  dynamic _inAppReview;
 
   String _formatTimeSpent(DateTime start) {
     final diff = DateTime.now().difference(start);
@@ -1415,6 +1481,8 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
     setState(() => _showReviewScreen = true);
     _startCountdown();
     HapticFeedback.mediumImpact();
+    await iar.loadLibrary();
+    _inAppReview = iar.InAppReview.instance;
     if (await _inAppReview.isAvailable()) {
       await _inAppReview.requestReview();
     }
@@ -1565,6 +1633,10 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
           DuoButton(
             onPressed: () async {
               HapticFeedback.heavyImpact();
+              if (_inAppReview == null) {
+                await iar.loadLibrary();
+                _inAppReview = iar.InAppReview.instance;
+              }
               await _inAppReview.openStoreListing();
             },
             backgroundColor: cs.primary,

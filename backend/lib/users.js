@@ -2,18 +2,19 @@ const db = require('./db');
 const { encrypt } = require('../encryption');
 const { clearUserCache } = require('./cache');
 
-async function upsertUser(uid, displayName, email) {
+async function upsertUser(uid, displayName, email, catName) {
   const encryptedEmail = email ? encrypt(email, uid) : null;
   await db.execute({
     sql: `
-      INSERT INTO users (id, display_name, email)
-      VALUES (?, ?, ?)
+      INSERT INTO users (id, display_name, email, cat_name)
+      VALUES (?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         display_name = COALESCE(excluded.display_name, users.display_name),
         email = COALESCE(excluded.email, users.email),
+        cat_name = COALESCE(excluded.cat_name, users.cat_name),
         last_active = CURRENT_TIMESTAMP
     `,
-    args: [uid, displayName || null, encryptedEmail],
+    args: [uid, displayName || null, encryptedEmail, catName || null],
   });
   clearUserCache(uid);
 }

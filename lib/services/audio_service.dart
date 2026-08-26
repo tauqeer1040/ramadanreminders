@@ -1,6 +1,6 @@
 import 'dart:js_interop';
 
-import 'package:audioplayers/audioplayers.dart';
+import 'package:audioplayers/audioplayers.dart' deferred as ap;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -23,7 +23,8 @@ class BackgroundMusicService with WidgetsBindingObserver {
 
   static const MethodChannel _channel = MethodChannel('com.taucity.meowmin/widget');
 
-  final AudioPlayer _player = AudioPlayer();
+  dynamic _player;
+  bool _libsLoaded = false;
   bool _isInitialized = false;
   bool _musicEnabled = true;
   String? _currentTrackPath;
@@ -52,14 +53,19 @@ class BackgroundMusicService with WidgetsBindingObserver {
 
   Future<void> init() async {
     if (_isInitialized) return;
+    if (!_libsLoaded) {
+      await ap.loadLibrary();
+      _player = ap.AudioPlayer();
+      _libsLoaded = true;
+    }
 
     final prefs = await SharedPreferences.getInstance();
     _musicEnabled = prefs.getBool(_prefKeyEnabled) ?? true;
     _currentTrackPath = prefs.getString(_prefKeyTrack);
 
-    _player.setPlayerMode(PlayerMode.mediaPlayer);
-    _player.setReleaseMode(ReleaseMode.loop);
-    _player.setVolume(1.0);
+    _player!.setPlayerMode(ap.PlayerMode.mediaPlayer);
+    _player!.setReleaseMode(ap.ReleaseMode.loop);
+    _player!.setVolume(1.0);
 
     WidgetsBinding.instance.addObserver(this);
     _isInitialized = true;
@@ -100,12 +106,12 @@ class BackgroundMusicService with WidgetsBindingObserver {
     final devicePlaying = await _isDevicePlayingAudio();
     if (devicePlaying) {
       debugPrint("Device is already playing audio. Skipping background music.");
-      await _player.stop();
+      await _player?.stop();
       return;
     }
     try {
-      await _player.stop();
-      await _player.play(AssetSource(assetPath));
+      await _player?.stop();
+      await _player?.play(ap.AssetSource(assetPath));
     } catch (e) {
       debugPrint("Error playing background music: $e");
     }
@@ -135,7 +141,7 @@ class BackgroundMusicService with WidgetsBindingObserver {
         await _playTrack(_currentTrackPath!);
       }
     } else {
-      await _player.stop();
+      await _player?.stop();
     }
   }
 
@@ -144,11 +150,11 @@ class BackgroundMusicService with WidgetsBindingObserver {
   }
 
   Future<void> stop() async {
-    await _player.stop();
+    await _player?.stop();
   }
 
   Future<void> pause() async {
-    await _player.pause();
+    await _player?.pause();
   }
 
   Future<void> resume() async {
@@ -156,13 +162,13 @@ class BackgroundMusicService with WidgetsBindingObserver {
     final devicePlaying = await _isDevicePlayingAudio();
     if (devicePlaying) {
       debugPrint("Device is already playing audio. Pausing background music.");
-      await _player.pause();
+      await _player?.pause();
       return;
     }
-    final state = _player.state;
-    if (state == PlayerState.playing) return;
-    if (state == PlayerState.paused) {
-      await _player.resume();
+    final state = _player?.state;
+    if (state == ap.PlayerState.playing) return;
+    if (state == ap.PlayerState.paused) {
+      await _player?.resume();
     } else if (_currentTrackPath != null) {
       await _playTrack(_currentTrackPath!);
     }
@@ -181,6 +187,6 @@ class BackgroundMusicService with WidgetsBindingObserver {
 
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _player.dispose();
+    _player?.dispose();
   }
 }

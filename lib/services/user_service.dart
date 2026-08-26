@@ -2,12 +2,15 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_client.dart';
 import '../core/constants.dart';
 
 class UserService {
   static Future<void> syncUser(User user) async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final catName = prefs.getString('onboarding_catName');
       final headers = await ApiClient.postHeaders();
       await http.post(
         Uri.parse('${AppConstants.backendUrl}/user/upsert'),
@@ -15,6 +18,7 @@ class UserService {
         body: jsonEncode({
           'displayName': user.displayName,
           'email': user.email,
+          'catName': catName,
         }),
       ).timeout(const Duration(seconds: 10));
     } catch (e) {

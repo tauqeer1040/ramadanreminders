@@ -100,6 +100,7 @@ require('./routes/shop')(app);
 require('./routes/superwall')(app);
 require('./routes/trial')(app);
 require('./routes/subscription')(app);
+require('./routes/invites')(app);
 require('./routes/internal')(app);
 
 // Capture 5xx responses (routes catch their own errors and return them as

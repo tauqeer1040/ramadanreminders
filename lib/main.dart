@@ -1,19 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'services/app_bootstrap.dart';
 import 'services/crash_reporter.dart';
+import 'services/app_bootstrap.dart';
 import 'core/app_navigator.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Prevent GoogleFonts from fetching fonts over the network.
-  // Inter is self-hosted via assets/fonts/Inter-latin.woff2 + pubspec.yaml.
-  GoogleFonts.config.allowRuntimeFetching = false;
 
   FlutterError.onError = (details) {
     final msg = details.exceptionAsString();
@@ -29,13 +24,16 @@ void main() async {
   // Installed after the noise filter above so it can chain to it.
   CrashReporter.init();
 
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-
-  // Firebase must be initialized before runApp() so that widgets which
-  // reference FirebaseAnalytics.instance during build don't crash.
-  // Heavy init (auth, RevenueCat, etc.) stays deferred in the splash.
+  // Initialize Firebase before the first widget builds. Widgets reference
+  // FirebaseAnalytics during build, so this must complete before runApp().
+  // (initFirebaseOnly is a fast local config read on web — no network blocking.)
   await AppBootstrap.initFirebaseOnly();
 
+  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
+  // Heavy core services (crypto, auth restore, RevenueCat) are initialized in
+  // the splash screen via the unawaited AppBootstrap.run(), so the first paint
+  // is not blocked on them.
   runApp(const ProviderScope(child: MyApp()));
 }
 

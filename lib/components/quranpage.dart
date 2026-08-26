@@ -9,9 +9,9 @@ import 'package:scratcher/scratcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:lottie/lottie.dart';
 
 import '../services/insight_service.dart';
+import 'widgets/deferred_lottie.dart';
 import '../services/favorites_service.dart';
 import '../services/shop_service.dart';
 import '../services/analytics_service.dart';
@@ -630,69 +630,6 @@ class _QuranPageState extends State<QuranPage>
   }
 
 
-  Widget _buildDebugInsightsSection() {
-    return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        childrenPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        initiallyExpanded: false,
-        title: Row(
-          children: [
-            Icon(Icons.bug_report, size: 14, color: Colors.white38),
-            const SizedBox(width: 6),
-            Text(
-              'Debug: ${_insightCards.length} insight${_insightCards.length == 1 ? '' : 's'} loaded',
-              style: const TextStyle(fontSize: 11, color: Colors.white38),
-            ),
-          ],
-        ),
-        children: [
-          if (_insightCards.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text('No insight cards loaded.', style: TextStyle(fontSize: 11, color: Colors.white24)),
-            )
-          else
-            ..._insightCards.asMap().entries.map((e) {
-              final i = e.key;
-              final c = e.value;
-              final snippet = c.type == 'personalized_insight'
-                  ? (c.insight ?? c.quote ?? '').toString()
-                  : c.type == 'surah_guidance'
-                      ? '${c.surahName ?? ''} ${c.ayahNumber != null ? '${c.ayahNumber}' : ''} — ${(c.english ?? '').toString()}'
-                      : '${c.taskTitle ?? ''} — ${(c.lesson ?? '').toString()}';
-              return Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '#${i + 1}  ${c.type}',
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white54),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      snippet.length > 200 ? '${snippet.substring(0, 200)}…' : snippet,
-                      style: const TextStyle(fontSize: 11, color: Colors.white60, height: 1.4),
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-
-
   Future<bool> _onSwipe(
     int previousIndex,
     int? currentIndex,
@@ -748,7 +685,7 @@ class _QuranPageState extends State<QuranPage>
                                 child: Transform.scale(
                                   scale: 2,
                                   alignment: Alignment.bottomCenter,
-                                  child: Lottie.asset('assets/photos/elements/music_fly.json', fit: BoxFit.cover),
+                                  child: DeferredLottie(asset: 'assets/photos/elements/music_fly.json', fit: BoxFit.cover),
                                 ),
                               ),
                             ),
@@ -914,8 +851,7 @@ class _QuranPageState extends State<QuranPage>
                             ),
                 ),
                     ),
-                  ),
-                  _buildDebugInsightsSection(),
+                    ),
                 ],
               ),
             ),

@@ -73,6 +73,21 @@ class RevenueCatService {
     }
   }
 
+  /// Idempotent, concurrency-safe initializer. Safe to call from any entry
+  /// point (paywall, provider, auth) — guarantees configure() has run before
+  /// any Purchases.* call without requiring an eager start at app launch.
+  Future<void> ensureInitialized() async {
+    if (_initialized) return;
+    if (_initializing) {
+      // Wait for the in-flight init to complete.
+      while (_initializing && !_initialized) {
+        await Future.delayed(const Duration(milliseconds: 25));
+      }
+      return;
+    }
+    await initialize();
+  }
+
   void _onCustomerInfoUpdated(CustomerInfo info) {
     _cachedCustomerInfo = info;
     for (final listener in _listeners) {
@@ -81,6 +96,7 @@ class RevenueCatService {
   }
 
   Future<void> identify(String userId) async {
+    await ensureInitialized();
     if (!_initialized) return;
     try {
       final result = await Purchases.logIn(userId);

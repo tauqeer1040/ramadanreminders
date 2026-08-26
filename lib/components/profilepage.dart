@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
-import 'package:lottie/lottie.dart';
 import '../services/auth_service.dart';
+import 'widgets/deferred_lottie.dart';
 import '../services/notification_service.dart';
 import '../services/audio_service.dart';
 import '../services/sfx_service.dart';
@@ -20,16 +20,18 @@ import '../core/constants.dart';
 import '../screens/manage_account_screen.dart';
 import '../services/user_service.dart';
 import '../services/streak_service.dart';
+import '../services/invite_service.dart';
 import '../theme/app_theme.dart';
 import 'stats_card.dart';
 import 'widgets/duo_button.dart';
 import 'widgets/auth_debug_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:home_widget/home_widget.dart';
+import 'package:home_widget/home_widget.dart' deferred as hw;
 import 'package:share_plus/share_plus.dart' deferred as share_plus;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../screens/about_screen.dart';
+import '../services/insight_service.dart';
 
 class ProfilePage1 extends StatefulWidget {
   const ProfilePage1({super.key});
@@ -62,6 +64,7 @@ class _ProfilePage1State extends State<ProfilePage1>
   Timer? _wobbleTimer;
   Timer? _healthTimer;
   String _lastSync = '';
+  List<InsightCard> _insightCards = [];
 
   @override
   void initState() {
@@ -96,6 +99,7 @@ class _ProfilePage1State extends State<ProfilePage1>
       (_) => _wobbleCtrl.forward(from: 0),
     );
     _startHealthPolling();
+    _loadInsights();
   }
 
   Future<void> _loadCovers() async {
@@ -183,6 +187,12 @@ class _ProfilePage1State extends State<ProfilePage1>
     StatsCard.refresh(context);
     _loadCovers();
     await _loadStats();
+  }
+
+  Future<void> _loadInsights() async {
+    if (!mounted) return;
+    final cards = await InsightService.fetchPersonalizedInsights(limit: 3);
+    if (mounted) setState(() => _insightCards = cards);
   }
 
   void _startHealthPolling() {
@@ -317,7 +327,7 @@ class _ProfilePage1State extends State<ProfilePage1>
                                 child: Transform.scale(
                                   scale: 2,
                                   alignment: Alignment.bottomCenter,
-                                  child: Lottie.asset('assets/photos/elements/music_fly.json', fit: BoxFit.cover),
+                                  child: DeferredLottie(asset: 'assets/photos/elements/music_fly.json', fit: BoxFit.cover),
                                 ),
                               ),
                             ),
@@ -449,11 +459,12 @@ class _ProfilePage1State extends State<ProfilePage1>
             DuoButton(
               onPressed: () async {
                 await share_plus.loadLibrary();
-                final url = kIsWeb
-                    ? 'https://meowmin.taucity.xyz'
-                    : 'https://play.google.com/store/apps/details?id=com.taucity.ramadanreflections';
+                final url = await InviteService.buildInviteUrl() ??
+                    (kIsWeb
+                        ? 'https://meowmin.taucity.xyz'
+                        : 'https://play.google.com/store/apps/details?id=com.taucity.ramadanreflections');
                 share_plus.Share.share(
-                  '🌙 Check out Meowmin! A beautiful journaling companion for your spiritual journey.\n\n$url',
+                  '🌙 Join me on Meowmin and we\'ll shield each other\'s streaks! A beautiful journaling companion for your spiritual journey.\n\n$url',
                 );
                 await _incrementStars(100);
               },
@@ -924,6 +935,30 @@ class _ProfilePage1State extends State<ProfilePage1>
 
   // ── DEBUG ───────────────────────────────────────────────────────────────────
 
+  Widget _buildDebugInsightsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        _buildProfileRow('Insights', '${_insightCards.length} loaded${InsightService.lastFetchError != null ? " — error: ${InsightService.lastFetchError}" : ''}'),
+        if (_insightCards.isNotEmpty)
+          ..._insightCards.asMap().entries.map((e) {
+            final i = e.key;
+            final c = e.value;
+            final snippet = c.type == 'personalized_insight'
+                ? (c.insight ?? c.quote ?? '').toString()
+                : c.type == 'surah_guidance'
+                    ? '${c.surahName ?? ''} ${c.ayahNumber != null ? '${c.ayahNumber}' : ''} — ${(c.english ?? '').toString()}'
+                    : '${c.taskTitle ?? ''} — ${(c.lesson ?? '').toString()}';
+            return Padding(
+              padding: const EdgeInsets.only(left: 8, top: 4),
+              child: _buildProfileRow('#${i + 1}', '${c.type}: ${snippet.length > 120 ? '${snippet.substring(0, 120)}…' : snippet}'),
+            );
+          }),
+      ],
+    );
+  }
+
   Widget _debugCard() {
     return GestureDetector(
       onTap: () => setState(() => _debugExpanded = !_debugExpanded),
@@ -969,6 +1004,7 @@ class _ProfilePage1State extends State<ProfilePage1>
                 if (_debugLastError.isNotEmpty)
                   _buildProfileRow('Last Error', _debugLastError, valueColor: Colors.redAccent),
                 const AuthDebugCard(),
+                _buildDebugInsightsSection(),
               ],
             ],
           ),
@@ -1038,7 +1074,8 @@ class _ProfilePage1State extends State<ProfilePage1>
       return;
     }
 
-    final supported = await HomeWidget.isRequestPinWidgetSupported() ?? false;
+    await hw.loadLibrary();
+    final supported = await hw.HomeWidget.isRequestPinWidgetSupported() ?? false;
     if (!supported) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1082,9 +1119,9 @@ class _ProfilePage1State extends State<ProfilePage1>
 
     if (choice == null || !mounted) return;
 
-    final streak = await StreakService.getStreak();
+    final streak = await StreakService.getDisplayStreak();
     await WidgetService.updateStreakWidget(streak);
-    await HomeWidget.requestPinWidget(
+    await hw.HomeWidget.requestPinWidget(
       androidName: choice == 'portrait' ? 'StreakWidgetProvider' : 'StreakWidgetLandscapeProvider',
       name: choice == 'portrait' ? 'StreakWidgetProvider' : 'StreakWidgetLandscapeProvider',
     );

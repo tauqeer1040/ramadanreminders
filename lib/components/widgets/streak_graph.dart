@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
 import '../../theme/app_theme.dart';
+import 'deferred_lottie.dart';
 
 class StreakGraph extends StatefulWidget {
   final int streak;
@@ -62,8 +62,8 @@ class _StreakGraphState extends State<StreakGraph> with SingleTickerProviderStat
         // Lottie Fire Icon
         SizedBox(
           height: widget.size * 0.8,
-          child: Lottie.asset(
-            'assets/photos/elements/streak_fire.json',
+          child: DeferredLottie(
+            asset: 'assets/photos/elements/streak_fire.json',
             fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => const Icon(
               Icons.local_fire_department_rounded,

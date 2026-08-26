@@ -3,6 +3,7 @@ const { z } = require('zod');
 const upsertUserSchema = z.object({
   displayName: z.string().nullish(),
   email: z.string().nullish(),
+  catName: z.string().nullish(),
 });
 
 const syncJournalsSchema = z.object({
@@ -48,6 +49,16 @@ const subscriptionSyncSchema = z.object({
   periodType: z.string().optional(),
 });
 
+const syncStreakSchema = z.object({
+  streak: z.number().int().min(0).max(100000),
+});
+
+const acceptInviteSchema = z.object({
+  inviterUid: z.string().min(1),
+  myName: z.string().nullish(),
+  myCat: z.string().nullish(),
+});
+
 module.exports = {
   upsertUserSchema,
   syncJournalsSchema,
@@ -58,4 +69,6 @@ module.exports = {
   claimBonusSchema,
   purchaseItemSchema,
   subscriptionSyncSchema,
+  syncStreakSchema,
+  acceptInviteSchema,
 };

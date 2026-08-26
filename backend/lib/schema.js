@@ -15,6 +15,7 @@ const USER_ALTER_COLUMNS = [
   ['daily_award_count', 'INTEGER DEFAULT 0'],
   ['ai_calls_date', 'TEXT'],
   ['ai_calls_count', 'INTEGER DEFAULT 0'],
+  ['cat_name', 'TEXT'],
 ];
 
 const JOURNAL_CREATE_COLUMNS = ['id', 'user_id', 'content', 'created_at', 'ai_status', 'ai_attempts', 'ai_last_error', 'ai_next_retry_at'];
@@ -123,6 +124,21 @@ const CREATE_STATEMENTS = [
       route TEXT,
       method TEXT,
       request_body TEXT
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS streaks (
+      uid TEXT PRIMARY KEY,
+      streak INTEGER NOT NULL DEFAULT 1,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS friendships (
+      user_a_uid TEXT NOT NULL,
+      user_b_uid TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_a_uid, user_b_uid)
     )
   `,
 ];

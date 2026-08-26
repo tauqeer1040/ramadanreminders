@@ -50,6 +50,9 @@ jobs:
       - name: Bundle worker
         run: npm run build:worker
 
+      - name: Verify worker bundle exists
+        run: test -f public/_worker.js || { echo "::error::public/_worker.js missing — API would serve HTML"; exit 1; }
+
       - name: Deploy to Cloudflare Pages
         run: npx wrangler pages deploy public --project-name meowmin --branch main
         env:

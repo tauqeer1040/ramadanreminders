@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +7,7 @@ import '../services/insight_service.dart';
 import '../theme/app_theme.dart';
 import 'journal_list_screen.dart';
 import 'widgets/mascot_empty_state.dart';
+import 'widgets/glass_container.dart';
 
 ({String title, String body}) _splitEntry(String text) {
   final lines = text.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
@@ -262,17 +262,14 @@ class _JournalEntryRowState extends State<_JournalEntryRow> {
       onLongPress: _showMenu,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
-        child: ClipRRect(
+        child: GlassContainer(
+          sigmaX: 12,
+          sigmaY: 12,
+          tint: Colors.white.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(18),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.18), width: 1),
-              ),
-              child: Column(
+          border: Border.all(color: Colors.white.withValues(alpha: 0.18), width: 1),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
@@ -337,8 +334,6 @@ class _JournalEntryRowState extends State<_JournalEntryRow> {
                   ..._buildInsightsSection(tt),
                 ],
               ),
-            ),
-          ),
         ),
       ),
     );
@@ -404,22 +399,17 @@ class _JournalHistorySectionState extends State<JournalHistorySection> {
 
         final shown = all.take(widget.maxEntries).toList();
 
-        return ClipRRect(
+        return GlassContainer(
+          sigmaX: 8,
+          sigmaY: 8,
+          tint: Colors.black.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(0),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.3),
-                border: Border(
-                  top: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-                  bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
+          border: Border(
+            top: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
@@ -463,9 +453,6 @@ class _JournalHistorySectionState extends State<JournalHistorySection> {
                 ),
               ],
             ),
-          ),
-          ),
-          ),
         );
       },
     );

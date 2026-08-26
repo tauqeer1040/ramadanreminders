@@ -1,12 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:in_app_review/in_app_review.dart';
+import 'package:in_app_review/in_app_review.dart' deferred as iar;
 import 'package:share_plus/share_plus.dart' deferred as share_plus;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../screens/onboarding_screen.dart';
 import 'widgets/duo_button.dart';
+import '../services/invite_service.dart';
 
 class AboutBottomSheet extends StatelessWidget {
   const AboutBottomSheet({super.key});
@@ -130,7 +131,8 @@ class _ActionButtons extends StatelessWidget {
           DuoButton(
             onPressed: () async {
               HapticFeedback.lightImpact();
-              final InAppReview inAppReview = InAppReview.instance;
+              await iar.loadLibrary();
+              final inAppReview = iar.InAppReview.instance;
               if (await inAppReview.isAvailable()) {
                 inAppReview.requestReview();
               } else {
@@ -167,11 +169,12 @@ class _ActionButtons extends StatelessWidget {
           onPressed: () async {
             HapticFeedback.lightImpact();
             await share_plus.loadLibrary();
-            final url = kIsWeb
-                ? 'https://meowmin.taucity.xyz'
-                : 'https://play.google.com/store/apps/details?id=com.taucity.ramadanreflections';
+            final url = await InviteService.buildInviteUrl() ??
+                (kIsWeb
+                    ? 'https://meowmin.taucity.xyz'
+                    : 'https://play.google.com/store/apps/details?id=com.taucity.ramadanreflections');
             share_plus.Share.share(
-              '🌙 Check out Meowmin! A beautiful journaling companion for your spiritual journey.\n\n$url',
+              '🌙 Join me on Meowmin and we\'ll shield each other\'s streaks! A beautiful journaling companion for your spiritual journey.\n\n$url',
             );
           },
           backgroundColor: const Color(0xFFE91E63),

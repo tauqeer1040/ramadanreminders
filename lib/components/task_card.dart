@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:google_fonts/google_fonts.dart';
-
 import 'package:flutter_confetti/flutter_confetti.dart';
 
 /// A minimal task card for the horizontal tasks carousel.
@@ -127,8 +125,7 @@ class _TaskCardState extends State<TaskCard> {
                           textAlign: TextAlign.center,
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.outfit(
-                            textStyle: tt.displaySmall,
+                          style: tt.displaySmall?.copyWith(
                             color: cs.onSurface,
                             fontWeight: FontWeight.w300,
                             letterSpacing: -1.0,

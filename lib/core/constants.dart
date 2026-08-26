@@ -3,4 +3,6 @@ class AppConstants {
 
   static String get backendUrl =>
     _override.isNotEmpty ? _override : 'https://meowmin.taucity.xyz/api/v2';
+
+  static const String webAppUrl = 'https://meowmin.taucity.xyz/app/';
 }

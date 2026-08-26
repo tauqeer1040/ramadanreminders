@@ -1,4 +1,4 @@
-import 'package:home_widget/home_widget.dart';
+import 'package:home_widget/home_widget.dart' deferred as hw;
 
 class WidgetService {
   static const _androidPortrait = 'StreakWidgetProvider';
@@ -7,9 +7,10 @@ class WidgetService {
   static List<String> get _providers => [_androidPortrait, _androidLandscape];
 
   static Future<void> updateStreakWidget(int streak) async {
-    await HomeWidget.saveWidgetData('streak', streak.toString());
+    await hw.loadLibrary();
+    await hw.HomeWidget.saveWidgetData('streak', streak.toString());
     for (final name in _providers) {
-      await HomeWidget.updateWidget(
+      await hw.HomeWidget.updateWidget(
         androidName: name,
         name: name,
       );
@@ -17,8 +18,9 @@ class WidgetService {
   }
 
   static Future<void> refreshWidgetBackground() async {
+    await hw.loadLibrary();
     for (final name in _providers) {
-      await HomeWidget.updateWidget(
+      await hw.HomeWidget.updateWidget(
         androidName: name,
         name: name,
       );

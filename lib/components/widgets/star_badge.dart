@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import '../../theme/app_theme.dart';
+import 'deferred_lottie.dart';
 
 class StarBadge extends StatelessWidget {
   final int streakCount;
@@ -41,8 +41,8 @@ class StarBadge extends StatelessWidget {
                   SizedBox(
                     width: 36,
                     height: 36,
-                    child: Lottie.asset(
-                      'assets/photos/elements/streak_fire.json',
+                    child: DeferredLottie(
+                      asset: 'assets/photos/elements/streak_fire.json',
                       fit: BoxFit.contain,
                     ),
                   ),

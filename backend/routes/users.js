@@ -11,11 +11,11 @@ module.exports = function (app) {
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors });
     }
-    const { displayName, email } = parsed.data;
+    const { displayName, email, catName } = parsed.data;
     const uid = req.uid;
 
     try {
-      await upsertUser(uid, displayName, email);
+      await upsertUser(uid, displayName, email, catName);
       await recalculateUserMetadata(uid);
       res.json({ success: true, uid });
     } catch (error) {

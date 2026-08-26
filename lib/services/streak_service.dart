@@ -1,6 +1,9 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'analytics_protocol.dart';
 import 'analytics_service.dart';
+import 'invite_service.dart';
 
 class StreakResult {
   final int streak;
@@ -109,6 +112,18 @@ class StreakService {
     try {
       _analytics.logStreakRecorded(result.streak);
     } catch (_) {}
+
+    // Push the new streak to the backend so a linked friend can read it for
+    // the shared "shielded" streak. Fire-and-forget.
+    unawaited(InviteService.pushMyStreak(result.streak));
+  }
+
+  /// The streak shown to the user: the max of their own streak and a linked
+  /// friend's streak (so a missed day is shielded by the friend's higher one).
+  static Future<int> getDisplayStreak() async {
+    final local = await getStreak();
+    final friend = await InviteService.getFriendStreakCached();
+    return max(local, friend);
   }
 
   static bool isPrime(int n) {

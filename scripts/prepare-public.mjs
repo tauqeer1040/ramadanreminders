@@ -73,15 +73,18 @@ try {
   // index.html missing — nothing to patch
 }
 
-// 2c. Copy HTML splash image — Flutter doesn't bundle assets/splash/ into the
-//     build output (it skips .webp in that directory), but index.html references
-//     it directly via <img> and <link rel="preload">.
-const splashSrc = path.join(root, 'assets', 'splash', 'splash.gif');
-const splashDest = path.join(publicDir, 'app', 'assets', 'assets', 'splash', 'splash.gif');
-if (pathExists(splashSrc)) {
-  mkdirSync(path.dirname(splashDest), { recursive: true });
-  cpSync(splashSrc, splashDest);
-  console.log('[ok] copied splash/splash.gif -> public/app/assets/assets/splash/');
+// 2c. Copy HTML splash assets — Flutter doesn't bundle assets/splash/ into the
+//     build output, but index.html references them directly via <video>/<img>
+//     and <link rel="preload">. Use the animated WebM/MP4 (47/64 KB) instead of
+//     the old splash.gif (591 KB), with gif.webp (21 KB) as the instant poster.
+for (const name of ['gif.webp', 'splash.webm', 'splash.mp4']) {
+  const splashSrc = path.join(root, 'assets', 'splash', name);
+  const splashDest = path.join(publicDir, 'app', 'assets', 'assets', 'splash', name);
+  if (pathExists(splashSrc)) {
+    mkdirSync(path.dirname(splashDest), { recursive: true });
+    cpSync(splashSrc, splashDest);
+    console.log(`[ok] copied splash/${name} -> public/app/assets/assets/splash/`);
+  }
 }
 
 // 3. Shop assets -> public/assets

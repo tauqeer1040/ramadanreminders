@@ -1,5 +1,5 @@
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import '../../components/widgets/glass_container.dart';
 import 'package:flutter/services.dart';
 import 'emotion_theme.dart';
 import 'emotion_flower.dart';
@@ -175,22 +175,18 @@ class _EmotionScreenState extends State<EmotionScreen>
           EmotionEntry(value: _sliderValue, timestamp: DateTime.now()),
         );
       },
-      child: ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      child: SizedBox(
+      child: GlassContainer(
+        sigmaX: 16,
+        sigmaY: 16,
+        tint: Colors.black.withValues(alpha: 0.08),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+        child: SizedBox(
         height: sheetH,
         child: Stack(
           children: [
             _AnimatedBackground(bgCtrl: _bgCtrl, colors: colors),
-            ClipRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
-                  ),
-                  child: SafeArea(
+            SafeArea(
                     bottom: true,
                     child: LayoutBuilder(
                       builder: (context, constraints) {
@@ -203,15 +199,12 @@ class _EmotionScreenState extends State<EmotionScreen>
                         );
                       },
                     ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-    );
+                   ),
+                 ],
+               ),
+             ),
+           ),
+         );
   }
 }
 

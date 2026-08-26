@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -8,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../services/journal_service.dart';
 import '../services/analytics_service.dart';
 import '../features/mood/emotion_screen.dart';
+import 'widgets/glass_container.dart';
 
 class JournalBottomSheet extends StatefulWidget {
   final String? initialText;
@@ -275,20 +275,14 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
         child: wrapped,
       );
     }
-    return ClipRRect(
+    return GlassContainer(
+      sigmaX: 16,
+      sigmaY: 16,
+      tint: Colors.black.withValues(alpha: 0.08),
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.08),
-              border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
-            ),
-            child: wrapped,
-          ),
-        ),
-      ),
+      border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+      padding: EdgeInsets.zero,
+      child: wrapped,
     );
   }
 

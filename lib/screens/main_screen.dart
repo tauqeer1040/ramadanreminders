@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../components/homepage.dart';
-import '../components/shop_screen.dart';
-import '../components/quranpage.dart';
-import '../components/profilepage.dart';
+import '../components/shop_screen.dart' deferred as shop_screen_lib;
+import '../components/quranpage.dart' deferred as quranpage_lib;
+import '../components/profilepage.dart' deferred as profilepage_lib;
 import '../core/app_background.dart';
 import '../services/analytics_service.dart';
 import '../services/auth_service.dart';
@@ -32,15 +32,26 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   StreamSubscription? _authSubscription;
 
   final List<bool> _pageLoaded = [true, false, false, false];
+  final List<bool> _pageLoading = [false, false, false, false];
 
   static const _tabNames = ['home', 'insights', 'shop', 'profile'];
 
   List<Widget> get _pages => [
     AppBackground(backgroundImage: 'assets/photos/elements/app_bg2.webp', child: Homepage(key: _homepageKey)),
-    AppBackground(child: _pageLoaded[1] ? QuranPage() : const SizedBox.shrink()),
-    AppBackground(child: _pageLoaded[2] ? ShopScreen(key: ValueKey('shop_$_shopRefresh')) : const SizedBox.shrink()),
-    AppBackground(child: _pageLoaded[3] ? ProfilePage1() : const SizedBox.shrink()),
+    AppBackground(child: _buildDeferredTab(1, () => quranpage_lib.QuranPage())),
+    AppBackground(child: _buildDeferredTab(2, () => shop_screen_lib.ShopScreen(key: ValueKey('shop_$_shopRefresh')))),
+    AppBackground(child: _buildDeferredTab(3, () => profilepage_lib.ProfilePage1())),
   ];
+
+  Widget _buildDeferredTab(int index, Widget Function() builder) {
+    if (_pageLoaded[index]) return builder();
+    if (_pageLoading[index]) {
+      return const Center(
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+    return const SizedBox.shrink();
+  }
 
   @override
   void initState() {
@@ -69,9 +80,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       AnalyticsService.instance.logTabViewed(_tabNames[clamped]);
     }
     if (!_pageLoaded[clamped]) {
-      setState(() {
-        _pageLoaded[clamped] = true;
-      });
+      _loadTab(clamped);
     }
     setState(() => _selectedIndex = clamped);
 
@@ -84,6 +93,33 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         duration: const Duration(milliseconds: 420),
         curve: Curves.easeInOutCubicEmphasized,
       );
+    }
+  }
+
+  Future<void> _loadTab(int index) async {
+    if (_pageLoading[index] || _pageLoaded[index]) return;
+    setState(() => _pageLoading[index] = true);
+    try {
+      switch (index) {
+        case 1:
+          await quranpage_lib.loadLibrary();
+          break;
+        case 2:
+          await shop_screen_lib.loadLibrary();
+          break;
+        case 3:
+          await profilepage_lib.loadLibrary();
+          break;
+      }
+      if (mounted) {
+        setState(() {
+          _pageLoading[index] = false;
+          _pageLoaded[index] = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _pageLoading[index] = false);
+      debugPrint('[MainScreen] Failed to load tab $index: $e');
     }
   }
 

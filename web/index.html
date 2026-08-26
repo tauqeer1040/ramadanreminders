@@ -41,8 +41,9 @@
 
   <!-- Preload the main Dart bundle so the browser fetches it immediately -->
   <link rel="preload" href="main.dart.js" as="script" />
-  <!-- Show the animated splash GIF instantly (no extra request after preload) -->
-  <link rel="preload" as="image" href="assets/assets/splash/splash.gif" fetchpriority="high" />
+  <!-- Poster paints instantly (LCP anchor); animated splash videos load alongside -->
+  <link rel="preload" as="image" href="assets/assets/splash/gif.webp" fetchpriority="high" />
+  <link rel="preload" as="video" href="assets/assets/splash/splash.webm" type="video/webm" />
 
   <style id="splash-screen-style">
     html {
@@ -104,6 +105,14 @@
     }
   </style>
   <script id="splash-screen-script">
+    // Pre-read onboarding status from localStorage so Flutter can skip the
+    // async SharedPreferences chain and show the target screen faster.
+    try {
+      window.__splashNeedsOnboarding = localStorage.getItem('onboarding_complete') !== 'true';
+    } catch (e) {
+      window.__splashNeedsOnboarding = true;
+    }
+
     function removeSplashFromWeb() {
       var splash = document.getElementById("splash");
       if (!splash) return;
@@ -127,7 +136,9 @@
 
   <!-- Branded animated splash — visible from first paint, removed when Flutter's target screen is ready -->
   <div id="splash" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000000;z-index:9999;">
-    <img src="assets/assets/splash/splash.gif" alt="Loading" style="max-width:100%;max-height:100%;object-fit:contain;" />
+    <video autoplay muted loop playsinline poster="assets/assets/splash/gif.webp" style="max-width:100%;max-height:100%;object-fit:contain;">
+      <source src="assets/assets/splash/splash.webm" type="video/webm" />
+    </video>
   </div>
 
   <script src="flutter_bootstrap.js" async=""></script>

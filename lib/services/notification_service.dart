@@ -2,35 +2,36 @@ import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart' deferred as fln;
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:web/web.dart' as web;
 
 class NotificationService {
-  static final FlutterLocalNotificationsPlugin _notificationsPlugin =
-      FlutterLocalNotificationsPlugin();
+  static dynamic _notificationsPlugin;
 
   static Future<void> init() async {
+    await fln.loadLibrary();
+    _notificationsPlugin = fln.FlutterLocalNotificationsPlugin();
     tz.initializeTimeZones();
 
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    final initializationSettingsAndroid =
+        fln.AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    const DarwinInitializationSettings initializationSettingsDarwin =
-        DarwinInitializationSettings(
+    final initializationSettingsDarwin =
+        fln.DarwinInitializationSettings(
           requestAlertPermission: false,
           requestBadgePermission: false,
           requestSoundPermission: false,
         );
 
-    const InitializationSettings initializationSettings =
-        InitializationSettings(
+    final initializationSettings =
+        fln.InitializationSettings(
           android: initializationSettingsAndroid,
           iOS: initializationSettingsDarwin,
         );
 
-    await _notificationsPlugin.initialize(settings: initializationSettings);
+    await _notificationsPlugin!.initialize(settings: initializationSettings);
   }
   // Web Notifications are unavailable on iOS Safari (and most Safari installs)
   // — `window.Notification` is undefined there. Feature-detect the runtime
@@ -53,11 +54,11 @@ class NotificationService {
         return false;
       }
     }
-    final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
-        _notificationsPlugin
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >();
+    final androidImplementation =
+        (_notificationsPlugin as dynamic)
+            ?.resolvePlatformSpecificImplementation(
+              fln.AndroidFlutterLocalNotificationsPlugin,
+            );
 
     final bool? granted = await androidImplementation
         ?.requestNotificationsPermission();
@@ -73,11 +74,11 @@ class NotificationService {
         return false;
       }
     }
-    final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
-        _notificationsPlugin
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >();
+    final androidImplementation =
+        (_notificationsPlugin as dynamic)
+            ?.resolvePlatformSpecificImplementation(
+              fln.AndroidFlutterLocalNotificationsPlugin,
+            );
 
     final bool? granted = await androidImplementation
         ?.areNotificationsEnabled();
@@ -85,7 +86,7 @@ class NotificationService {
   }
 
   static Future<void> scheduleDailyNotifications({String username = 'you'}) async {
-    await _notificationsPlugin.cancelAll();
+    await (_notificationsPlugin as dynamic)?.cancelAll();
 
     final now = DateTime.now();
     final local = tz.local;
@@ -133,32 +134,32 @@ class NotificationService {
     required String body,
     required tz.TZDateTime dateTime,
   }) async {
-    final AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
+    final androidDetails =
+        fln.AndroidNotificationDetails(
           'daily_reminders',
           'Gentle Reminders',
           channelDescription: 'Soft daily reminders for your spiritual journey',
-          importance: Importance.defaultImportance,
-          priority: Priority.defaultPriority,
-          largeIcon: const DrawableResourceAndroidBitmap('mascot_notification'),
-          styleInformation: const BigPictureStyleInformation(
-            DrawableResourceAndroidBitmap('mascot_notification'),
+          importance: fln.Importance.defaultImportance,
+          priority: fln.Priority.defaultPriority,
+          largeIcon: fln.DrawableResourceAndroidBitmap('mascot_notification'),
+          styleInformation: fln.BigPictureStyleInformation(
+            fln.DrawableResourceAndroidBitmap('mascot_notification'),
             hideExpandedLargeIcon: true,
           ),
         );
 
-    final NotificationDetails notificationDetails = NotificationDetails(
+    final notificationDetails = fln.NotificationDetails(
       android: androidDetails,
     );
 
-    await _notificationsPlugin.zonedSchedule(
+    await (_notificationsPlugin as dynamic)?.zonedSchedule(
       id: id,
       title: title,
       body: body,
       scheduledDate: dateTime,
       notificationDetails: notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
+      androidScheduleMode: fln.AndroidScheduleMode.inexactAllowWhileIdle,
+      matchDateTimeComponents: fln.DateTimeComponents.time,
     );
   }
 }

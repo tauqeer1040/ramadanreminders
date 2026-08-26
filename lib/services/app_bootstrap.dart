@@ -16,7 +16,8 @@ import 'auth_service.dart';
 import 'crypto_service.dart';
 import 'journal_remote_storage.dart';
 import 'analytics_service.dart';
-import 'revenuecat_service.dart';
+import 'invite_service.dart';
+import 'revenuecat_service.dart' deferred as rc;
 import 'pwa_install_service.dart';
 
 @pragma('vm:entry-point')
@@ -84,18 +85,20 @@ class AppBootstrap {
     // redirect is pending. Must run after Firebase Auth is restored above.
     await AuthService.completeRedirectSignIn();
 
-    // Parallelize independent init: crypto key fetch + RevenueCat init.
-    // These have no dependency on each other.
-    final cryptoKeyFuture = CryptoService.fetchAndStoreKey();
-    final revenuecatFuture = RevenueCatService.instance.initialize();
-    await Future.wait([cryptoKeyFuture, revenuecatFuture]);
+    // Parallelize independent init: crypto key fetch. RevenueCat is NOT
+    // initialized here — it self-initializes via ensureInitialized() on first
+    // real use (paywall / provider), keeping its configure() off the startup
+    // path.
+    await CryptoService.fetchAndStoreKey();
 
     // Defer encrypted cache warming — runs later via initBackgroundServices().
     // This avoids blocking the splash → homescreen transition.
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      await RevenueCatService.instance.identify(user.uid);
+      // identify() self-initializes RevenueCat if needed.
+      await rc.loadLibrary();
+      await rc.RevenueCatService.instance.identify(user.uid);
     }
 
     _coreInitialized = true;
@@ -104,6 +107,10 @@ class AppBootstrap {
     try {
       AnalyticsService.instance.logAppOpen();
     } catch (_) {}
+
+    // Capture + accept any pending friend invite, and refresh the linked
+    // friend's cached streak. Fire-and-forget: does not block startup.
+    unawaited(InviteService.initInvites());
   }
 
   /// Wait for Firebase Auth to emit a non-null user (session restored from
@@ -170,8 +177,11 @@ class AppBootstrap {
     }
 
     JournalSyncService.initAutoSync();
-    await BackgroundMusicService().init();
-    await SfxService().init();
+    // Audio services self-initialize on first real use (lazy guards in
+    // play/setMusicEnabled). Fire them here for web autoplay-on-gesture, but
+    // never block the rest of background init on them.
+    unawaited(BackgroundMusicService().init());
+    unawaited(SfxService().init());
     StreakService.recordActivity();
   }
 }

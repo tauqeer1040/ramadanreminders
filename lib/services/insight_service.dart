@@ -126,6 +126,8 @@ class InsightService {
 
   static const String _dailyContentKey = 'daily_content_cache';
 
+  static String? lastFetchError;
+
   static String _today() {
     final now = DateTime.now();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
@@ -176,6 +178,7 @@ class InsightService {
 
       if (response.statusCode == 200) {
         final payload = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+        lastFetchError = null;
         final cards = payload['insightCards'];
         // Never poison the local cache with an empty day — a journal may
         // complete later and we want the next fetch to hit the network.
@@ -184,7 +187,10 @@ class InsightService {
         }
         return payload;
       }
-    } catch (_) {}
+      lastFetchError = 'HTTP ${response.statusCode}';
+    } catch (e) {
+      lastFetchError = e.toString();
+    }
 
     return cached;
   }

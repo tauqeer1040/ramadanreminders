@@ -1,13 +1,14 @@
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
+import 'widgets/deferred_lottie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/journal_service.dart';
 import '../services/streak_service.dart';
 import '../services/favorites_service.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import 'widgets/glass_container.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data model
@@ -44,7 +45,7 @@ class _StatsData {
 Future<_StatsData> _loadStats() async {
   final results = await Future.wait([
     JournalService.getAllLocalJournals(),
-    StreakService.getStreak(),
+    StreakService.getDisplayStreak(),
     FavoritesService.getFavorites(),
     SharedPreferences.getInstance(),
   ]);
@@ -299,77 +300,71 @@ class _StatsCardState extends State<StatsCard>
 
     return GestureDetector(
       onTap: () => _showStatDetail(context, data, 0),
-      child: ClipRRect(
+      child: GlassContainer(
+        sigmaX: 12,
+        sigmaY: 12,
+        tint: Color(0xFF9D50FF).withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(22),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              color: Color(0xFF9D50FF).withValues(alpha: 0.2),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.18),
-                width: 1,
-              ),
-              borderRadius: BorderRadius.circular(22),
-            ),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.18),
+          width: 1,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    const Text(
-                      'STREAK',
-                      style: TextStyle(
-                        color: fg,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const Icon(Icons.arrow_upward_rounded,
-                        color: fg, size: 24),
-                    const SizedBox(width: 2),
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.bottomLeft,
-                        child: Text(
-                          '${data.streakDays}',
-                          style: const TextStyle(
-                            color: fg,
-                            fontSize: 40,
-                            fontWeight: FontWeight.w900,
-                            height: 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    SizedBox(
-                      width: 56,
-                      height: 56,
-                      child: Lottie.asset(
-                        'assets/photos/elements/streak_fire.json',
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.local_fire_department_rounded,
-                          color: Color(0xFFFF6B35),
-                          size: 28,
-                        ),
-                      ),
-                    ),
-                  ],
+                const Text(
+                  'STREAK',
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                  ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const Icon(Icons.arrow_upward_rounded,
+                    color: fg, size: 24),
+                const SizedBox(width: 2),
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.bottomLeft,
+                    child: Text(
+                      '${data.streakDays}',
+                      style: const TextStyle(
+                        color: fg,
+                        fontSize: 40,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: DeferredLottie(
+                    asset: 'assets/photos/elements/streak_fire.json',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.local_fire_department_rounded,
+                      color: Color(0xFFFF6B35),
+                      size: 28,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -481,21 +476,17 @@ class _StatsCardState extends State<StatsCard>
 
     return GestureDetector(
       onTap: () => _showStatDetail(context, data, 1),
-      child: ClipRRect(
+      child: GlassContainer(
+        sigmaX: 12,
+        sigmaY: 12,
+        tint: Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(22),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.18),
-                width: 1,
-              ),
-              borderRadius: BorderRadius.circular(22),
-            ),
-            child: Column(
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.18),
+          width: 1,
+        ),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+        child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
@@ -559,12 +550,10 @@ class _StatsCardState extends State<StatsCard>
                         ],
                       ),
                     ),
-                  );
+                   );
                 }),
               ],
             ),
-          ),
-        ),
       ),
     );
   }
@@ -980,18 +969,15 @@ class _StatsCardState extends State<StatsCard>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (ctx) => ClipRRect(
+      builder: (ctx) => GlassContainer(
+        sigmaX: 20,
+        sigmaY: 20,
+        tint: Colors.white.withValues(alpha: 0.05),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            height: MediaQuery.of(context).size.height * 0.35,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
-            ),
-            child: Column(
+        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.35,
+          child: Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.only(top: 10, bottom: 4),
@@ -1039,7 +1025,6 @@ class _StatsCardState extends State<StatsCard>
               ],
             ),
           ),
-        ),
       ),
     );
   }
@@ -1342,18 +1327,15 @@ class _StatStorySheetState extends State<_StatStorySheet> {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
 
-    return ClipRRect(
+    return GlassContainer(
+      sigmaX: 20,
+      sigmaY: 20,
+      tint: Colors.white.withValues(alpha: 0.05),
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          height: screenHeight * 0.45,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
-          ),
-          child: Column(
+      border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+      child: SizedBox(
+        height: screenHeight * 0.45,
+        child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 10, bottom: 4),
@@ -1404,7 +1386,6 @@ class _StatStorySheetState extends State<_StatStorySheet> {
         ],
       ),
         ),
-      ),
     );
   }
 }

@@ -6,8 +6,8 @@ import 'package:scratcher/scratcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:lottie/lottie.dart';
 import '../models/shop_item.dart';
+import 'widgets/deferred_lottie.dart';
 import '../services/shop_service.dart';
 import '../services/widget_service.dart';
 import '../services/analytics_service.dart';
@@ -284,7 +284,7 @@ class _ShopScreenState extends State<ShopScreen> {
                             child: Transform.scale(
                               scale: 2,
                               alignment: Alignment.bottomCenter,
-                              child: Lottie.asset('assets/photos/elements/music_fly.json', fit: BoxFit.cover),
+                              child: DeferredLottie(asset: 'assets/photos/elements/music_fly.json', fit: BoxFit.cover),
                             ),
                           ),
                         ),

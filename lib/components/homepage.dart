@@ -7,7 +7,6 @@ import '../services/auth_service.dart';
 import '../services/streak_service.dart';
 import '../services/star_service.dart';
 import '../services/audio_service.dart';
-import 'package:lottie/lottie.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../screens/about_screen.dart';
 import '../providers/homepage_provider.dart';
@@ -17,6 +16,7 @@ import 'widgets/star_badge.dart';
 import 'widgets/journal_entry_button.dart';
 import 'streak_reward_dialog.dart';
 import 'widgets/mascot_greeting.dart';
+import 'widgets/deferred_lottie.dart';
 
 class Homepage extends ConsumerStatefulWidget {
   const Homepage({super.key});
@@ -79,7 +79,7 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
   }
 
   Future<void> _loadStreak() async {
-    final streak = await StreakService.getStreak();
+    final streak = await StreakService.getDisplayStreak();
     if (mounted) ref.read(homepageProvider.notifier).setStreak(streak);
     final hasReward = await StreakService.checkAndClaimPrimeReward();
     if (hasReward && mounted) {
@@ -151,7 +151,7 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
                                           child: Transform.scale(
                                             scale: 2,
                                             alignment: Alignment.bottomCenter,
-                                            child: Lottie.asset('assets/photos/elements/music_fly.json', fit: BoxFit.cover),
+                                            child: DeferredLottie(asset: 'assets/photos/elements/music_fly.json', fit: BoxFit.cover),
                                           ),
                                         ),
                                       ),

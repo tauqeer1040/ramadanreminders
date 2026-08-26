@@ -9,7 +9,7 @@ import 'browser_detector.dart';
 import 'crypto_service.dart';
 import 'journal_remote_storage.dart';
 import 'journal_service.dart';
-import 'revenuecat_service.dart';
+import 'revenuecat_service.dart' deferred as rc;
 
 class AuthService {
   static final _auth = FirebaseAuth.instance;
@@ -208,7 +208,8 @@ class AuthService {
     }
     AnalyticsService.instance.logEvent('sign_in', params: {'method': analyticsMethod});
     try {
-      await RevenueCatService.instance.identify(user.uid);
+      await rc.loadLibrary();
+      await rc.RevenueCatService.instance.identify(user.uid);
     } catch (e) {
       debug.logEvent('RC_ERR', 'RevenueCat identify failed: $e');
     }
@@ -292,7 +293,8 @@ class AuthService {
   /// Sign out and re-create anonymous session
   static Future<void> signOut() async {
     AnalyticsService.instance.logEvent('sign_out');
-    await RevenueCatService.instance.reset();
+    await rc.loadLibrary();
+    await rc.RevenueCatService.instance.reset();
     await _auth.signOut();
     try {
       await GoogleSignIn().signOut();

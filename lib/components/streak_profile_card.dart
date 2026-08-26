@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'widgets/streak_graph.dart';
+import 'widgets/streak_shield_badge.dart';
 import '../services/streak_service.dart';
 
 class StreakProfileCard extends StatefulWidget {
@@ -20,7 +21,7 @@ class _StreakProfileCardState extends State<StreakProfileCard> {
   }
 
   Future<void> _load() async {
-    final streak = await StreakService.getStreak();
+    final streak = await StreakService.getDisplayStreak();
     if (mounted) setState(() { _streak = streak; _loaded = true; });
   }
 
@@ -30,7 +31,12 @@ class _StreakProfileCardState extends State<StreakProfileCard> {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: StreakGraph(streak: _streak),
+      child: Column(
+        children: [
+          StreakGraph(streak: _streak),
+          const StreakShieldBadge(),
+        ],
+      ),
     );
   }
 }

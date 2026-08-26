@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
-import 'package:cryptography/cryptography.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:cryptography/cryptography.dart' deferred as crypto;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart' deferred as fss;
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,15 +18,25 @@ class CryptoService {
   static const _keyStorageKey = 'journal_encryption_key';
   static const _readyFlag = 'encryption_ready';
   static const _ciphertextVersion = 'v1';
-  static const _storage = FlutterSecureStorage();
+  static late final dynamic _storage;
 
-  static SecretKey? _secretKey;
+  static dynamic _secretKey;
+  static bool _libsLoaded = false;
+
+  static Future<void> _ensureLibs() async {
+    if (!_libsLoaded) {
+      await Future.wait([crypto.loadLibrary(), fss.loadLibrary()]);
+      _storage = fss.FlutterSecureStorage();
+      _libsLoaded = true;
+    }
+  }
 
   static Future<void> init() async {
+    await _ensureLibs();
     final stored = await _storage.read(key: _keyStorageKey);
     if (stored != null && stored.isNotEmpty) {
       final keyBytes = base64Decode(stored);
-      _secretKey = SecretKey(keyBytes);
+      _secretKey = crypto.SecretKey(keyBytes);
     }
   }
 
@@ -37,6 +47,7 @@ class CryptoService {
   }
 
   static Future<void> fetchAndStoreKey() async {
+    await _ensureLibs();
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -55,7 +66,7 @@ class CryptoService {
         if (key.isNotEmpty) {
           await _storage.write(key: _keyStorageKey, value: key);
           final keyBytes = base64Decode(key);
-          _secretKey = SecretKey(keyBytes);
+          _secretKey = crypto.SecretKey(keyBytes);
           await prefs.setBool(_readyFlag, true);
           return;
         }
@@ -75,8 +86,9 @@ class CryptoService {
   static Future<String> encrypt(String plaintext) async {
     if (plaintext.isEmpty) return plaintext;
     if (_secretKey == null) return plaintext;
+    await _ensureLibs();
 
-    final aesGcm = AesGcm.with256bits();
+    final aesGcm = crypto.AesGcm.with256bits();
     final iv = randomBytes(12);
     final secretBox = await aesGcm.encrypt(
       utf8.encode(plaintext),
@@ -116,6 +128,7 @@ class CryptoService {
     if (ciphertext.isEmpty) return ciphertext;
     if (!isEncrypted(ciphertext)) return ciphertext;
     if (_secretKey == null) return ciphertext;
+    await _ensureLibs();
 
     try {
       final base64Part = ciphertext.startsWith('$_ciphertextVersion:')
@@ -124,10 +137,10 @@ class CryptoService {
       final combined = jsonDecode(utf8.decode(base64Decode(base64Part))) as Map<String, dynamic>;
       final iv = base64Decode(combined['iv'] as String);
       final cipherText = base64Decode(combined['c'] as String);
-      final mac = Mac(base64Decode(combined['t'] as String));
+      final mac = crypto.Mac(base64Decode(combined['t'] as String));
 
-      final secretBox = SecretBox(cipherText, nonce: iv, mac: mac);
-      final aesGcm = AesGcm.with256bits();
+      final secretBox = crypto.SecretBox(cipherText, nonce: iv, mac: mac);
+      final aesGcm = crypto.AesGcm.with256bits();
       final plaintext = await aesGcm.decrypt(secretBox, secretKey: _secretKey!);
       return utf8.decode(plaintext);
     } catch (_) {

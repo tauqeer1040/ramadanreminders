@@ -50,7 +50,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      precacheImage(const AssetImage('assets/splash/splash.gif'), context);
+      precacheImage(const AssetImage('assets/splash/gif.webp'), context);
     });
 
     _init();
@@ -63,6 +63,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   Future<void> _init() async {
+    // Firebase is initialized in main() before runApp() (see AppBootstrap.initFirebaseOnly).
+    // Heavy core services run separately via the unawaited AppBootstrap.run() below.
+
     // On web, the HTML splash (animated gif) already played during download —
     // skip the min-splash timer and transition the instant MainScreen is ready.
     final timer = kIsWeb
@@ -80,15 +83,28 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     unawaited(AppBootstrap.run());
 
     // ── Mandatory: read onboarding status ──
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.reload();
-    final needsOnboarding = !(prefs.getBool('onboarding_complete') ?? false);
+    bool needsOnboarding;
+    if (kIsWeb) {
+      // On web, read the pre-determined value from index.html's inline script.
+      // This avoids the async SharedPreferences plugin bridge entirely.
+      try {
+        final jsVal = globalContext['splashNeedsOnboarding'];
+        needsOnboarding = jsVal == null || (jsVal as JSBoolean).toDart != true;
+      } catch (_) {
+        needsOnboarding = true;
+      }
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      needsOnboarding = !(prefs.getBool('onboarding_complete') ?? false);
+    }
 
     if (needsOnboarding) {
-      final asked = prefs.getBool('notification_permission_asked') ?? false;
-      if (!asked) {
-        await prefs.setBool('notification_permission_asked', true);
-        if (!kIsWeb) {
+      if (!kIsWeb) {
+        final prefs = await SharedPreferences.getInstance();
+        final asked = prefs.getBool('notification_permission_asked') ?? false;
+        if (!asked) {
+          await prefs.setBool('notification_permission_asked', true);
           NotificationService.requestPermissions();
         }
       }
@@ -224,7 +240,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 color: Colors.black,
                 child: Center(
                   child: Image.asset(
-                    'assets/splash/splash.gif',
+                    'assets/splash/gif.webp',
                     fit: BoxFit.contain,
                   ),
                 ),

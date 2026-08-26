@@ -1,4 +1,5 @@
 // header.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class JourneyHeader extends StatelessWidget {
@@ -32,22 +33,31 @@ class JourneyHeader extends StatelessWidget {
               Expanded(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: ShaderMask(
-                    shaderCallback: (bounds) => LinearGradient(
-                      colors: [
-                        colorScheme.primary,
-                        colorScheme.primaryContainer,
-                      ],
-                    ).createShader(bounds),
-                    child: Text(
-                      'Meowmin',
-                      style: textTheme.displaySmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Crimson Text',
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                  child: kIsWeb
+                      ? Text(
+                          'Meowmin',
+                          style: textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Crimson Text',
+                            color: colorScheme.primary,
+                          ),
+                        )
+                      : ShaderMask(
+                          shaderCallback: (bounds) => LinearGradient(
+                            colors: [
+                              colorScheme.primary,
+                              colorScheme.primaryContainer,
+                            ],
+                          ).createShader(bounds),
+                          child: Text(
+                            'Meowmin',
+                            style: textTheme.displaySmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Crimson Text',
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(width: 12),
