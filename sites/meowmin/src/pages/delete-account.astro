@@ -1,0 +1,50 @@
+---
+import Base from '../layouts/Base.astro';
+
+const title = 'Delete Account';
+const description = 'How to delete your Meowmin AI Journal account and what happens to your data.';
+---
+
+<Base title={title} description={description}>
+  <section class="py-12 sm:py-16 px-6 lg:px-8">
+    <div class="max-w-[720px] mx-auto">
+      <a class="back inline-block mb-8 font-medium text-brand hover:text-brand-dark transition" href="/">&larr; Meowmin</a>
+
+      <h1 class="text-4xl sm:text-5xl font-bold text-gray-900 mb-2">Delete Your Meowmin AI Journal Account</h1>
+      <p class="subtitle text-gray-500 text-sm mb-10">Meowmin by Taucity — Last updated: August 2026</p>
+
+      <div class="space-y-4 text-gray-700">
+        <p>You can request deletion of your Meowmin account and all associated data at any time. Choose the method that works for you below.</p>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">Option 1 — Delete in the app (fastest)</h2>
+        <ol class="list-decimal pl-6 space-y-2">
+          <li>Open Meowmin and go to <strong>Profile</strong>.</li>
+          <li>Tap <strong>Delete Account</strong>.</li>
+          <li>Confirm. This action is irreversible — your account and all associated data are queued for permanent deletion.</li>
+        </ol>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">Option 2 — Request deletion by email</h2>
+        <p>If you no longer have the app, email <a href="mailto:contact@taucity.xyz" class="text-brand hover:text-brand-dark transition">contact@taucity.xyz</a> from the address associated with your account and write "Delete my account". We will verify and process your request within 30 days.</p>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">What is deleted</h2>
+        <ul class="list-disc pl-6 space-y-2">
+          <li>Your diary entries, reflections, and any content you created.</li>
+          <li>AI-generated insights, suggested tasks, and Qur'anic references.</li>
+          <li>Your account email and display name.</li>
+          <li>Locally stored encrypted keys and preferences.</li>
+          <li>Everything tied to your Firebase user ID.</li>
+        </ul>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">What we keep</h2>
+        <p>We keep only the minimum required for legal and billing purposes: subscription and purchase records (managed by RevenueCat and Google Play) are retained only as long as required, then anonymized. All other data is permanently removed from our servers within <strong>30 days</strong> of your deletion request.</p>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">More information</h2>
+        <p>See our <a href="/privacy" class="text-brand hover:text-brand-dark transition">Privacy Policy</a> for the full details on the data we collect and how it is used.</p>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">Contact</h2>
+        <p>Questions about account deletion?<br />
+        Email: <a href="mailto:contact@taucity.xyz" class="text-brand hover:text-brand-dark transition">contact@taucity.xyz</a></p>
+      </div>
+    </div>
+  </section>
+</Base>

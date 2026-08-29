@@ -10,14 +10,14 @@ interface Props {
 
 const {
   title = 'Meowmin',
-  description = 'Meowmin is a free daily diary app. Write about your day and get personalized Quran verses, Surah stories, and Hadith that match your experience.',
+  description = 'Meowmin is a free AI journal for Muslims. Write about your day and get personalized Quran verses, Surah stories, and Hadith that match your experience — the best Islamic journaling app.',
   image = '/screenshots/home.webp',
   noindex = false,
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const pageTitle = Astro.url.pathname === '/'
-  ? 'Meowmin — The Quran, mirrored in your day'
+  ? 'Meowmin — the AI journal for Muslims | Quran reflections & dhikr'
   : `${title} · Meowmin`;
 ---
 
@@ -71,7 +71,7 @@ const pageTitle = Astro.url.pathname === '/'
       url: 'https://meowmin.taucity.xyz',
       applicationCategory: 'LifestyleApplication',
       operatingSystem: 'Web, Android, iOS',
-      description: 'Meowmin is a free daily diary app. Write about your day and get personalized Quran verses, Surah stories, and Hadith that match your experience.',
+      description: 'Meowmin is a free AI journal for Muslims. Write about your day and get personalized Quran verses, Surah stories, and Hadith that match your experience — the best Islamic journaling app.',
       inLanguage: 'en',
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     })} />
@@ -164,7 +164,7 @@ const pageTitle = Astro.url.pathname === '/'
             <ul class="space-y-2 sm:space-y-3 text-sm sm:text-base">
               <li><a href="/privacy" class="hover:text-white/70 transition">Privacy Policy</a></li>
               <li><a href="/terms" class="hover:text-white/70 transition">Terms of Service</a></li>
-              <li><a href="mailto:tauqeer1040@gmail.com" class="hover:text-white/70 transition">Contact</a></li>
+              <li><a href="mailto:contact@taucity.xyz" class="hover:text-white/70 transition">Contact</a></li>
             </ul>
           </div>
           <!-- CTA -->
@@ -187,7 +187,7 @@ const pageTitle = Astro.url.pathname === '/'
       // Inject sr-only SEO text into body for Googlebot
       const srText = document.createElement('p');
       srText.className = 'sr-only';
-      srText.textContent = 'Meowmin is a free daily diary app that helps you build a closer connection with Allah through personalized Quran guidance. Write about your day and Meowmin finds real Quran verses, Surah stories, and Hadith that match what you experienced. Had an angry day? Get the verse about patience. Had a grateful day? Get the verse about shukr. Meowmin makes the Quran relevant to your everyday life by matching your diary entries with the right verses and stories from the Quran and Islamic tradition.';
+       srText.textContent = 'Meowmin is a free AI journal for Muslims that helps you build a closer connection with Allah through personalized Quran guidance. Write about your day and Meowmin finds real Quran verses, Surah stories, and Hadith that match what you experienced. Had an angry day? Get the verse about patience. Had a grateful day? Get the verse about shukr. Meowmin is the best journaling app for Muslims — an islamic journal and quran journal that makes the Quran relevant to your everyday life by matching your diary entries with the right verses and stories from the Quran and Islamic tradition.';
       document.body.prepend(srText);
 
       document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {
