@@ -49,7 +49,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      precacheImage(const AssetImage('assets/splash/gif.webp'), context);
+      try {
+        precacheImage(const AssetImage('assets/splash/gif.webp'), context);
+      } catch (e) {
+        debugPrint('[Splash] precache gif failed: $e');
+      }
     });
 
     _init();
@@ -93,9 +97,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         needsOnboarding = true;
       }
     } else {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.reload();
-      needsOnboarding = !(prefs.getBool('onboarding_complete') ?? false);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.reload();
+        needsOnboarding = !(prefs.getBool('onboarding_complete') ?? false);
+      } catch (e, st) {
+        debugPrint('[Splash] prefs load failed: $e $st');
+        // Fallback to onboarding=false to avoid stuck, will still show MainScreen
+        needsOnboarding = false;
+      }
     }
 
     if (needsOnboarding) {
@@ -133,6 +143,22 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       if (!mounted) return;
       setState(() {
         _targetScreen = MainScreen(onReady: _onTargetReady);
+      });
+
+      // Fallback: if MainScreen onReady never fires (e.g. build throws), force transition after 2s
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && !_isTargetReady && _isTimerDone) {
+          debugPrint('[Splash] fallback forcing _isTargetReady (MainScreen onReady timeout)');
+          _onTargetReady();
+        } else if (mounted && !_isTimerDone && !_isTargetReady) {
+          // Edge: timer still not done but onReady missing — force both
+          debugPrint('[Splash] fallback forcing timer + ready');
+          setState(() {
+            _isTimerDone = true;
+            _isTargetReady = true;
+            _checkTransition();
+          });
+        }
       });
 
       await timer;

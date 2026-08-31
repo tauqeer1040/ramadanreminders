@@ -16,3 +16,13 @@
 -keep class com.revenuecat.** { *; }
 -dontwarn com.revenuecat.**
 -keep class com.revenuecat.purchases.** { *; }
+
+# SharedPreferences, WorkManager, AudioPlayers, SecureStorage, etc (prevent MissingPluginException with isMinifyEnabled)
+-keep class io.flutter.plugins.sharedpreferences.** { *; }
+-keep class com.baseflow.flutter.** { *; }
+-keep class androidx.work.** { *; }
+-keep class com.it_nomads.fluttersecurestorage.** { *; }
+-keep class xyz.luan.audioplayers.** { *; }
+-dontwarn androidx.work.**
+-dontwarn io.flutter.plugins.sharedpreferences.**
+-dontwarn xyz.luan.audioplayers.**

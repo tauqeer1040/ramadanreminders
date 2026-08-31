@@ -39,10 +39,15 @@ class AppBootstrap {
   /// Called from main() before runApp().
   static Future<void> initFirebaseOnly() async {
     if (_firebaseInitialized) return;
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
+    try {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      }
+    } on FirebaseException catch (e) {
+      if (e.code != 'duplicate-app') rethrow;
+      debugPrint('[AppBootstrap] Firebase already initialized (duplicate-app), continuing');
     }
     _firebaseInitialized = true;
   }
