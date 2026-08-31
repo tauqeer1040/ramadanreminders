@@ -203,7 +203,7 @@ class _ActionButtons extends StatelessWidget {
             final url = await InviteService.buildInviteUrl() ??
                 (kIsWeb
                     ? 'https://meowmin.taucity.xyz'
-                    : 'https://play.google.com/store/apps/details?id=com.taucity.ramadanreflections');
+                    : 'https://play.google.com/store/apps/details?id=com.taucity.meowmin');
             share_plus.Share.share(
               '🌙 Join me on Meowmin and we\'ll shield each other\'s streaks! A beautiful journaling companion for your spiritual journey.\n\n$url',
             );

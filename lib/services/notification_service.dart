@@ -1,11 +1,8 @@
-import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
-
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'web_bridge.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart' deferred as fln;
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:web/web.dart' as web;
 
 class NotificationService {
   static dynamic _notificationsPlugin;
@@ -48,7 +45,7 @@ class NotificationService {
     if (kIsWeb) {
       if (!_webNotificationsSupported) return false;
       try {
-        final result = await web.Notification.requestPermission().toDart;
+        final result = await Notification.requestPermission().toDart;
         return result.toDart == 'granted';
       } catch (_) {
         return false;
@@ -69,7 +66,7 @@ class NotificationService {
     if (kIsWeb) {
       if (!_webNotificationsSupported) return false;
       try {
-        return web.Notification.permission == 'granted';
+        return Notification.permission == 'granted';
       } catch (_) {
         return false;
       }

@@ -1,11 +1,9 @@
-import 'dart:js_interop';
-
 import 'package:audioplayers/audioplayers.dart' deferred as ap;
+import 'web_bridge.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:web/web.dart' as web;
 import 'analytics_protocol.dart';
 import 'analytics_service.dart';
 
@@ -32,7 +30,7 @@ class BackgroundMusicService with WidgetsBindingObserver {
   // On web, browsers (especially iOS Safari) block autoplay without a user
   // gesture, so the first background-music play is deferred until the first
   // interaction. Reused JS listener so add/removeEventListener match.
-  JSFunction? _webGestureListener;
+  void Function(Event)? _webGestureListener;
 
   Future<bool> _isDevicePlayingAudio() async {
     try {
@@ -81,13 +79,13 @@ class BackgroundMusicService with WidgetsBindingObserver {
   }
 
   void _deferUntilWebGesture(String track) {
-    void handler(web.Event _) {
+    void handler(Event _) {
       if (_musicEnabled) {
         _playTrack(track);
       }
     }
 
-    _webGestureListener = handler.toJS;
+    _webGestureListener = handler;
     web.window.addEventListener('pointerdown', _webGestureListener);
     web.window.addEventListener('keydown', _webGestureListener);
     web.window.addEventListener('touchstart', _webGestureListener);

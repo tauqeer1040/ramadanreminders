@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
 import 'package:flutter/foundation.dart';
+import '../services/web_bridge.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/notification_service.dart';
@@ -178,7 +177,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     // Removes the HTML splash via the global function defined in index.html.
     // If the bridge fails, the 8s failsafe in index.html still clears it.
     try {
-      globalContext.callMethod('removeSplashFromWeb'.toJS);
+      globalContext.callMethod('removeSplashFromWeb');
     } catch (_) {}
   }
 

@@ -1,6 +1,5 @@
-import 'dart:js_interop';
 import 'package:flutter/foundation.dart';
-import 'package:web/web.dart' as web;
+import 'web_bridge.dart';
 import 'analytics_service.dart';
 
 /// Reports uncaught Dart errors and web JS errors to Firebase Analytics so
@@ -46,27 +45,27 @@ class CrashReporter {
   /// promise rejections) that never surface as Dart errors.
   static void _initWebHandlers() {
     try {
-      web.window.addEventListener('error', ((web.Event event) {
+      web.window.addEventListener('error', ((Event event) {
         try {
-          final e = event as web.ErrorEvent;
+          final e = event as ErrorEvent;
           _report(
             type: 'web_error',
             message: e.message,
             detail: '${e.filename}:${e.lineno}:${e.colno}',
           );
         } catch (_) {}
-      }).toJS);
+        }));
 
-      web.window.addEventListener('unhandledrejection', ((web.Event event) {
+      web.window.addEventListener('unhandledrejection', ((Event event) {
         try {
-          final e = event as web.PromiseRejectionEvent;
+          final e = event as PromiseRejectionEvent;
           _report(
             type: 'web_unhandled_rejection',
             message: _stringifyJs(e.reason),
             detail: '',
           );
         } catch (_) {}
-      }).toJS);
+        }));
     } catch (_) {
       // Never let crash reporting itself break the app.
     }

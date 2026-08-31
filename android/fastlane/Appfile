@@ -1,0 +1,2 @@
+json_key_file("fastlane/play-developer-api.json") # replace with your Play Developer API service-account JSON
+package_name("com.taucity.meowmin")
