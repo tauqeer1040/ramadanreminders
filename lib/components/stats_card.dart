@@ -80,11 +80,13 @@ Future<_StatsData> _loadStats() async {
     } catch (_) {}
   }
 
-  final quranDays =
-      prefs.getKeys().where((k) => k.startsWith('quran_revealed_')).length;
+  // New stable key + legacy per-day keys
+  final revealedNew = prefs.getStringList('quran_revealed_ids')?.length ?? 0;
+  final legacyDays = prefs.getKeys().where((k) => k.startsWith('quran_revealed_')).length;
+  final quranDays = revealedNew > 0 ? 1 : legacyDays; // tweak: at least 1 if new exists, else legacy count
 
-  // Count total chapters read across all days
-  int quranChaptersRead = 0;
+  // Count total chapters read across all days (new + legacy)
+  int quranChaptersRead = revealedNew;
   for (final key in prefs.getKeys()) {
     if (key.startsWith('quran_revealed_')) {
       final list = prefs.getStringList(key);

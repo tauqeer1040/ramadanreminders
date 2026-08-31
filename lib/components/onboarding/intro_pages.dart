@@ -93,9 +93,9 @@ class MusicSelectionPage extends StatefulWidget {
 }
 
 class _MusicSelectionPageState extends State<MusicSelectionPage> {
-  int _selectedTrack = 0;
-  final List<Uint8List?> _covers = [null, null];
+  Uint8List? _cover;
   bool _loading = true;
+  bool _played = false;
 
   @override
   void initState() {
@@ -105,18 +105,20 @@ class _MusicSelectionPageState extends State<MusicSelectionPage> {
 
   Future<void> _loadCovers() async {
     try {
-      final paths = [
-        'assets/photos/elements/cover_am_session.webp',
-        'assets/photos/elements/cover_after_dark.webp',
-      ];
-      for (int i = 0; i < paths.length; i++) {
-        final bd = await rootBundle.load(paths[i]);
-        _covers[i] = bd.buffer.asUint8List();
-      }
+      final bd = await rootBundle.load('assets/photos/elements/cover_am_session.webp');
+      _cover = bd.buffer.asUint8List();
     } catch (e) {
       debugPrint("Error loading covers: $e");
     }
-    if (mounted) setState(() => _loading = false);
+    if (mounted) {
+      setState(() => _loading = false);
+      // Auto-play study session as default
+      if (!_played) {
+        _played = true;
+        BackgroundMusicService().play('tunes/1_A.M_Study_Session_lofi_hip_hop_5min.m4a');
+        AnalyticsService.instance.logEvent('onboarding_music_selected', params: {'index': '0'});
+      }
+    }
   }
 
   @override
@@ -158,112 +160,32 @@ class _MusicSelectionPageState extends State<MusicSelectionPage> {
           if (_loading)
             const Center(child: CircularProgressIndicator())
           else
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() => _selectedTrack = 0);
-                      AnalyticsService.instance.logEvent('onboarding_music_selected', params: {'index': '0'});
-                      BackgroundMusicService().play(
-                        'tunes/1_A.M_Study_Session_lofi_hip_hop_5min.m4a',
-                      );
-                    },
-                    child: Column(
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: _selectedTrack == 0
-                                  ? cs.primary
-                                  : Colors.transparent,
-                              width: 3,
+            Center(
+              child: Column(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: cs.primary, width: 3),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(21),
+                      child: _cover != null
+                          ? Image.memory(_cover!, height: 160, width: 220, fit: BoxFit.cover)
+                          : Container(
+                              height: 160,
+                              width: 220,
+                              color: cs.surfaceContainerHighest,
+                              child: const Icon(Icons.music_note, size: 48),
                             ),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(21),
-                            child: _covers[0] != null
-                                ? Image.memory(
-                                    _covers[0]!,
-                                    height: 160,
-                                    width: double.infinity,
-                                    fit: BoxFit.cover,
-                                  )
-                                : Container(
-                                    height: 160,
-                                    color: cs.surfaceContainerHighest,
-                                    child: const Icon(
-                                      Icons.music_note,
-                                      size: 48,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          "1am study session",
-                          style: tt.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
                     ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() => _selectedTrack = 1);
-                      AnalyticsService.instance.logEvent('onboarding_music_selected', params: {'index': '1'});
-                      BackgroundMusicService().play(
-                        'tunes/After_Dark_in_Cairo_Arabic_Melodies_Jazz_Fusion_for_Late_Night_Focus_Study_5min.m4a',
-                      );
-                    },
-                    child: Column(
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: _selectedTrack == 1
-                                  ? cs.primary
-                                  : Colors.transparent,
-                              width: 3,
-                            ),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(21),
-                            child: _covers[1] != null
-                                ? Image.memory(
-                                    _covers[1]!,
-                                    height: 160,
-                                    width: double.infinity,
-                                    fit: BoxFit.cover,
-                                  )
-                                : Container(
-                                    height: 160,
-                                    color: cs.surfaceContainerHighest,
-                                    child: const Icon(
-                                      Icons.music_note,
-                                      size: 48,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          "after dark in cairo",
-                          style: tt.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Text("1am study session", style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text("lofi • default", style: tt.labelSmall?.copyWith(color: cs.onSurface.withValues(alpha: 0.6))),
+                ],
+              ),
             ),
           const Spacer(flex: 1),
           Row(

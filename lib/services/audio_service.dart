@@ -44,7 +44,7 @@ class BackgroundMusicService with WidgetsBindingObserver {
 
   static const String _prefKeyEnabled = 'background_music_enabled';
   static const String _prefKeyTrack = 'background_music_track';
-  static const String _defaultTrack = 'tunes/app_audio_5min.m4a';
+  static const String _defaultTrack = 'tunes/1_A.M_Study_Session_lofi_hip_hop_5min.m4a';
 
   bool get isMusicEnabled => _musicEnabled;
   String? get currentTrackPath => _currentTrackPath;
@@ -60,6 +60,14 @@ class BackgroundMusicService with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     _musicEnabled = prefs.getBool(_prefKeyEnabled) ?? true;
     _currentTrackPath = prefs.getString(_prefKeyTrack);
+    // Migration: remove After_Dark / app_audio legacy picks → force study track
+    if (_currentTrackPath != null &&
+        (_currentTrackPath!.contains('Cairo') ||
+            _currentTrackPath!.contains('After_Dark') ||
+            _currentTrackPath!.contains('app_audio'))) {
+      _currentTrackPath = _defaultTrack;
+      await prefs.setString(_prefKeyTrack, _defaultTrack);
+    }
 
     _player!.setPlayerMode(ap.PlayerMode.mediaPlayer);
     _player!.setReleaseMode(ap.ReleaseMode.loop);

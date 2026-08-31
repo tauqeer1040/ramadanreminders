@@ -40,63 +40,98 @@ async function enrichSurahCard(card) {
   }
 }
 
-async function buildDailyContent(uid, dayKey) {
-  const cacheKey = `daily:${uid}:${dayKey}`;
+/**
+ * New: 1 journal = 3 cards per deck.
+ * Priority: 1) yesterday/today batch if exists, else 2) latest unread fallback (unlimited window).
+ * For local-only v1, "unread" is determined client-side via excludedIds.
+ * Backend handles date window + excludeIds filtering.
+ */
+async function buildScratchBatch(uid, { excludeIds = [], dayKeys = [] } = {}) {
+  // Build cache key that includes exclude list hash to avoid cache poisoning
+  const excludeKey = excludeIds.length ? `:ex:${excludeIds.join(',')}` : '';
+  const dayKeyStr = dayKeys.length ? dayKeys.join(',') : 'any';
+  const cacheKey = `scratch:${uid}:${dayKeyStr}${excludeKey}`;
   const cached = getCache(cacheKey);
   if (cached) return cached;
 
-  const latestRowsResult = await db.execute({
-    sql: `
-      SELECT
-        j.id,
-        j.content,
-        j.created_at,
-        a.summary
+  // Helper to query with optional date filter and exclude
+  async function queryBatch(whereDateSql, dateArgs) {
+    let sql = `
+      SELECT j.id, j.content, j.created_at, a.summary
       FROM journal_entries j
       INNER JOIN journal_ai a ON j.id = a.journal_id
       WHERE j.user_id = ? AND j.ai_status = 'completed'
-      ORDER BY j.created_at DESC
-      LIMIT 1
-    `,
-    args: [uid],
-  });
+    `;
+    const args = [uid];
+    if (whereDateSql) {
+      sql += ` AND ${whereDateSql}`;
+      args.push(...dateArgs);
+    }
+    if (excludeIds.length) {
+      sql += ` AND j.id NOT IN (${excludeIds.map(() => '?').join(',')})`;
+      args.push(...excludeIds);
+    }
+    sql += ` ORDER BY j.created_at DESC LIMIT 1`;
+    const res = await db.execute({ sql, args });
+    return res.rows;
+  }
 
-  const latestRows = latestRowsResult.rows;
-  if (!latestRows.length) {
-    return {
-      dayKey,
+  // 1) Try yesterday/today window if dayKeys provided (dayKeys = [today, yesterday])
+  let rows = [];
+  if (dayKeys.length) {
+    // Use DATE(created_at) which is UTC; also support id prefix fallback for local dates
+    // We check both created_at date and id prefix for robustness
+    const datePlaceholders = dayKeys.map(() => `date(j.created_at) = ?`).join(' OR ');
+    const idPlaceholders = dayKeys.map(() => `j.id LIKE ?`).join(' OR ');
+    const whereDateSql = `((${datePlaceholders}) OR (${idPlaceholders}))`;
+    const dateArgs = [...dayKeys, ...dayKeys.map(k => `${k}%`)];
+    rows = await queryBatch(whereDateSql, dateArgs);
+  }
+
+  // 2) Fallback: unlimited window, latest not excluded
+  if (!rows.length) {
+    rows = await queryBatch(null, []);
+  }
+
+  if (!rows.length) {
+    const empty = {
+      journalId: null,
       insightCards: [],
-      tasks: [],
       related: { journalId: null, reflectionTags: [], taskTags: [], similarReflections: [], similarTasks: [] },
       featuredReference: null,
     };
+    setCache(cacheKey, empty);
+    return empty;
   }
 
-  const insightCards = buildInsightCardsFromRows(latestRows, uid);
-  if (!insightCards.length) return {
-    dayKey, insightCards: [], tasks: [],
-    related: { journalId: null, reflectionTags: [], taskTags: [], similarReflections: [], similarTasks: [] },
-    featuredReference: null,
-  };
+  const insightCards = buildInsightCardsFromRows(rows, uid);
+  if (!insightCards.length) {
+    const empty = {
+      journalId: rows[0].id,
+      insightCards: [],
+      related: { journalId: rows[0].id, reflectionTags: [], taskTags: [], similarReflections: [], similarTasks: [] },
+      featuredReference: null,
+    };
+    setCache(cacheKey, empty);
+    return empty;
+  }
 
-  const latestJournal = latestRows[0];
-
+  const journalId = rows[0].id;
   const surahCard = insightCards.find(c => c.type === 'surah_guidance');
   await enrichSurahCard(surahCard).catch(() => {});
 
   let related = { reflectionTags: [], taskTags: [], similarReflections: [], similarTasks: [] };
   try {
-    related = await loadSimilarMatchesForJournal(uid, latestJournal.id);
+    related = await loadSimilarMatchesForJournal(uid, journalId);
   } catch (e) {
-    console.warn('[buildDailyContent] loadSimilarMatches failed:', e.message);
+    console.warn('[buildScratchBatch] loadSimilarMatches failed:', e.message);
   }
 
   const payload = {
-    dayKey,
+    journalId,
     insightCards,
-    tasks: [],
     related: {
-      journalId: latestJournal.id,
+      journalId,
       reflectionTags: related.reflectionTags,
       taskTags: related.taskTags,
       similarReflections: related.similarReflections,
@@ -109,4 +144,46 @@ async function buildDailyContent(uid, dayKey) {
   return payload;
 }
 
-module.exports = { enrichSurahCard, buildDailyContent };
+async function buildDailyContent(uid, dayKey) {
+  const cacheKey = `daily:${uid}:${dayKey}`;
+  const cached = getCache(cacheKey);
+  if (cached) return cached;
+
+  // Delegate to scratch batch for consistent priority logic
+  // dayKey provided -> treat as today, also check yesterday
+  let dayKeys = [];
+  if (dayKey) {
+    try {
+      const d = new Date(dayKey);
+      const y = new Date(d);
+      y.setDate(d.getDate() - 1);
+      const yKey = y.toISOString().slice(0, 10);
+      dayKeys = [dayKey, yKey];
+    } catch (_) {
+      dayKeys = [dayKey];
+    }
+  }
+
+  const scratch = await buildScratchBatch(uid, { excludeIds: [], dayKeys });
+  if (scratch.journalId) {
+    const payload = {
+      dayKey,
+      insightCards: scratch.insightCards,
+      tasks: [],
+      related: scratch.related,
+      featuredReference: scratch.featuredReference,
+    };
+    setCache(cacheKey, payload);
+    return payload;
+  }
+
+  return {
+    dayKey,
+    insightCards: [],
+    tasks: [],
+    related: { journalId: null, reflectionTags: [], taskTags: [], similarReflections: [], similarTasks: [] },
+    featuredReference: null,
+  };
+}
+
+module.exports = { enrichSurahCard, buildDailyContent, buildScratchBatch };

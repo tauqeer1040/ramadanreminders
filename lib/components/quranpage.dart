@@ -72,17 +72,15 @@ class _QuranPageState extends State<QuranPage>
 
   // The deck of widgets dynamically built
   List<Widget> _deck = [];
-  final Set<int> _revealedCards = {};
+  final Set<String> _revealedCards = {};
   List<String> _scratchCardImages = [];
   final List<_HeartBurst> _hearts = [];
-  late String _revealedKey;
 
   @override
   void initState() {
     super.initState();
     _player.setPlayerMode(PlayerMode.mediaPlayer);
 
-    _revealedKey = 'quran_revealed_${DateTime.now().toIso8601String().substring(0, 10)}';
     _loadRevealedCards();
     _initData();
 
@@ -131,7 +129,9 @@ class _QuranPageState extends State<QuranPage>
 
   Future<void> _loadInsightLocallyOnly() async {
     try {
-      final cached = await InsightService.loadCacheInternal(); // This getter now includes day context
+      // Prefer scratch-batch cache (stable ids, persistent until all revealed)
+      final scratchCached = await InsightService.loadScratchCacheInternal();
+      final cached = scratchCached ?? await InsightService.loadCacheInternal();
       if (mounted && cached != null && cached.isNotEmpty) {
         setState(() {
           _insightCards = cached;
@@ -141,17 +141,22 @@ class _QuranPageState extends State<QuranPage>
     } catch (_) {}
   }
 
-
-
   Future<void> _fetchFreshDataSilently() async {
     if (FirebaseAuth.instance.currentUser != null) {
       try {
-        final cards = await InsightService.fetchPersonalizedInsights(limit: 3, forceRefresh: false);
+        final cards = await InsightService.fetchScratchBatch(forceRefresh: false);
         if (mounted && cards.isNotEmpty) {
-          setState(() {
-            _insightCards = cards;
-            _buildDeck();
-          });
+          // Only replace if not already showing same journal batch to avoid flicker
+          final newIds = cards.map((c) => c.id ?? '').toSet();
+          final curIds = _insightCards.map((c) => c.id ?? '').toSet();
+          if (newIds.isEmpty || curIds.isEmpty || !newIds.every(curIds.contains)) {
+            setState(() {
+              _insightCards = cards;
+              _buildDeck();
+            });
+          }
+        } else if (cards.isEmpty && _insightCards.isNotEmpty) {
+          // Keep existing cached batch if new fetch is empty (no unread)
         }
       } catch (_) {
         // Silently fail as before
@@ -184,11 +189,12 @@ class _QuranPageState extends State<QuranPage>
   }
 
   Future<void> _loadRevealedCards() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_revealedKey);
-    if (raw != null) {
+    final ids = await InsightService.loadRevealedIds();
+    // Migration: also load legacy per-day int indices if present and convert if needed
+    // We keep ids as strings; legacy int entries are ignored after first new save.
+    if (ids.isNotEmpty) {
       setState(() {
-        _revealedCards.addAll(raw.map(int.parse).toSet());
+        _revealedCards.addAll(ids);
       });
     }
   }
@@ -196,8 +202,8 @@ class _QuranPageState extends State<QuranPage>
   Future<void> _saveRevealedCards() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(
-      _revealedKey,
-      _revealedCards.map((e) => e.toString()).toList(),
+      InsightService.revealedIdsKey,
+      _revealedCards.toList(),
     );
   }
 
@@ -768,7 +774,8 @@ class _QuranPageState extends State<QuranPage>
                                 percentThresholdX,
                                 percentThresholdY,
                               ) {
-                                final revealed = _revealedCards.contains(index);
+                                final cardId = _insightCards[index].id ?? 'idx_$index';
+                                final revealed = _revealedCards.contains(cardId);
                                 Widget card = _deck[index];
 
                                 if (!revealed && _scratchCardImages.isNotEmpty) {
@@ -800,12 +807,14 @@ class _QuranPageState extends State<QuranPage>
                                           },
                                           onThreshold: () {
                                             _purrPlayer.stop();
-                                            setState(() => _revealedCards.add(index));
+                                            final id = _insightCards[index].id ?? 'idx_$index';
+                                            setState(() => _revealedCards.add(id));
                                             _saveRevealedCards();
                                             HapticFeedback.heavyImpact();
                                             _triggerConfetti();
                                             _rewardPlayer.play(AssetSource('tunes/positive_tone_a6b6.wav'));
                                             ShopService.awardStars('quran_read');
+                                            // If all 3 now revealed, next open will fetch next batch
                                           },
                                           child: card,
                                         ),

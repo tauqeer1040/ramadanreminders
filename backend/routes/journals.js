@@ -269,6 +269,37 @@ module.exports = function (app, apiLimiter) {
     }
   });
 
+  // New: scratch-batch — 1 journal = 3 cards, yesterday/today priority, unlimited unread fallback
+  // Query: ?day=YYYY-MM-DD&exclude=id1,id2
+  app.get('/api/v2/user/:uid/scratch-batch', async (req, res) => {
+    if (req.params.uid !== req.uid) return res.status(403).json({ error: 'Forbidden' });
+    const uid = req.uid;
+    const dayKey = String(req.query.day || new Date().toISOString().slice(0, 10));
+    const excludeRaw = String(req.query.exclude || '').trim();
+    const excludeIds = excludeRaw ? excludeRaw.split(',').map(s => s.trim()).filter(Boolean).slice(0, 50) : [];
+    try {
+      const { buildScratchBatch } = require('../lib/quran');
+      // Build dayKeys = [today, yesterday] for priority window
+      let dayKeys = [];
+      try {
+        const d = new Date(dayKey);
+        if (!isNaN(d.getTime())) {
+          const y = new Date(d);
+          y.setDate(d.getDate() - 1);
+          dayKeys = [dayKey, y.toISOString().slice(0, 10)];
+        } else {
+          dayKeys = [dayKey];
+        }
+      } catch (_) {
+        dayKeys = [dayKey];
+      }
+      const payload = await buildScratchBatch(uid, { excludeIds, dayKeys });
+      res.json(payload);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get('/api/v2/journal/:id/similar', async (req, res) => {
     const { id } = req.params;
     try {

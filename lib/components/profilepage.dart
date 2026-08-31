@@ -55,8 +55,7 @@ class _ProfilePage1State extends State<ProfilePage1>
   String _dbStatus = 'yellow';
   bool _debugExpanded = false;
 
-  int _selectedTrack = 0;
-  final List<Uint8List?> _covers = [null, null];
+  final List<Uint8List?> _covers = [null];
   bool _loadingCovers = true;
 
   late AnimationController _wobbleCtrl;
@@ -82,8 +81,7 @@ class _ProfilePage1State extends State<ProfilePage1>
       }
     });
 
-    final currentPath = BackgroundMusicService().currentTrackPath ?? '';
-    _selectedTrack = currentPath.contains('Cairo') ? 1 : 0;
+    // Single track: always study session
     _loadCovers();
 
     _wobbleCtrl = AnimationController(
@@ -104,14 +102,8 @@ class _ProfilePage1State extends State<ProfilePage1>
 
   Future<void> _loadCovers() async {
     try {
-      final paths = [
-        'assets/photos/elements/cover_am_session.webp',
-        'assets/photos/elements/cover_after_dark.webp',
-      ];
-      for (int i = 0; i < paths.length; i++) {
-        final bd = await rootBundle.load(paths[i]);
-        _covers[i] = bd.buffer.asUint8List();
-      }
+      final bd = await rootBundle.load('assets/photos/elements/cover_am_session.webp');
+      _covers[0] = bd.buffer.asUint8List();
     } catch (e) {
       debugPrint("Error loading covers in profile: $e");
     }
@@ -558,17 +550,17 @@ class _ProfilePage1State extends State<ProfilePage1>
           _buildToggleRow(
             icon: Icons.music_note_rounded,
             label: 'Background Music',
-            subtitle: 'BGM plays throughout the app',
+            subtitle: '1am study session • lofi',
             value: _musicEnabled,
             onChanged: (val) async {
               await BackgroundMusicService().setMusicEnabled(val);
+              if (val) {
+                // Ensure study track is playing when re-enabled
+                await BackgroundMusicService().play('tunes/1_A.M_Study_Session_lofi_hip_hop_5min.m4a');
+              }
               setState(() => _musicEnabled = val);
             },
           ),
-          if (_musicEnabled) ...[
-            const SizedBox(height: 16),
-            _buildMusicSegmentedButton(),
-          ],
           Divider(color: AppTheme.starWhite.withValues(alpha: 0.08), height: 24),
           _buildToggleRow(
             icon: Icons.volume_up_rounded,
@@ -585,95 +577,7 @@ class _ProfilePage1State extends State<ProfilePage1>
     );
   }
 
-  Widget _buildMusicSegmentedButton() {
-    if (_loadingCovers) {
-      return const SizedBox(
-        height: 90,
-        child: Center(
-          child: CircularProgressIndicator(color: AppTheme.neonPurple),
-        ),
-      );
-    }
 
-    return Row(
-      children: List.generate(2, (index) {
-        final isSelected = _selectedTrack == index;
-        final trackName = index == 0 ? "1am study session" : "after dark in cairo";
-        final trackPath = index == 0
-            ? 'tunes/1_A.M_Study_Session_lofi_hip_hop_5min.m4a'
-            : 'tunes/After_Dark_in_Cairo_Arabic_Melodies_Jazz_Fusion_for_Late_Night_Focus_Study_5min.m4a';
-
-        return Expanded(
-          child: GestureDetector(
-            onTap: () async {
-              setState(() => _selectedTrack = index);
-              await BackgroundMusicService().play(trackPath);
-            },
-            child: Container(
-              height: 90,
-              margin: EdgeInsets.only(
-                left: index == 1 ? 8 : 0,
-                right: index == 0 ? 8 : 0,
-              ),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isSelected ? AppTheme.neonPurple : AppTheme.starWhite.withValues(alpha: 0.1),
-                  width: isSelected ? 2.5 : 1,
-                ),
-                image: _covers[index] != null
-                    ? DecorationImage(
-                        image: MemoryImage(_covers[index]!),
-                        fit: BoxFit.cover,
-                        colorFilter: ColorFilter.mode(
-                          Colors.black.withValues(alpha: isSelected ? 0.45 : 0.65),
-                          BlendMode.srcOver,
-                        ),
-                      )
-                    : null,
-                color: _covers[index] == null ? AppTheme.neonPurple.withValues(alpha: 0.1) : null,
-              ),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(
-                        trackName,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: isSelected ? AppTheme.starWhite : AppTheme.starWhite.withValues(alpha: 0.7),
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (isSelected)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: AppTheme.neonPurple,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check,
-                          color: Colors.white,
-                          size: 14,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }),
-    );
-  }
 
   Widget _buildToggleRow({
     required IconData icon,

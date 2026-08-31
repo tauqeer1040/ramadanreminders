@@ -37,9 +37,14 @@ class InsightCard {
   final String? taskTitle;
   final String? taskDescription;
 
+  final String? id;
+  final String? journalId;
+
   InsightCard({
     required this.date,
     this.type = 'personalized_insight',
+    this.id,
+    this.journalId,
     this.journalExcerpt,
     this.insight,
     this.quote,
@@ -59,6 +64,8 @@ class InsightCard {
   });
 
   Map<String, dynamic> toJson() => {
+        'id': id,
+        'journalId': journalId,
         'date': date,
         'type': type,
         'journalExcerpt': journalExcerpt,
@@ -89,6 +96,8 @@ class InsightCard {
     // Backward compat: old format cards without type get mapped to personalized_insight
     if (t.isEmpty) {
       return InsightCard(
+        id: json['id'] as String?,
+        journalId: json['journalId'] as String?,
         date: json['date'] ?? '',
         type: 'personalized_insight',
         journalExcerpt: clean(json['journalExcerpt'] as String?),
@@ -98,6 +107,8 @@ class InsightCard {
       );
     }
     return InsightCard(
+      id: json['id'] as String?,
+      journalId: json['journalId'] as String?,
       date: json['date'] ?? '',
       type: t,
       journalExcerpt: clean(json['journalExcerpt'] as String?),
@@ -125,6 +136,8 @@ class InsightService {
   static final String _backendUrl = AppConstants.backendUrl;
 
   static const String _dailyContentKey = 'daily_content_cache';
+  static const String _scratchBatchKey = 'scratch_batch_cache';
+  static const String revealedIdsKey = 'quran_revealed_ids';
 
   static String? lastFetchError;
 
@@ -137,7 +150,174 @@ class InsightService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_dailyContentKey);
+      await prefs.remove(_scratchBatchKey);
     } catch (_) {}
+  }
+
+  static Future<void> invalidateScratchCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_scratchBatchKey);
+    } catch (_) {}
+  }
+
+  static Future<Set<String>> loadRevealedIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(revealedIdsKey);
+      if (raw == null) return {};
+      return raw.toSet();
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<void> addRevealedId(String id) async {
+    if (id.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final set = await loadRevealedIds();
+      set.add(id);
+      await prefs.setStringList(revealedIdsKey, set.toList());
+    } catch (_) {}
+  }
+
+  static Future<Map<String, dynamic>?> _loadCachedScratchBatch() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_scratchBatchKey);
+      if (raw == null) return null;
+      return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> _saveScratchBatch(Map<String, dynamic> payload) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_scratchBatchKey, jsonEncode(payload));
+    } catch (_) {}
+  }
+
+  static bool _isBatchFullyRevealed(List<dynamic> cards, Set<String> revealed) {
+    if (cards.isEmpty) return false;
+    for (final c in cards) {
+      final map = Map<String, dynamic>.from(c as Map);
+      final id = map['id'] as String? ?? '';
+      if (id.isEmpty || !revealed.contains(id)) return false;
+    }
+    return true;
+  }
+
+  /// 1 journal = 3 cards per deck. Yesterday/today priority, unlimited unread fallback.
+  /// Never reloads on every view — returns cached batch unless fully revealed or forceRefresh/new journal.
+  static Future<List<InsightCard>> fetchScratchBatch({bool forceRefresh = false}) async {
+    final user = _auth.currentUser;
+    if (user == null) return [];
+
+    // Try cache first (unless forceRefresh)
+    if (!forceRefresh) {
+      final cached = await _loadCachedScratchBatch();
+      if (cached != null) {
+        final cardsRaw = cached['insightCards'];
+        if (cardsRaw is List && cardsRaw.isNotEmpty) {
+          final revealed = await loadRevealedIds();
+          if (!_isBatchFullyRevealed(cardsRaw, revealed)) {
+            return cardsRaw
+                .map((e) => InsightCard.fromJson(Map<String, dynamic>.from(e as Map)))
+                .where((c) => c.type.isNotEmpty)
+                .toList();
+          }
+          // Fully revealed -> fall through to fetch next batch
+        }
+      }
+    }
+
+    // Build exclude list: journalIds that are fully revealed
+    final revealed = await loadRevealedIds();
+    // Derive journalIds that are fully revealed (all 3 cards of that journal revealed)
+    // For v1, we exclude any journal where at least one card id matches and we have 3 revealed for that journal.
+    // Simpler: collect journalIds where revealed contains card_ prefix
+    final Map<String, int> journalRevealedCount = {};
+    for (final id in revealed) {
+      // id = card_<journalId>_<idx>
+      final m = RegExp(r'^card_(.+)_(\d+)$').firstMatch(id);
+      if (m != null) {
+        final jid = m.group(1)!;
+        journalRevealedCount[jid] = (journalRevealedCount[jid] ?? 0) + 1;
+      } else if (id.isNotEmpty) {
+        // fallback: treat id itself as journalId if not in card_ format
+        journalRevealedCount[id] = (journalRevealedCount[id] ?? 0) + 1;
+      }
+    }
+    final fullyRevealedJournalIds = journalRevealedCount.entries
+        .where((e) => e.value >= 3)
+        .map((e) => e.key)
+        .toList();
+
+    // Attempt up to 5 times in case we keep hitting already-revealed batches
+    for (int attempt = 0; attempt < 5; attempt++) {
+      final excludeParam = fullyRevealedJournalIds.isEmpty ? '' : '&exclude=${fullyRevealedJournalIds.map(Uri.encodeComponent).join(',')}';
+      try {
+        final response = await http.get(
+          Uri.parse('$_backendUrl/user/${user.uid}/scratch-batch?day=${_today()}$excludeParam'),
+          headers: await ApiClient.authHeaders(),
+        ).timeout(const Duration(seconds: 30));
+
+        if (response.statusCode == 200) {
+          final payload = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+          final cards = payload['insightCards'];
+          if (cards is List && cards.isNotEmpty) {
+            // Check if this batch is already fully revealed (shouldn't happen due to exclude, but guard)
+            if (_isBatchFullyRevealed(cards, revealed)) {
+              final jid = payload['journalId'] as String?;
+              if (jid != null && jid.isNotEmpty && !fullyRevealedJournalIds.contains(jid)) {
+                fullyRevealedJournalIds.add(jid);
+                continue;
+              }
+            }
+            lastFetchError = null;
+            await _saveScratchBatch(payload);
+            return cards
+                .map((e) => InsightCard.fromJson(Map<String, dynamic>.from(e as Map)))
+                .where((c) => c.type.isNotEmpty)
+                .toList();
+          }
+          // Empty -> no more unread, return empty (will show empty state)
+          return [];
+        }
+        lastFetchError = 'HTTP ${response.statusCode}';
+      } catch (e) {
+        lastFetchError = e.toString();
+      }
+      break;
+    }
+
+    // Fallback to cached even if fully revealed (show again rather than empty)
+    final fallback = await _loadCachedScratchBatch();
+    if (fallback != null) {
+      final cardsRaw = fallback['insightCards'];
+      if (cardsRaw is List) {
+        return cardsRaw
+            .map((e) => InsightCard.fromJson(Map<String, dynamic>.from(e as Map)))
+            .where((c) => c.type.isNotEmpty)
+            .toList();
+      }
+    }
+    return [];
+  }
+
+  static Future<List<InsightCard>?> loadScratchCacheInternal() async {
+    final cached = await _loadCachedScratchBatch();
+    if (cached == null) return null;
+    final cardsRaw = cached['insightCards'];
+    if (cardsRaw is List) {
+      return cardsRaw
+          .map((e) => InsightCard.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return null;
   }
 
   static Future<Map<String, dynamic>?> _loadCachedDailyContent() async {

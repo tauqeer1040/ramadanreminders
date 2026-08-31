@@ -7,6 +7,15 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+import java.util.Properties
+import java.io.FileInputStream
+
+val keystoreProps = Properties()
+val keystorePropsFile = rootProject.file("key.properties")
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(FileInputStream(keystorePropsFile))
+}
+
 android {
     namespace = "com.taucity.meowmin"
     compileSdk = 36
@@ -40,10 +49,11 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("../meowmin-release.jks")
-            storePassword = "meowmin2026"
-            keyAlias = "meowmin-release"
-            keyPassword = "meowmin2026"
+            val storeFilePath = keystoreProps["storeFile"] as String? ?: "../meowmin-release.jks"
+            storeFile = file(storeFilePath)
+            storePassword = keystoreProps["storePassword"] as String? ?: "meowmin2026"
+            keyAlias = keystoreProps["keyAlias"] as String? ?: "meowmin-release"
+            keyPassword = keystoreProps["keyPassword"] as String? ?: "meowmin2026"
         }
     }
 
