@@ -31,7 +31,7 @@ class _CommitmentButtonState extends State<CommitmentButton>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 5),
     );
     _controller.addListener(() => setState(() {}));
     _controller.addStatusListener((status) {
@@ -122,11 +122,11 @@ class _CommitmentButtonState extends State<CommitmentButton>
       width: 84,
       height: 84,
       decoration: BoxDecoration(
-        color: const Color(0xFF22C55E),
+        color: Color(0xFFFACC15),
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF22C55E).withValues(alpha: 0.5),
+            color: Color(0xFFFACC15).withValues(alpha: 0.4),
             blurRadius: 20,
             spreadRadius: 4,
           ),

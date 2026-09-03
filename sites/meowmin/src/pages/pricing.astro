@@ -1,0 +1,345 @@
+---
+import Base from '../layouts/Base.astro';
+
+const title = 'Pricing';
+const description = 'Meowmin pricing — start with a 3-day free trial (no card required), then pick Yearly, 4-Month Challenge or Lifetime. Billed securely by Paddle.';
+---
+
+<Base title={title} description={description}>
+  <section class="py-12 sm:py-16 px-6 lg:px-8">
+    <div class="max-w-[960px] mx-auto">
+      <a class="inline-block mb-8 font-medium text-brand hover:text-brand-dark transition" href="/">&larr; Meowmin</a>
+
+      <div class="text-center mb-10">
+        <h1 class="text-4xl sm:text-5xl font-bold text-gray-900 tracking-tight">Simple, honest pricing</h1>
+        <p class="text-gray-500 text-lg mt-4 max-w-2xl mx-auto">Start with a <strong class="text-gray-900">3-day free trial</strong> — no credit card required. Then choose the pace that completes the Quran with you. No ads, ever.</p>
+        <p class="text-sm text-gray-400 mt-3">All prices in USD. Billed securely by <a href="https://www.paddle.com" target="_blank" rel="noopener" class="underline hover:text-gray-600">Paddle.com</a>, our Merchant of Record. Taxes (VAT/GST) calculated at checkout where applicable.</p>
+      </div>
+
+      <!-- Free trial vs Max -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
+        <div class="rounded-3xl border-2 border-green-200 bg-green-50/50 p-6 relative flex flex-col">
+          <span class="absolute -top-3 left-6 bg-green-600 text-white text-xs font-bold tracking-widest px-3 py-1 rounded-full">NO CREDIT CARD REQUIRED</span>
+          <h3 class="font-bold text-gray-900 mt-2">3-Day Free Trial</h3>
+          <p class="text-sm text-gray-500 mt-1">Try Meowmin for 3 days — no card needed</p>
+          <p class="text-3xl font-extrabold text-gray-900 mt-4">$0</p>
+          <p class="text-sm text-gray-500">for 3 days</p>
+          <ul class="mt-5 space-y-2 text-sm text-gray-700 flex-1">
+            <li class="flex gap-2"><span class="text-green-600">✓</span> 280 characters per entry — take it slow</li>
+            <li class="flex gap-2"><span class="text-green-600">✓</span> Daily Quran verses &amp; stories matched to your day</li>
+            <li class="flex gap-2"><span class="text-green-600">✓</span> Streak tracking from day 1</li>
+            <li class="flex gap-2"><span class="text-green-600">✓</span> Private, encrypted diary</li>
+          </ul>
+          <p class="text-xs text-gray-500 mt-4 bg-white/70 border border-green-100 rounded-xl px-3 py-2">After 3 days your journal stays at 280 characters until you pick a plan. No auto-charge.</p>
+          <a href="/app" class="mt-4 inline-flex w-full justify-center bg-green-600 text-white font-semibold px-6 py-3 rounded-2xl hover:bg-green-700 transition">Start free trial — no card required</a>
+        </div>
+        <div class="rounded-3xl border border-gray-200 bg-white p-6 relative flex flex-col">
+          <h3 class="font-bold text-gray-900">Meowmin Max</h3>
+          <p class="text-sm text-gray-500 mt-1">Your pace, not a pressure</p>
+          <p class="text-3xl font-extrabold text-gray-900 mt-4">from $1</p>
+          <p class="text-sm text-gray-500">then from $49.99 — see plans below</p>
+          <ul class="mt-5 space-y-2 text-sm text-gray-700 flex-1">
+            <li class="flex gap-2"><span class="text-brand">✓</span> 114 Surahs · habit over burnout</li>
+            <li class="flex gap-2"><span class="text-brand">✓</span> Streak shields — never lose progress</li>
+            <li class="flex gap-2"><span class="text-brand">✓</span> Family sharing (Lifetime)</li>
+            <li class="flex gap-2"><span class="text-brand">✓</span> Unlimited journal length from $49.99</li>
+          </ul>
+          <a href="#plans" class="mt-4 inline-flex w-full justify-center border border-gray-200 text-gray-800 font-semibold px-6 py-3 rounded-2xl hover:bg-gray-50 transition">Compare plans ↓</a>
+        </div>
+      </div>
+
+      <!-- Plans -->
+      <h2 id="plans" class="text-2xl font-bold text-gray-900 text-center">Choose your plan</h2>
+      <p class="text-center text-sm text-gray-500 mt-2">All subscriptions auto-renew until cancelled. Cancel anytime from the app or by email — see <a href="/refund" class="text-brand underline">Refund Policy</a>.</p>
+      <div id="checkout-status" class="hidden rounded-2xl border p-4 text-sm mb-6 text-center"></div>
+
+      <!-- Celebration screen — white page, black text like landing, hidden by default -->
+      <div id="celebration" class="hidden fixed inset-0 z-[80] overflow-y-auto bg-[#FFF8F0]">
+        <div class="min-h-full flex items-center justify-center p-6 sm:p-10">
+          <div class="relative w-full max-w-2xl overflow-hidden rounded-[2.5rem] bg-white p-8 sm:p-12 text-gray-900 text-center shadow-2xl border border-gray-100">
+          <div class="relative">
+            <div class="mx-auto w-20 h-20 rounded-full bg-gray-900 flex items-center justify-center shadow-xl mb-6">
+              <img src="/images/face.png" alt="" class="w-14 h-14 object-contain" />
+            </div>
+            <p class="text-brand font-bold tracking-[0.2em] text-xs uppercase mb-3">Allahu Akbar — Mabrook! 🎉</p>
+            <h2 class="text-3xl sm:text-4xl font-display font-black leading-tight text-gray-900">You’re in — Meowmin Max is yours!</h2>
+            <p class="text-gray-600 text-lg mt-4 max-w-2xl mx-auto leading-relaxed">
+              JazakAllahu khairan — thank you for choosing to invest in your deen. This is a big move, and the best way to learn deen: a little every day, with your own life as the lesson.
+            </p>
+            <div class="mt-8 grid grid-cols-3 gap-3 max-w-lg mx-auto text-center">
+              <div class="bg-gray-50 rounded-2xl py-4 border border-gray-200">
+                <div class="text-2xl font-black text-gray-900">114</div><div class="text-xs font-semibold tracking-widest text-gray-500">SURAHS AWAIT</div>
+              </div>
+              <div class="bg-gray-50 rounded-2xl py-4 border border-gray-200">
+                <div class="text-2xl font-black text-gray-900">360°</div><div class="text-xs font-semibold tracking-widest text-gray-500">OF YOUR LIFE</div>
+              </div>
+              <div class="bg-brand text-white rounded-2xl py-4">
+                <div class="text-2xl font-black">∞</div><div class="text-xs font-bold tracking-widest">SHIELDED STREAK</div>
+              </div>
+            </div>
+            <div class="mt-8 bg-gray-50 rounded-2xl p-6 text-left max-w-2xl mx-auto border border-gray-100">
+              <h3 class="font-bold text-gray-900 flex items-center gap-2"><span class="w-8 h-8 rounded-full bg-brand/10 text-brand flex items-center justify-center">✦</span> You’re about to change — for the better</h3>
+              <p class="text-sm text-gray-600 mt-3 leading-relaxed">
+                You’ve just chosen the habit that changes everything: <strong class="text-gray-900">write a little every day</strong>. Not a huge weekly task — a gentle, regular return to the Quran with your own day as the bridge. Show up for 2 minutes tomorrow, and the next day, and the next. Your streak shields will hold you when life gets busy. In 30 days you’ll remember more Quran than you have in years. In 120 days you’ll have walked through 114 Surahs. In a year you’ll be a different person — calmer, more grateful, closer to Allah.
+              </p>
+              <ul class="mt-4 space-y-2 text-sm text-gray-700">
+                <li class="flex gap-2"><span class="text-brand">→</span> <strong>Be regular:</strong> Open the app tomorrow and write one honest line. That’s it.</li>
+                <li class="flex gap-2"><span class="text-brand">→</span> <strong>Watch your shields:</strong> They grow with every plan — your streak never has to break.</li>
+                <li class="flex gap-2"><span class="text-brand">→</span> <strong>Feel it compound:</strong> Each verse now has your story attached. It sticks because it’s yours.</li>
+              </ul>
+            </div>
+            <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+              <a href="/app?checkout=success" class="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-2xl font-bold shadow-lg hover:bg-brand-dark transition">Open Meowmin &amp; write tonight →</a>
+              <a href="/app" class="inline-flex items-center justify-center gap-2 bg-white text-gray-900 border border-gray-200 px-8 py-4 rounded-2xl font-semibold hover:bg-gray-50 transition">Go to my streaks</a>
+            </div>
+            <p class="text-gray-400 text-xs mt-4">Need help? <a href="mailto:contact@taucity.xyz" class="underline hover:text-gray-900">contact@taucity.xyz</a> — we’re here.</p>
+            <button onclick="document.getElementById('celebration').classList.add('hidden'); document.body.style.overflow='';" class="mt-4 text-gray-400 text-xs underline hover:text-gray-900">Continue to pricing →</button>
+          </div>
+        </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
+        <!-- Monthly $1 Starter (capped) -->
+        <div class="rounded-3xl border border-gray-200 bg-white p-6 flex flex-col">
+          <h3 class="font-bold text-gray-900">Monthly — Starter</h3>
+          <p class="text-xs font-semibold tracking-widest text-brand mt-1">HABIT STARTER</p>
+          <div class="mt-4">
+            <span class="text-3xl font-extrabold text-gray-900">$1</span><span class="text-gray-500 text-sm"> first 30 days</span>
+            <p class="text-sm text-gray-500 mt-1">then <strong class="text-gray-900">$15 / month</strong></p>
+          </div>
+          <ul class="mt-5 space-y-2 text-sm text-gray-600 flex-1">
+            <li>• Billed monthly via Paddle</li>
+            <li>• 3 streak shields included</li>
+            <li>• 280 characters per entry — take it slow</li>
+            <li>• Cancel anytime</li>
+          </ul>
+          <p class="text-xs text-brand/80 mt-4 font-medium">Starter is for habit, not hurry — capped to avoid burnout. Upgrade for unlimited.</p>
+          <button data-price="pri_01m1h2jbnv7d7xs7eb8a9bswav" class="paddle-btn mt-4 inline-flex w-full justify-center bg-brand text-white font-semibold px-5 py-3 rounded-2xl hover:bg-brand-dark transition">Choose Starter →</button>
+        </div>
+
+        <!-- 4-Month Challenge -->
+        <div class="rounded-3xl border border-gray-200 bg-white p-6 flex flex-col relative">
+          <span class="absolute -top-3 left-6 bg-gold text-gray-900 text-xs font-bold tracking-widest px-3 py-1 rounded-full">114 SURAHS · 120 DAYS</span>
+          <h3 class="font-bold text-gray-900 mt-2">4-Month Challenge</h3>
+          <p class="text-xs font-semibold tracking-widest text-brand mt-1">COMPLETE QURAN IN 4 MONTHS</p>
+          <div class="mt-4">
+            <span class="text-3xl font-extrabold text-gray-900">$49.99</span><span class="text-gray-500 text-sm"> / 4 months</span>
+            <p class="text-sm text-gray-500 mt-1">≈ $12.50 / month</p>
+          </div>
+          <ul class="mt-5 space-y-2 text-sm text-gray-600 flex-1">
+            <li>• Billed every 4 months</li>
+            <li>• 18 streak shields included</li>
+            <li>• <strong>Unlimited</strong> journal length</li>
+            <li>• One Surah at a time</li>
+          </ul>
+          <p class="text-xs text-gray-400 mt-4">Auto-renews every 4 months until cancelled.</p>
+          <button data-price="pri_01m1h2jqbb7e3gjym5kqf88b54" class="paddle-btn mt-4 inline-flex w-full justify-center bg-brand text-white font-semibold px-5 py-3 rounded-2xl hover:bg-brand-dark transition shadow-md shadow-brand/20">Choose 4-Month →</button>
+        </div>
+
+        <!-- Yearly (promoted to hero) -->
+        <div class="rounded-3xl border-2 border-brand bg-white p-6 flex flex-col relative">
+          <span class="absolute -top-3 left-6 bg-gold text-gray-900 text-xs font-bold tracking-widest px-3 py-1 rounded-full">30 JUZ · 12 MONTHS</span>
+          <h3 class="font-bold text-gray-900 mt-2">Yearly</h3>
+          <p class="text-xs font-semibold tracking-widest text-green-600 mt-1">RECOMMENDED · BEST FOR CONSISTENCY</p>
+          <div class="mt-4">
+            <span class="text-3xl font-extrabold text-gray-900">$99.99</span><span class="text-gray-500 text-sm"> / year</span>
+            <p class="text-sm text-gray-500 mt-1">≈ $8.33 / month — save 44%</p>
+          </div>
+          <ul class="mt-5 space-y-2 text-sm text-gray-600 flex-1">
+            <li>• Billed annually</li>
+            <li>• 72 streak shields included</li>
+            <li>• <strong>Unlimited</strong> journal length</li>
+            <li>• Complete Quran at a sustainable pace</li>
+          </ul>
+          <p class="text-xs text-gray-400 mt-4">Auto-renews yearly until cancelled. Cancel anytime.</p>
+          <button data-price="pri_01m1h2jqe88brc2grgnr20jv80" class="paddle-btn mt-4 inline-flex w-full justify-center bg-brand text-white font-semibold px-5 py-3 rounded-2xl hover:bg-brand-dark transition">Choose Yearly →</button>
+        </div>
+
+        <!-- Lifetime -->
+        <div class="rounded-3xl border border-gray-900 bg-gray-900 text-white p-6 flex flex-col">
+          <h3 class="font-bold">Lifetime — Gift of Allah</h3>
+          <p class="text-xs font-semibold tracking-widest text-gold mt-1">PAY ONCE · OWN FOREVER</p>
+          <div class="mt-4">
+            <span class="text-3xl font-extrabold">$199</span><span class="text-white/60 text-sm"> one-time</span>
+            <p class="text-sm text-white/60 mt-1">no renewals, ever</p>
+          </div>
+          <ul class="mt-5 space-y-2 text-sm text-white/80 flex-1">
+            <li>• One-time payment — lifetime access</li>
+            <li>• 150 streak shields — shared pool</li>
+            <li>• <strong class="text-white">Unlimited</strong> length — forever</li>
+            <li>• Share with up to <strong class="text-white">3 users</strong> (invite by email, transferable)</li>
+          </ul>
+          <p class="text-xs text-white/50 mt-4">Like lending a game CD to family. We won't pull it back.</p>
+          <button data-price="pri_01m1h2jqghnv9yj6k50fqf0wtr" class="paddle-btn mt-4 inline-flex w-full justify-center bg-brand text-white font-semibold px-5 py-3 rounded-2xl hover:bg-brand-dark transition">Choose Lifetime →</button>
+        </div>
+      </div>
+
+      <!-- Consumable -->
+      <div class="mt-6 rounded-3xl border border-dashed border-gray-300 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h3 class="font-bold text-gray-900">Need an extra shield? — Streak Shield</h3>
+          <p class="text-sm text-gray-500 mt-1">One-time, consumable. Adds 1 shield to your balance. Use it to repair a missed day.</p>
+        </div>
+        <div class="text-right flex-shrink-0">
+          <p class="text-2xl font-extrabold text-gray-900">$0.99 <span class="text-sm font-medium text-gray-500">/ shield</span></p>
+          <p class="text-xs text-gray-400">Non-renewing · no subscription</p>
+          <button data-price="pri_01m1h2jqjntx6pec1arz3fzw48" class="paddle-btn mt-3 inline-flex w-full sm:w-auto justify-center bg-brand text-white font-semibold px-6 py-3 rounded-2xl hover:bg-brand-dark transition shadow-md shadow-brand/20">Buy shield →</button>
+        </div>
+      </div>
+
+      <!-- Billing details -->
+      <div class="mt-12 rounded-3xl bg-gray-900 text-white p-8">
+        <h2 class="text-xl font-bold">How billing works</h2>
+        <div class="grid sm:grid-cols-2 gap-6 mt-6 text-sm leading-relaxed text-white/80">
+          <div>
+            <h3 class="font-semibold text-white">Merchant of Record</h3>
+            <p class="mt-1">Payments are processed by <strong class="text-white">Paddle.com Market Ltd</strong>, our Merchant of Record. Your statement will show <code class="bg-white/10 px-1.5 py-0.5 rounded">PADDLE.NET* MEOWMIN</code> or similar. Paddle handles VAT/GST, invoicing, and refunds.</p>
+          </div>
+          <div>
+            <h3 class="font-semibold text-white">Auto-renewal &amp; cancellation</h3>
+            <p class="mt-1">Subscriptions auto-renew at the end of each period. Cancel anytime from the app (<strong class="text-white">Profile → Manage Subscription</strong>) or email <a href="mailto:contact@taucity.xyz" class="underline text-white">contact@taucity.xyz</a>. Access continues until the current period ends.</p>
+          </div>
+          <div>
+            <h3 class="font-semibold text-white">Currency &amp; taxes</h3>
+            <p class="mt-1">All prices shown in <strong class="text-white">USD</strong>. If your card is in another currency, your bank converts at its rate. Taxes (VAT/GST) are added at checkout when required and collected by Paddle.</p>
+          </div>
+          <div>
+            <h3 class="font-semibold text-white">Trials &amp; Starter</h3>
+            <p class="mt-1"><strong class="text-white">3-day free trial</strong> needs no card — 280 characters per entry, gentle start. <strong class="text-white">Starter $1 first 30 days</strong> is also capped at 280 chars to build habit slowly without burnout. After 30 days it renews at $15/mo. Upgrade to 4-Month, Yearly or Lifetime for unlimited.</p>
+          </div>
+        </div>
+        <p class="text-xs text-white/50 mt-6">Questions? <a href="mailto:contact@taucity.xyz" class="underline hover:text-white">contact@taucity.xyz</a> — we reply within 1–2 business days. See our <a href="/refund" class="underline hover:text-white">Refund Policy</a>, <a href="/terms" class="underline hover:text-white">Terms</a> and <a href="/privacy" class="underline hover:text-white">Privacy Policy</a>.</p>
+      </div>
+
+      <!-- FAQ -->
+      <div class="mt-12 max-w-3xl mx-auto">
+        <h2 class="text-2xl font-bold text-gray-900 text-center">Pricing FAQ</h2>
+        <div class="mt-8 space-y-6 text-sm leading-relaxed">
+          <div>
+            <h3 class="font-semibold text-gray-900">Can I switch plans?</h3>
+            <p class="text-gray-600 mt-1">Yes. Change or cancel from the app or email us. Downgrades take effect at the next renewal; upgrades are immediate (Paddle prorates where applicable).</p>
+          </div>
+          <div>
+            <h3 class="font-semibold text-gray-900">What about the family sharing on Lifetime?</h3>
+            <p class="text-gray-600 mt-1">Lifetime owners can invite up to 2 family/friends by email (3 users total including you). Invites are transferable — you can revoke and re-invite. Shields (150) are a shared pool.</p>
+          </div>
+          <div>
+            <h3 class="font-semibold text-gray-900">Where do I get invoices / receipts?</h3>
+            <p class="text-gray-600 mt-1">Paddle emails a receipt after each charge. You can also request invoices at <a href="mailto:contact@taucity.xyz" class="text-brand underline">contact@taucity.xyz</a>.</p>
+          </div>
+          <div>
+            <h3 class="font-semibold text-gray-900">Is there a free trial?</h3>
+            <p class="text-gray-600 mt-1">Yes — <strong>3 days free, no credit card required</strong>, capped at 280 characters per entry from day 1. After 3 days your journal stays 280 chars until you pick a plan. The $1 Starter is also capped at 280 chars on purpose — it’s for habit, not hurry.</p>
+          </div>
+          <div>
+            <h3 class="font-semibold text-gray-900">Why is the $1 Starter still capped at 280 characters?</h3>
+            <p class="text-gray-600 mt-1">We keep Starter at 280 chars to encourage a little every day rather than a burnout burst. Consistent beats intense — research also shows putting a small amount down makes you take it more seriously. When you’re ready to pour more, Yearly and the 4-Month Challenge unlock unlimited length. You can also buy extra $0.99 shields anytime.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-12 text-center">
+        <a href="/app" class="inline-flex items-center gap-2 bg-brand text-white px-8 py-4 rounded-2xl hover:bg-brand-dark transition font-semibold text-lg shadow-lg shadow-brand/20">Start free trial — no card required <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg></a>
+        <p class="text-xs text-gray-400 mt-3">Secure Paddle checkout · Purple branded · Cancel anytime · 3-day trial no card needed</p>
+      </div>
+    </div>
+  </section>
+
+  <script is:inline src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.4/dist/confetti.browser.min.js"></script>
+  <script is:inline src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+  <script is:inline>
+    const PADDLE_CLIENT_TOKEN = 'live_5cb906ee26aa4f9fb9f0c9d52e7';
+    const statusEl = document.getElementById('checkout-status');
+    const celebrationEl = document.getElementById('celebration');
+    const plansGrid = document.querySelector('.grid.grid-cols-1.sm\\:grid-cols-2.lg\\:grid-cols-4');
+    const billingSection = document.querySelector('.bg-gray-900.rounded-\\[2\\.5rem\\]') || document.querySelector('.bg-gray-900');
+    function showStatus(msg, isError) {
+      if (!statusEl) return;
+      statusEl.className = isError ? 'rounded-2xl border border-red-200 bg-red-50 text-red-800 p-4 text-sm mb-6 text-center' : 'rounded-2xl border border-green-200 bg-green-50 text-green-800 p-4 text-sm mb-6 text-center';
+      statusEl.textContent = msg;
+      statusEl.classList.remove('hidden');
+      statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    function showCelebration() {
+      if (!celebrationEl) return;
+      celebrationEl.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      // also hide background scroll hint
+      // celebration is fixed overlay - no need to hide grid
+      // normal celebration — ~80% less confetti, 3 seconds
+      let duration = 3000;
+      let end = Date.now() + duration;
+      let colors = ['#9d50ff','#facc15','#D6DF7E','#FAA49A','#A0C4FF'];
+      (function frame() {
+        if (window.confetti) {
+          window.confetti({ particleCount: 2, angle: 60, spread: 65, origin: { x: 0, y: 0.65 }, colors });
+          window.confetti({ particleCount: 2, angle: 120, spread: 65, origin: { x: 1, y: 0.65 }, colors });
+        }
+        if (Date.now() < end) requestAnimationFrame(frame);
+      })();
+      setTimeout(() => { if (window.confetti) window.confetti({ particleCount: 30, spread: 80, origin: { x: 0.5, y: 0.5 }, colors }); }, 400);
+      if (navigator.vibrate) navigator.vibrate(30);
+    }
+    try {
+      if (window.Paddle) {
+        Paddle.Environment.set('production');
+        Paddle.Initialize({
+          token: PADDLE_CLIENT_TOKEN,
+          pwCustomer: undefined,
+          eventCallback: function(data) { console.log('[Paddle] event', data); }
+        });
+        const savedCtm = localStorage.getItem('paddle_customer_id');
+        if (savedCtm) { try { Paddle.Initialize({ pwCustomer: { id: savedCtm }, token: PADDLE_CLIENT_TOKEN }); } catch(e) {} }
+      }
+    } catch (e) { console.error(e); }
+
+    document.querySelectorAll('.paddle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const priceId = btn.dataset.price;
+        if (!window.Paddle) return showStatus('Paddle not loaded — check domain approval', true);
+        let appUserId = null;
+        try { appUserId = localStorage.getItem('firebase:authUser') || localStorage.getItem('appUserId') || null; } catch(_) {}
+        const customData = appUserId ? { appUserId } : undefined;
+        try {
+          Paddle.Checkout.open({
+            items: [{ priceId, quantity: 1 }],
+            customData,
+            settings: { displayMode: 'overlay', theme: 'light', successUrl: window.location.origin + '/pricing?checkout=success' }
+          });
+        } catch (e) { showStatus('Checkout failed: ' + e.message, true); }
+      });
+    });
+
+    window.addEventListener('message', (event) => {
+      try {
+        const data = event.data;
+        if (data && data.event === 'checkout.completed') {
+          const ctm = data.data?.customer?.id;
+          if (ctm) localStorage.setItem('paddle_customer_id', ctm);
+          showCelebration();
+        }
+      } catch(_) {}
+    });
+
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('checkout') === 'success') showCelebration();
+      if (params.get('checkout') === 'canceled') showStatus('Checkout canceled — try again anytime.', true);
+      // auto-open if ?price=pri_... is present (pricing now IS checkout)
+      const priceId = params.get('price');
+      if (priceId && /^pri_[a-z0-9]{26}$/.test(priceId)) {
+        const btn = document.querySelector(`.paddle-btn[data-price="${priceId}"]`);
+        if (btn) {
+          btn.closest('.rounded-3xl')?.classList.add('ring-2','ring-brand','ring-offset-2');
+          btn.classList.add('animate-pulse');
+          let tries = 0;
+          const tid = setInterval(() => {
+            if (window.Paddle && window.Paddle.Checkout) { clearInterval(tid); btn.click(); }
+            else if (++tries > 60) clearInterval(tid);
+          }, 150);
+        }
+      }
+    })();
+  </script>
+</Base>

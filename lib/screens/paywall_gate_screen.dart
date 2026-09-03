@@ -192,7 +192,7 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '3-Day Trial',
+                              '30-Day Trial',
                               style: TextStyle(
                                 color: AppTheme.starWhite,
                                 fontSize: 18,

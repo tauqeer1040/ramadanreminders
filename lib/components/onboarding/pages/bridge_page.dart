@@ -54,7 +54,7 @@ class BridgePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      "Most people read the Quran without ever connecting it to their daily life. Meowmin builds you a custom plan \u2014 you journal what's on your heart, and we pair it with Quran verses and reflections that speak directly to your situation. It's a personal roadmap designed around your life, your struggles, and your growth.",
+                      "Most people will keep reading without understanding. You won't. Here's how it works. Make your bed. Write one thought. Go to sleep. By morning, a Quran verse that speaks to your exact situation is waiting. That's the routine. 30 nights. No thinking required.",
                       style: tt.bodyLarge?.copyWith(
                         color: cs.onSurface.withValues(alpha: 0.7),
                       ),
@@ -102,7 +102,7 @@ class BridgePage extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
-                                  "Start my plan",
+                                  "Start writing",
                                   style: TextStyle(
                                     fontSize: 16,
                                     color: cs.onSurface,

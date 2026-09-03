@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import 'analytics_protocol.dart';
 import 'analytics_service.dart';
 import 'invite_service.dart';
+import '../core/constants.dart';
 
 class StreakResult {
   final int streak;
@@ -24,6 +27,7 @@ class StreakService {
   static const _lastActivityDateKey = 'last_activity_date';
   static const _activityDatesKey = 'streak_activity_dates';
   static const _claimedPrimesKey = 'claimed_prime_rewards';
+  static const _shieldBalanceKey = 'shield_balance';
 
   static AnalyticsProtocol _analytics = AnalyticsService.instance;
 
@@ -55,6 +59,41 @@ class StreakService {
     return result;
   }
 
+  static Future<int> getShieldBalance() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${AppConstants.backendUrl}/subscription/shields'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final shields = data['shields'] as int? ?? 0;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt(_shieldBalanceKey, shields);
+        return shields;
+      }
+    } catch (_) {}
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_shieldBalanceKey) ?? 0;
+  }
+
+  static Future<int> consumeShields(int daysGap) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConstants.backendUrl}/shop/shield-consume'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'daysGap': daysGap}),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final remaining = data['remaining'] as int? ?? 0;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt(_shieldBalanceKey, remaining);
+        return data['consumed'] as int? ?? 0;
+      }
+    } catch (_) {}
+    return 0;
+  }
+
   static Future<StreakResult> checkAndUpdateStreak() async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now();
@@ -74,7 +113,25 @@ class StreakService {
       final lastDate = DateTime.parse(lastDateStr);
       final normalizedToday = DateTime(today.year, today.month, today.day);
       final yesterday = normalizedToday.subtract(const Duration(days: 1));
-      streak = lastDate == yesterday ? streak + 1 : 1;
+      if (lastDate == yesterday) {
+        streak += 1;
+      } else {
+        final gap = normalizedToday.difference(DateTime(lastDate.year, lastDate.month, lastDate.day)).inDays;
+        if (gap > 1) {
+          final consumed = await consumeShields(gap);
+          if (consumed > 0) {
+            _analytics.logEvent('streak_shield_used', params: {
+              'gap': gap.toString(),
+              'consumed': consumed.toString(),
+            });
+            streak = streak;
+          } else {
+            streak = 1;
+          }
+        } else {
+          streak = 1;
+        }
+      }
     }
 
     if (streak < 1) streak = 1;

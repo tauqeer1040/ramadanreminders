@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../lib/db');
-const { purchaseItemSchema } = require('../lib/validation');
+const { purchaseItemSchema, shieldConsumeSchema } = require('../lib/validation');
 const { assetRoot } = require('../lib/runtime');
 
 const SHOP_ASSETS_DIR = assetRoot();
@@ -84,6 +84,97 @@ module.exports = function (app) {
       res.json({ success: true, stars: newStars });
     } catch (error) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/v2/shop/shield-grant', async (req, res) => {
+    const uid = req.uid;
+    const { purchaseToken, productId } = req.body;
+
+    if (!purchaseToken || !productId) {
+      return res.status(400).json({ error: 'purchaseToken and productId required' });
+    }
+
+    if (!productId.includes('streak-shield')) {
+      return res.status(400).json({ error: 'Invalid product' });
+    }
+
+    try {
+      if (process.env.REVENUECAT_API_SECRET) {
+        const verifyUrl = `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}`;
+        const rcRes = await fetch(verifyUrl, {
+          headers: { Authorization: `Bearer ${process.env.REVENUECAT_API_SECRET}` },
+        });
+        if (rcRes.ok) {
+          const rcData = await rcRes.json();
+          const subs = rcData?.subscriber?.subscriptions || {};
+          const hasActive = Object.values(subs).some(s =>
+            s.expires_at && Date.now() < new Date(s.expires_at).getTime()
+          );
+          if (!hasActive) {
+            const nonSubPurchase = rcData?.subscriber?.non_subscription_transactions?.find(
+              t => t.product_identifier?.includes('streak-shield') && t.purchase_token === purchaseToken
+            );
+            if (!nonSubPurchase) {
+              console.warn(`[Shield Grant] No matching purchase found for ${uid}`);
+            }
+          }
+        }
+      }
+
+      await db.execute({
+        sql: 'UPDATE users SET shield_balance = COALESCE(shield_balance, 0) + 1 WHERE id = ?',
+        args: [uid],
+      });
+
+      const result = await db.execute({
+        sql: 'SELECT shield_balance FROM users WHERE id = ?',
+        args: [uid],
+      });
+
+      res.json({
+        success: true,
+        shields: result.rows[0]?.shield_balance ?? 1,
+      });
+    } catch (error) {
+      console.error('[Shield Grant] Error:', error.message);
+      res.status(500).json({ error: 'Failed to grant shield' });
+    }
+  });
+
+  app.post('/api/v2/shop/shield-consume', async (req, res) => {
+    const parsed = shieldConsumeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors });
+    }
+    const { daysGap } = parsed.data;
+    const uid = req.uid;
+
+    try {
+      const result = await db.execute({
+        sql: 'SELECT shield_balance FROM users WHERE id = ?',
+        args: [uid],
+      });
+      const shields = result.rows[0]?.shield_balance ?? 0;
+
+      if (shields <= 0) {
+        return res.status(400).json({ error: 'No shields available', shields: 0 });
+      }
+
+      const consumed = Math.min(shields, daysGap);
+      await db.execute({
+        sql: 'UPDATE users SET shield_balance = shield_balance - ? WHERE id = ?',
+        args: [consumed, uid],
+      });
+
+      res.json({
+        success: true,
+        consumed,
+        remaining: shields - consumed,
+      });
+    } catch (error) {
+      console.error('[Shield Consume] Error:', error.message);
+      res.status(500).json({ error: 'Failed to consume shield' });
     }
   });
 };

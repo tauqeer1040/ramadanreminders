@@ -59,6 +59,14 @@ const acceptInviteSchema = z.object({
   myCat: z.string().nullish(),
 });
 
+const transferLifetimeSchema = z.object({
+  recipientEmail: z.string().email(),
+});
+
+const shieldConsumeSchema = z.object({
+  daysGap: z.number().int().min(1).max(7),
+});
+
 module.exports = {
   upsertUserSchema,
   syncJournalsSchema,
@@ -71,4 +79,6 @@ module.exports = {
   subscriptionSyncSchema,
   syncStreakSchema,
   acceptInviteSchema,
+  transferLifetimeSchema,
+  shieldConsumeSchema,
 };

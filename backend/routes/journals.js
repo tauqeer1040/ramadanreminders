@@ -7,6 +7,16 @@ const { scheduleProcessSoon } = require('../lib/ai-engine');
 const { buildDailyContent } = require('../lib/quran');
 const { syncJournalsSchema, createJournalSchema } = require('../lib/validation');
 
+const FREE_CHAR_LIMIT = 280;
+
+async function isSubscribed(uid) {
+  const result = await db.execute({
+    sql: 'SELECT subscription_status FROM users WHERE id = ?',
+    args: [uid],
+  });
+  return result.rows[0]?.subscription_status === 'active';
+}
+
 module.exports = function (app, apiLimiter) {
   app.get('/api/v2/user/:uid/journals', async (req, res) => {
     if (req.params.uid !== req.uid) return res.status(403).json({ error: 'Forbidden' });
@@ -76,13 +86,21 @@ module.exports = function (app, apiLimiter) {
     try {
       await upsertUser(uid, displayName, email);
 
+      const subscribed = await isSubscribed(uid);
+
       let syncedCount = 0;
       let newCount = 0;
+      const skipped = [];
       for (const journal of journals) {
         if (!journal?.id || !journal?.text || !String(journal.text).trim()) continue;
+        const trimmed = String(journal.text).trim();
+        if (!subscribed && trimmed.length > FREE_CHAR_LIMIT) {
+          skipped.push({ id: journal.id, reason: 'text_too_long', limit: FREE_CHAR_LIMIT });
+          continue;
+        }
         const existing = await db.execute({ sql: 'SELECT 1 FROM journal_entries WHERE id = ?', args: [journal.id] });
         const isNew = existing.rows.length === 0;
-        await upsertJournal(uid, { id: journal.id, text: String(journal.text).trim() });
+        await upsertJournal(uid, { id: journal.id, text: trimmed });
         syncedCount += 1;
         if (isNew) newCount += 1;
       }
@@ -106,6 +124,7 @@ module.exports = function (app, apiLimiter) {
         newCount,
         stars,
         status: syncedCount > 0 ? 'pending' : 'noop',
+        skipped: skipped.length > 0 ? skipped : undefined,
       });
     } catch (error) {
       console.error('[SYNC ERROR]', error.message);
@@ -122,11 +141,22 @@ module.exports = function (app, apiLimiter) {
     const uid = req.uid;
 
     try {
+      const subscribed = await isSubscribed(uid);
+      const trimmed = String(text).trim();
+      if (!subscribed && trimmed.length > FREE_CHAR_LIMIT) {
+        return res.status(429).json({
+          error: 'Journal exceeds free limit',
+          limit: FREE_CHAR_LIMIT,
+          length: trimmed.length,
+          upgrade: 'Meowmin Max subscribers have no character limit.',
+        });
+      }
+
       const existing = await db.execute({ sql: 'SELECT 1 FROM journal_entries WHERE id = ?', args: [id] });
       const isNew = existing.rows.length === 0;
 
       await upsertUser(uid);
-      await upsertJournal(uid, { id, text: String(text).trim() });
+      await upsertJournal(uid, { id, text: trimmed });
       await recalculateUserMetadata(uid);
       clearUserCache(uid);
       scheduleProcessSoon();

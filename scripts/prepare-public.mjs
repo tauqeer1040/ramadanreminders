@@ -74,10 +74,9 @@ try {
 }
 
 // 2c. Copy HTML splash assets — Flutter doesn't bundle assets/splash/ into the
-//     build output, but index.html references them directly via <video>/<img>
-//     and <link rel="preload">. Use the animated WebM/MP4 (47/64 KB) instead of
-//     the old splash.gif (591 KB), with gif.webp (21 KB) as the instant poster.
-for (const name of ['gif.webp', 'splash.webm', 'splash.mp4']) {
+//     build output, but index.html references them directly via <img>/<video>
+//     and <link rel="preload">. splash.gif is the hero (368 KB).
+for (const name of ['splash.gif', 'gif.webp', 'splash.webm', 'splash.mp4']) {
   const splashSrc = path.join(root, 'assets', 'splash', name);
   const splashDest = path.join(publicDir, 'app', 'assets', 'assets', 'splash', name);
   if (pathExists(splashSrc)) {

@@ -1,0 +1,248 @@
+---
+const cards = [
+  {
+    cover: '/screenshots/scratch/shop_13.webp',
+    bg: '#D6DF7E',
+    text: '#13441A',
+    accent: '#187B25',
+    title: 'An Ayah to Hold Onto',
+    body: '“And He found you lost and guided you.” Every step you take toward Him, He runs toward you. Your reflection today is proof that He has already placed a light in your heart.',
+    pill: 'Quran 93:7',
+  },
+  {
+    cover: '/screenshots/scratch/shop_15.webp',
+    bg: '#FAA49A',
+    text: '#4E1106',
+    accent: '#C4391D',
+    title: 'A Surah for You',
+    body: 'Your journey mirrors Surah Ad-Duha — after every night comes the morning light. Allah never abandoned you, and what lies ahead is far greater than what has passed.',
+    pill: 'Quran 93:1-5',
+  },
+  {
+    cover: '/screenshots/scratch/shop_17.webp',
+    bg: '#A0C4FF',
+    text: '#00154F',
+    accent: '#0052FF',
+    title: 'A Story to Remember',
+    body: 'Like the Companion who came to the Prophet ﷺ with a heavy heart, you too have chosen to speak your truth. “There is no Muslim who calls upon Allah, except that Allah grants him what he asks.”',
+    pill: 'Tirmidhi',
+  },
+];
+---
+
+<!-- Swiper CSS via CDN to avoid build import issues, loaded async -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+
+<div class="max-w-6xl mx-auto py-4">
+  <!-- Desktop: stacked cards deck (swiper cards effect), Mobile: same deck, centered - extra breathing room -->
+  <div class="swiper scratch-swiper mx-auto my-6" style="width:min(78vw,340px); height:560px; padding:12px 0;">
+    <div class="swiper-wrapper">
+      {cards.map((c) => (
+        <div class="swiper-slide">
+          <div
+            class="scratch-card relative w-full h-full overflow-hidden"
+            data-cover={c.cover}
+            style={`background:${c.bg}; border-color:${c.text};`}
+          >
+            <div class="sc-content flex flex-col items-center justify-center h-full text-center overflow-y-auto" style={`color:${c.text}; padding:28px;`}>
+              <div class="flex items-center gap-2.5 mb-4">
+                <img src="/images/face.png" alt="" width="32" height="32" class="w-8 h-8 rounded-full object-cover flex-shrink-0" loading="lazy" />
+                <p class="font-bold text-base sm:text-lg tracking-tight" style={`color:${c.text};`}>{c.title}</p>
+              </div>
+              <p class="text-[20px] sm:text-[22px] leading-[1.5] font-medium">{c.body}</p>
+              <div class="mt-4">
+                <span class="text-xs font-semibold px-3.5 py-1.5 rounded-full border inline-block" style={`background:${c.accent}1F; color:${c.text}; border-color:${c.text}26;`}>{c.pill}</span>
+              </div>
+              <p class="mt-3 text-[11px] opacity-60">from your journal</p>
+            </div>
+            <canvas class="scratch-canvas absolute inset-0 w-full h-full block touch-none select-none" style="border-radius:32px;"></canvas>
+            <div class="scratch-hint absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span class="bg-black/70 text-white text-xs font-semibold px-3.5 py-1.5 rounded-full backdrop-blur">Scratch to reveal →</span>
+            </div>
+            <div class="shimmer pointer-events-none absolute inset-0" style="border-radius:32px;"></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+  <p class="text-center text-xs text-gray-400 mt-4">Scratch with finger or mouse, then swipe the card →</p>
+</div>
+
+<style>
+  .scratch-card {
+    height: 560px;
+    border-radius: 32px;
+    border: 2px solid;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+    margin: 12px 0;
+  }
+  .scratch-swiper {
+    margin: 24px auto !important;
+  }
+  .scratch-card canvas {
+    border-radius: 32px;
+    display: block;
+  }
+  .shimmer {
+    background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,0.85) 50%, transparent 70%);
+    background-size: 200% 100%;
+    animation: shimmerMove 2s infinite;
+    mix-blend-mode: overlay;
+    border-radius: 32px;
+    opacity: 0.22;
+  }
+  @keyframes shimmerMove {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .shimmer { animation: none; }
+  }
+  /* Swiper cards effect tuning to match app's CardSwiper numberOfCardsDisplayed:2 */
+  .scratch-swiper .swiper-slide {
+    border-radius: 32px;
+    overflow: hidden;
+  }
+  .swiper.scratch-swiper {
+    overflow: visible;
+  }
+</style>
+
+<script>
+  // lazy init when section enters viewport
+  const swiperEl = document.querySelector('.scratch-swiper');
+  if (swiperEl) {
+    const observer = new IntersectionObserver(async (entries) => {
+      if (!entries[0].isIntersecting) return;
+      observer.disconnect();
+
+      // dynamic import Swiper + confetti to keep main bundle small
+      const [{ default: Swiper }, { EffectCards }] = await Promise.all([
+        import('swiper'),
+        import('swiper/modules')
+      ]);
+      // eslint-disable-next-line no-undef
+      const { default: confetti } = await import('canvas-confetti').catch(() => ({ default: null }));
+
+      // init swiper - cards effect, loop like app, grabCursor handled per card reveal state
+      const swiper = new Swiper('.scratch-swiper', {
+        modules: [EffectCards],
+        effect: 'cards',
+        grabCursor: true,
+        loop: true,
+        cardsEffect: { slideShadows: false, perSlideOffset: 8, perSlideRotate: 1.5 },
+        threshold: 12, // small threshold so slight drag still scratches, not swipes
+        touchStartPreventDefault: false,
+        // prevent swiper from capturing when scratching
+        touchMoveStopPropagation: false,
+      });
+
+      // init scratch canvases
+      const cards = document.querySelectorAll('.scratch-card');
+      cards.forEach((el) => {
+        const canvas = el.querySelector('canvas');
+        const hint = el.querySelector('.scratch-hint');
+        const shimmer = el.querySelector('.shimmer');
+        const coverSrc = el.dataset.cover;
+        const w = el.clientWidth;
+        const h = el.clientHeight;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.scale(dpr, dpr);
+
+        let isDrawing = false;
+        let revealed = false;
+        let lastX = 0, lastY = 0;
+
+        const img = new Image();
+        img.src = coverSrc;
+        img.onload = () => {
+          // cover fit: like app's Image.asset fit: cover - centered crop
+          const iw = img.width, ih = img.height;
+          const scale = Math.max(w / iw, h / ih);
+          const nw = iw * scale, nh = ih * scale;
+          const dx = (w - nw) / 2, dy = (h - nh) / 2;
+          ctx.drawImage(img, dx, dy, nw, nh);
+        };
+        img.onerror = () => {
+          ctx.fillStyle = '#e9e5dc';
+          ctx.fillRect(0, 0, w, h);
+        };
+
+        const getPos = (e) => {
+          const rect = canvas.getBoundingClientRect();
+          const src = e.touches ? e.touches[0] : e;
+          return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+        };
+        const scratch = (x, y) => {
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y);
+          ctx.lineWidth = 32; ctx.lineCap = 'round'; ctx.stroke();
+          lastX = x; lastY = y;
+          if (hint) hint.style.opacity = '0';
+          if (shimmer) shimmer.style.opacity = '0';
+          if (!revealed && Math.random() < 0.10) checkPercent();
+        };
+        const checkPercent = () => {
+          try {
+            const data = ctx.getImageData(0, 0, w, h).data;
+            let clear = 0;
+            for (let i = 3; i < data.length; i += 4) if (data[i] === 0) clear++;
+            if (clear / (w * h) > 0.68 && !revealed) { // 3x harder: 0.35 -> 0.68 (~2x area) + half brush = ~3x work
+              revealed = true;
+              canvas.style.transition = 'opacity 550ms ease';
+              canvas.style.opacity = '0';
+              canvas.style.pointerEvents = 'none';
+              if (hint) hint.style.display = 'none';
+              // enable swipe now (disable noSwiping)
+              el.classList.remove('swiper-no-swiping');
+              if (confetti) confetti({ particleCount: 45, spread: 65, origin: { y: 0.62 }, colors: ['#9d50ff','#facc15','#D6DF7E','#FAA49A','#A0C4FF'] });
+              if (navigator.vibrate) navigator.vibrate(30);
+              swiper.allowTouchMove = true;
+            }
+          } catch(e) {}
+        };
+        const onDown = (e) => {
+          // lock swiper while scratching unrevealed
+          if (!revealed) swiper.allowTouchMove = false;
+          isDrawing = true;
+          const p = getPos(e);
+          lastX = p.x; lastY = p.y;
+          scratch(p.x, p.y);
+          e.preventDefault();
+        };
+        const onMove = (e) => {
+          if (!isDrawing || revealed) return;
+          const p = getPos(e);
+          scratch(p.x, p.y);
+          e.preventDefault();
+        };
+        const onUp = () => {
+          isDrawing = false;
+          if (!revealed) { checkPercent(); swiper.allowTouchMove = false; } else { swiper.allowTouchMove = true; }
+        };
+        canvas.addEventListener('mousedown', onDown);
+        canvas.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        canvas.addEventListener('touchstart', onDown, { passive: false });
+        canvas.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('touchend', onUp);
+        // prevent swiper swipe until revealed
+        el.classList.add('swiper-no-swiping');
+        // tap to reveal fallback
+        el.addEventListener('click', () => {
+          if (window.matchMedia('(prefers-reduced-motion: reduce)').matches && !revealed) {
+            canvas.style.opacity = '0'; canvas.style.pointerEvents = 'none'; revealed = true; el.classList.remove('swiper-no-swiping');
+          }
+        });
+      });
+    }, { rootMargin: '240px' });
+    observer.observe(swiperEl);
+  }
+</script>

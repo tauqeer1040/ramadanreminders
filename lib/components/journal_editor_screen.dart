@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/journal_service.dart';
 import '../services/insight_service.dart';
 import '../core/app_background.dart';
+import 'widgets/tweet_counter.dart';
 
 class JournalEditorScreen extends StatefulWidget {
   final String? initialDate;
@@ -14,8 +16,11 @@ class JournalEditorScreen extends StatefulWidget {
 }
 
 class _JournalEditorScreenState extends State<JournalEditorScreen> {
+  static const int _maxChars = 280;
+
   late TextEditingController _controller;
   bool _isSaving = false;
+  bool _showedLimitToast = false;
   // Generate a totally unique ID for new journals so users can create multiple per day
   late String _journalDate;
 
@@ -54,6 +59,13 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
     // Syncing to the cloud still happens in batches later (e.g., at midnight or on app launch).
     await JournalService.saveLocalJournalWithId(_journalDate, text);
 
+    // Show "write more with pro" hint when limit is first reached
+    if (text.length >= _maxChars && !_showedLimitToast && mounted) {
+      _showedLimitToast = true;
+      HapticFeedback.lightImpact();
+    }
+    if (text.length < _maxChars) _showedLimitToast = false;
+
     if (mounted) setState(() => _isSaving = false);
   }
 
@@ -68,9 +80,7 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: cs.onSurface),
@@ -113,6 +123,9 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
                   autofocus: widget.initialDate == null, // Auto-focus if writing a new one
                   maxLines: null,
                   minLines: 6,
+                  maxLength: _maxChars,
+                  maxLengthEnforcement: MaxLengthEnforcement.none,
+                  buildCounter: (context, {currentLength = 0, isFocused = false, maxLength = 280}) => null,
                   textCapitalization: TextCapitalization.sentences,
                   style: TextStyle(
                     fontSize: 18,
@@ -128,6 +141,10 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
                     ),
                     border: InputBorder.none,
                   ),
+                ),
+                TweetCounter(
+                  currentLength: _controller.text.length,
+                  maxLength: _maxChars,
                 ),
                 _buildInsightsSection(cs),
               ],

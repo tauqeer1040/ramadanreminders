@@ -1,0 +1,82 @@
+---
+import Base from '../layouts/Base.astro';
+
+const title = 'Refund Policy';
+const description = 'Refund Policy for Meowmin — how refunds work, how to request one, and our contact details. Payments processed by Paddle.com, Merchant of Record.';
+---
+
+<Base title={title} description={description}>
+  <section class="py-12 sm:py-16 px-6 lg:px-8">
+    <div class="max-w-[720px] mx-auto">
+      <a class="inline-block mb-8 font-medium text-brand hover:text-brand-dark transition" href="/">&larr; Meowmin</a>
+
+      <h1 class="text-4xl sm:text-5xl font-bold text-gray-900 mb-2">Refund Policy</h1>
+      <p class="text-gray-500 text-sm mb-10">Meowmin by Taucity — Last updated: September 2026</p>
+
+      <div class="space-y-4 text-gray-700 leading-relaxed">
+        <p>We want you to be happy with Meowmin. If something is not right, we'll make it right. This policy explains how refunds work for <strong>Meowmin Max</strong> subscriptions, Lifetime, and consumable Streak Shields. Payments are processed by <strong>Paddle.com Market Ltd</strong>, our Merchant of Record — Paddle handles the charge, VAT/GST, and the refund itself.</p>
+
+        <div class="rounded-2xl bg-amber-50 border border-amber-200 p-5 text-sm">
+          <p class="font-semibold text-amber-900">Need a refund? Fastest way:</p>
+          <p class="text-amber-800 mt-1">Email <a href="mailto:contact@taucity.xyz" class="underline font-semibold">contact@taucity.xyz</a> with the email you used to purchase and your order ID (from Paddle's receipt). We review within <strong>1–2 business days</strong> and, if approved, Paddle issues the refund to your original payment method.</p>
+        </div>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">1. Who to contact</h2>
+        <ul class="list-disc pl-6 space-y-2">
+          <li><strong>Email us</strong>: <a href="mailto:contact@taucity.xyz" class="text-brand hover:text-brand-dark">contact@taucity.xyz</a> — we can approve and trigger refunds via Paddle.</li>
+          <li><strong>Paddle</strong>: If you prefer, you can contact Paddle support directly with your Paddle order ID. State shows as <code class="bg-gray-100 px-1.5 py-0.5 rounded text-sm">PADDLE.NET* MEOWMIN</code> or similar on your statement.</li>
+        </ul>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">2. Subscription refunds (Starter $1 / 4-Month Challenge / Yearly)</h2>
+        <p class="text-sm text-gray-500 -mt-2 mb-2"><strong>3-day free trial:</strong> No card is taken, so there is no charge to refund. You can simply stop using the app — no action needed.</p>
+        <ul class="list-disc pl-6 space-y-2">
+          <li><strong>Starter $1 first 30 days</strong> (capped 280 chars, 3 shields): If you cancel within the first 30 days, contact us within 14 days of the $1 charge for a full refund. Capped taste is intentional — we still refund fairly.</li>
+          <li><strong>Renewals</strong>: If you were charged for a renewal (e.g., $15/mo, $49.99/4mo, $99.99/yr) and did not intend to renew, contact us within <strong>14 days of the charge</strong> and we will refund the renewal — provided the new period has not been heavily used (e.g., fewer than 3 journal entries created in that period). We handle this case-by-case, fairly.</li>
+          <li><strong>Cancellation</strong>: You can cancel anytime. Cancellation stops future renewals; your Meowmin Max access continues until the end of the current paid period. We do not prorate the remaining days after you cancel (unless required by local law — e.g., EU/EEA statutory rights still apply).</li>
+          <li><strong>How to cancel</strong>: In the app: <strong>Profile → Manage Subscription</strong> (via RevenueCat Customer Center), or email us and we will cancel for you.</li>
+        </ul>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">3. Lifetime — Gift of Allah ($199 one-time)</h2>
+        <ul class="list-disc pl-6 space-y-2">
+          <li><strong>14-day refund window</strong>: Request within 14 days of purchase for a full refund. After 14 days, Lifetime is non-refundable as it grants immediate, permanent access (and family sharing).</li>
+          <li>Family invites that have been redeemed do not block a refund within the window — we revoke access on refund.</li>
+        </ul>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">4. Consumable Streak Shield ($0.99)</h2>
+        <p>Streak Shields are <strong>consumable, one-time purchases</strong> ($0.99 each) that add 1 shield to your balance. Once a shield is consumed to repair a streak, it cannot be refunded. Unconsumed, unused shields purchased within the last 14 days can be refunded on request — we will deduct them from your balance.</p>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">5. How refunds are issued</h2>
+        <ul class="list-disc pl-6 space-y-2">
+          <li>Approved refunds are issued by <strong>Paddle</strong> to your original payment method. Timeline is typically <strong>5–10 business days</strong> depending on your bank/card provider.</li>
+          <li>You will receive a confirmation email from Paddle when the refund is processed.</li>
+          <li>We will also confirm by email from <code class="bg-gray-100 px-1.5 py-0.5 rounded text-sm">contact@taucity.xyz</code>.</li>
+        </ul>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">6. Statutory rights</h2>
+        <p>Nothing in this policy limits your statutory rights. If you are in the EU/EEA or UK, you have a <strong>14-day withdrawal right</strong> for distance purchases. For digital content delivered immediately (e.g., Lifetime, shields), you acknowledge that delivery begins immediately and you may lose the withdrawal right once access is granted — but we still offer the 14-day refund windows above, which are at least as generous as the law requires.</p>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">7. Abuse, fraud, and chargebacks</h2>
+        <p>We reserve the right to decline refunds in cases of abuse (e.g., repeated purchase/refund cycles) or fraud. If you file a chargeback with your bank, please also email us so we can help — chargebacks are slower for everyone and Paddle will handle the dispute.</p>
+
+        <h2 class="text-2xl font-semibold text-gray-900 pt-6">8. Contact</h2>
+        <p>Questions about this policy or need a refund?<br />
+        Email: <a href="mailto:contact@taucity.xyz" class="text-brand hover:text-brand-dark">contact@taucity.xyz</a><br />
+        We aim to reply within 1–2 business days.</p>
+
+        <div class="rounded-2xl bg-gray-50 border border-gray-200 p-5 text-sm text-gray-600 mt-8">
+          <p class="font-semibold text-gray-900">Summary — quick reference</p>
+          <ul class="list-disc pl-5 mt-2 space-y-1">
+            <li>3-day free trial: $0 — no charge, nothing to refund.</li>
+            <li>Starter $1 / 4-Month Challenge / Yearly renewals: refund within 14 days of the charge if unused.</li>
+            <li>Lifetime $199: refund within 14 days.</li>
+            <li>Streak Shield $0.99: refund within 14 days if unused.</li>
+            <li>Cancel anytime — access lasts until end of current period.</li>
+            <li>Refunds via Paddle, 5–10 business days to appear.</li>
+          </ul>
+        </div>
+
+        <p class="text-sm text-gray-500 pt-6">See also: <a href="/pricing" class="text-brand underline">Pricing</a> · <a href="/terms" class="text-brand underline">Terms of Service</a> · <a href="/privacy" class="text-brand underline">Privacy Policy</a></p>
+      </div>
+    </div>
+  </section>
+</Base>

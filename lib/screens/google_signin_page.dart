@@ -52,7 +52,7 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
         children: [
           const Spacer(flex: 1),
           Text(
-            _loggedIn ? "You're all set!" : "Save your diaries and progress",
+            _loggedIn ? "You're all set!" : "Save your memories",
             textAlign: TextAlign.center,
             style: tt.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,

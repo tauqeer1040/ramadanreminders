@@ -8,6 +8,7 @@ import '../services/journal_service.dart';
 import '../services/analytics_service.dart';
 import '../features/mood/emotion_screen.dart';
 import 'widgets/glass_container.dart';
+import 'widgets/tweet_counter.dart';
 
 class JournalBottomSheet extends StatefulWidget {
   final String? initialText;
@@ -25,10 +26,13 @@ class JournalBottomSheet extends StatefulWidget {
 
 class _JournalBottomSheetState extends State<JournalBottomSheet>
     with TickerProviderStateMixin {
+  static const int _maxChars = 280;
+
   late TextEditingController _controller;
   final FocusNode _textFocus = FocusNode();
   late String _journalId;
   bool _hasWrittenContent = false;
+  bool _showedLimitToast = false;
 
   List<String> _suggestions = [];
   bool _showSuggestions = true;
@@ -178,6 +182,12 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
   void _onTextChanged(String text) {
     if (text.trim().isNotEmpty) _hasWrittenContent = true;
     JournalService.saveLocalJournalWithId(_journalId, text);
+    // Show "write more with pro" hint when limit is first reached
+    if (text.length >= _maxChars && !_showedLimitToast && mounted) {
+      _showedLimitToast = true;
+      HapticFeedback.lightImpact();
+    }
+    if (text.length < _maxChars) _showedLimitToast = false;
   }
 
   void _selectSuggestion(int index, String suggestion) {
@@ -330,22 +340,34 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
   Widget _buildTextField(ColorScheme cs) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: TextField(
-        focusNode: _textFocus,
-        controller: _controller,
-        onChanged: _onTextChanged,
-        autofocus: false,
-        maxLines: null,
-        textCapitalization: TextCapitalization.sentences,
-        style: TextStyle(fontSize: 18, color: cs.onSurface, height: 1.6),
-        decoration: InputDecoration(
-          hintText: "Write your thoughts, struggles, or gratitude here...",
-          hintStyle: TextStyle(
-            color: cs.onSurface.withValues(alpha: 0.6),
-            fontSize: 18,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            focusNode: _textFocus,
+            controller: _controller,
+            onChanged: _onTextChanged,
+            autofocus: false,
+            maxLines: null,
+            maxLength: _maxChars,
+            maxLengthEnforcement: MaxLengthEnforcement.none,
+            buildCounter: (context, {currentLength = 0, isFocused = false, maxLength = 280}) => null,
+            textCapitalization: TextCapitalization.sentences,
+            style: TextStyle(fontSize: 18, color: cs.onSurface, height: 1.6),
+            decoration: InputDecoration(
+              hintText: "Write your thoughts, struggles, or gratitude here...",
+              hintStyle: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.6),
+                fontSize: 18,
+              ),
+              border: InputBorder.none,
+            ),
           ),
-          border: InputBorder.none,
-        ),
+          TweetCounter(
+            currentLength: _controller.text.length,
+            maxLength: _maxChars,
+          ),
+        ],
       ),
     );
   }

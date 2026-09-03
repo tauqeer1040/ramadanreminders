@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
@@ -30,6 +31,40 @@ class _WebPaywallScreenState extends State<WebPaywallScreen> {
   bool _loading = true;
   bool _purchasing = false;
   String? _error;
+  int _page = 0; // 0 = overview, 1 = selected-plan inform
+
+  // Live Paddle pri IDs mirrored from pricing.astro — used for web deep-link
+  static const _priMap = {
+    r'$rc_monthly': 'pri_01m1h2jbnv7d7xs7eb8a9bswav',
+    r'$rc_three_month': 'pri_01m1h2jqbb7e3gjym5kqf88b54',
+    r'$rc_annual': 'pri_01m1h2jqe88brc2grgnr20jv80',
+    r'$rc_lifetime': 'pri_01m1h2jqghnv9yj6k50fqf0wtr',
+    r'$rc_custom_streak_shield': 'pri_01m1h2jqjntx6pec1arz3fzw48',
+  };
+
+  String? _priForPackage(Package p) {
+    final id = p.identifier;
+    if (_priMap.containsKey(id)) return _priMap[id];
+    final lower = id.toLowerCase();
+    if (lower.contains('three_month') || lower.contains('quarterly')) return _priMap[r'$rc_three_month'];
+    if (lower.contains('lifetime')) return _priMap[r'$rc_lifetime'];
+    if (lower.contains('custom_streak') || lower.contains('shield')) return _priMap[r'$rc_custom_streak_shield'];
+    if (p.packageType == PackageType.annual) return _priMap[r'$rc_annual'];
+    if (p.packageType == PackageType.monthly) return _priMap[r'$rc_monthly'];
+    return null;
+  }
+
+  Future<void> _continueToWeb(Package p) async {
+    final pri = _priForPackage(p);
+    if (pri == null) {
+      setState(() => _error = 'No web price for this plan yet.');
+      return;
+    }
+    final uri = Uri.parse('https://meowmin.taucity.xyz/pricing?price=$pri');
+    HapticFeedback.mediumImpact();
+    // Amazon-style new tab — keep app paywall behind
+    await launchUrl(uri, mode: LaunchMode.externalApplication, webOnlyWindowName: '_blank');
+  }
 
   @override
   void initState() {
@@ -134,20 +169,24 @@ class _WebPaywallScreenState extends State<WebPaywallScreen> {
     }
   }
 
-  String _labelFor(PackageType type) {
-    switch (type) {
+  String _labelFor(Package package) {
+    final id = package.identifier.toLowerCase();
+    if (id.contains('three_month') || id.contains('quarterly') || id.contains('four')) {
+      return '4-Month Challenge';
+    }
+    switch (package.packageType) {
       case PackageType.lifetime:
         return 'Lifetime';
       case PackageType.annual:
-        return 'Yearly';
+        return 'Yearly — Recommended';
       case PackageType.sixMonth:
         return '6 Months';
       case PackageType.threeMonth:
-        return '3 Months';
+        return '4-Month Challenge';
       case PackageType.twoMonth:
         return '2 Months';
       case PackageType.monthly:
-        return 'Monthly';
+        return id.contains('challenge') ? 'Monthly — Starter' : 'Monthly';
       case PackageType.weekly:
         return 'Weekly';
       default:
@@ -168,11 +207,28 @@ class _WebPaywallScreenState extends State<WebPaywallScreen> {
   String _badgeFor(Package p) {
     switch (p.packageType) {
       case PackageType.annual:
-        return 'BEST VALUE';
+        return '72 SHIELDS';
       case PackageType.lifetime:
-        return 'UNLOCK FOREVER';
+        return '150 SHIELDS · 3 USERS';
       default:
+        final id = p.identifier.toLowerCase();
+        if (id.contains('three_month') || id.contains('quarterly')) return '18 SHIELDS';
+        if (id.contains('monthly') && id.contains('challenge')) return '3 SHIELDS';
+        if (id.contains('monthly')) return '3 SHIELDS';
         return '';
+    }
+  }
+
+  int? _shieldCount(Package p) {
+    switch (p.packageType) {
+      case PackageType.annual:
+        return 72;
+      case PackageType.lifetime:
+        return 150;
+      default:
+        final id = p.identifier.toLowerCase();
+        if (id.contains('three_month') || id.contains('quarterly')) return 18;
+        return 3;
     }
   }
 
@@ -207,7 +263,7 @@ class _WebPaywallScreenState extends State<WebPaywallScreen> {
               child: Row(
                 children: [
                   Text(
-                    'Meowmin Pro',
+                    'Meowmin Max',
                     style: tt.titleLarge?.copyWith(
                       color: AppTheme.starWhite,
                       fontWeight: FontWeight.w900,
@@ -283,28 +339,40 @@ class _WebPaywallScreenState extends State<WebPaywallScreen> {
     }
 
     final offering = _offering!;
+    // Two-screen paywall: 0 = overview grid (mirrors /pricing), 1 = selected inform -> web
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: _page == 0 ? _buildPage0(offering, tt) : _buildPage1(tt),
+    );
+  }
+
+  // Screen 0: overview — mirrors pricing.astro #plans grid, no green trial (skip-for-now handles trial)
+  Widget _buildPage0(Offering offering, TextTheme tt) {
     return SingleChildScrollView(
+      key: const ValueKey('page0'),
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Keep Meowmin Independent',
+            'Choose your plan',
             style: tt.headlineSmall?.copyWith(
               color: AppTheme.starWhite,
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
-            'Ad-free, private, and beautifully built. Support a small team that keeps your spiritual journey yours.',
+            'Unlimited when you need it — habit over burnout. All on meowmin.taucity.xyz via Paddle.',
             style: TextStyle(
-              color: AppTheme.ghostSilver.withValues(alpha: 0.85),
-              fontSize: 14,
+              color: AppTheme.ghostSilver.withValues(alpha: 0.75),
+              fontSize: 12,
               height: 1.4,
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
           if (offering.availablePackages.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 40),
@@ -317,27 +385,29 @@ class _WebPaywallScreenState extends State<WebPaywallScreen> {
                 ),
               ),
             )
-          else ...[
+          else
             ...offering.availablePackages.map((p) {
-              final selected = _selected?.identifier == p.identifier;
+              // hide green trial not needed — pricing already shows trial separately, but keep all Max packages
+              // Shield (custom) stays as last card
               final badge = _badgeFor(p);
               return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.only(bottom: 10),
                 child: GestureDetector(
-                  onTap: () => setState(() => _selected = p),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _selected = p;
+                      _page = 1;
+                    });
+                  },
+                  child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: selected
-                          ? AppTheme.neonPurple.withValues(alpha: 0.15)
-                          : Colors.white.withValues(alpha: 0.05),
+                      color: Colors.white.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
-                        color: selected
-                            ? AppTheme.neonPurple
-                            : Colors.white.withValues(alpha: 0.1),
-                        width: selected ? 2 : 1,
+                        color: Colors.white.withValues(alpha: 0.1),
+                        width: 1,
                       ),
                     ),
                     child: Row(
@@ -349,10 +419,10 @@ class _WebPaywallScreenState extends State<WebPaywallScreen> {
                               Row(
                                 children: [
                                   Text(
-                                    _labelFor(p.packageType),
-                                    style: TextStyle(
+                                    _labelFor(p),
+                                    style: const TextStyle(
                                       color: AppTheme.starWhite,
-                                      fontSize: 15,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
@@ -390,108 +460,177 @@ class _WebPaywallScreenState extends State<WebPaywallScreen> {
                                 ),
                               ),
                               if (_introLine(p) case final intro?) ...[
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 3),
                                 Text(
                                   '$intro, then ${p.storeProduct.priceString}',
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     color: AppTheme.neonPurple,
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                   ),
+                                ),
+                              ],
+                              if (_shieldCount(p) case final shields?) ...[
+                                const SizedBox(height: 5),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.shield_rounded, size: 13, color: AppTheme.starGold),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '$shields shield${shields > 1 ? 's' : ''}',
+                                      style: const TextStyle(
+                                        color: AppTheme.starGold,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ],
                           ),
                         ),
-                        Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: selected
-                                  ? AppTheme.neonPurple
-                                  : AppTheme.ghostSilver
-                                      .withValues(alpha: 0.4),
-                              width: 2,
-                            ),
-                            color: selected
-                                ? AppTheme.neonPurple
-                                : Colors.transparent,
-                          ),
-                          child: selected
-                              ? const Icon(Icons.check_rounded,
-                                  size: 14, color: Colors.white)
-                              : null,
-                        ),
+                        const Icon(Icons.chevron_right_rounded, color: AppTheme.ghostSilver, size: 22),
                       ],
                     ),
                   ),
                 ),
               );
             }),
-            if (_error != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFFFF6D00),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
+          const SizedBox(height: 10),
+          Text(
+            'Tap a plan to see web billing details.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppTheme.ghostSilver.withValues(alpha: 0.5), fontSize: 11),
+          ),
+          const SizedBox(height: 14),
+          TextButton(
+            onPressed: _purchasing ? null : _restore,
+            child: Text(
+              'Restore Purchases',
+              style: TextStyle(
+                color: AppTheme.ghostSilver.withValues(alpha: 0.7),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Screen 1: selected plan inform — no FAQs, Continue opens Paddle in new tab
+  Widget _buildPage1(TextTheme tt) {
+    final p = _selected;
+    if (p == null) return _buildPage0(_offering!, tt);
+    final badge = _badgeFor(p);
+    return SingleChildScrollView(
+      key: const ValueKey('page1'),
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => setState(() => _page = 0),
+                icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.ghostSilver),
+              ),
+              Text('Back to plans', style: TextStyle(color: AppTheme.ghostSilver.withValues(alpha: 0.9), fontSize: 13, fontWeight: FontWeight.w600)),
             ],
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 56,
-              child: DuoButton(
-                onPressed:
-                    _selected == null || _purchasing ? null : () => _purchase(_selected!),
-                backgroundColor: const Color(0xFF9D50FF),
-                depthColor: const Color(0xFF6A00FF),
-                radius: 16,
-                dimOnDisabled: true,
-                child: _purchasing
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text(
-                        'Start Your Journey',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-              ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.neonPurple.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppTheme.neonPurple.withValues(alpha: 0.3)),
             ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: _purchasing ? null : _restore,
-              child: Text(
-                'Restore Purchases',
-                style: TextStyle(
-                  color: AppTheme.ghostSilver.withValues(alpha: 0.7),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _link(context, 'Terms', 'https://www.taucity.com/terms'),
-                const SizedBox(width: 16),
-                _link(context, 'Privacy', 'https://www.taucity.com/privacy'),
+                Row(
+                  children: [
+                    Text(_labelFor(p), style: const TextStyle(color: AppTheme.starWhite, fontSize: 16, fontWeight: FontWeight.w900)),
+                    if (badge.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: AppTheme.starGold.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
+                        child: Text(badge, style: const TextStyle(color: AppTheme.starGold, fontSize: 9, fontWeight: FontWeight.w800)),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text('${p.storeProduct.priceString}${_perPeriod(p)}', style: TextStyle(color: AppTheme.ghostSilver.withValues(alpha: 0.9), fontSize: 14, fontWeight: FontWeight.w700)),
+                if (_introLine(p) case final intro?) ...[
+                  const SizedBox(height: 4),
+                  Text('$intro, then ${p.storeProduct.priceString}', style: const TextStyle(color: AppTheme.neonPurple, fontSize: 12, fontWeight: FontWeight.w700)),
+                ],
               ],
             ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.language_rounded, size: 16, color: AppTheme.neonPurple),
+                    const SizedBox(width: 6),
+                    Text('Web billing via Paddle', style: TextStyle(color: AppTheme.starWhite.withValues(alpha: 0.9), fontSize: 12, fontWeight: FontWeight.w800)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'You’ll pay securely on meowmin.taucity.xyz via Paddle.com Market Ltd (our Merchant of Record). You’ll see PADDLE.NET* MEOWMIN on your statement. Paddle handles VAT/GST, receipts, and 14-day refunds. Your Meowmin Max entitlement syncs via RevenueCat after Paddle confirms.',
+                  style: TextStyle(color: AppTheme.ghostSilver.withValues(alpha: 0.8), fontSize: 12, height: 1.5),
+                ),
+                const SizedBox(height: 10),
+                Text('• Auto-renew until you cancel • Cancel in Profile → Manage Subscription or on the web', style: TextStyle(color: AppTheme.ghostSilver.withValues(alpha: 0.6), fontSize: 11)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _link(context, 'Terms', 'https://www.taucity.com/terms'),
+              const SizedBox(width: 16),
+              _link(context, 'Privacy', 'https://www.taucity.com/privacy'),
+            ],
+          ),
+          const SizedBox(height: 20),
+          DuoButton(
+            onPressed: () => kIsWeb ? _continueToWeb(p!) : _purchase(p!),
+            backgroundColor: AppTheme.neonPurple,
+            depthColor: const Color(0xFF6A00FF),
+            radius: 16,
+            height: 54,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(kIsWeb ? 'Continue to Secure Checkout' : 'Get Meowmin Max', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900)),
+                const SizedBox(width: 8),
+                Icon(kIsWeb ? Icons.open_in_new_rounded : Icons.lock_rounded, color: Colors.white, size: 16),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text('Opens in a new tab — Amazon-style', textAlign: TextAlign.center, style: TextStyle(color: AppTheme.ghostSilver.withValues(alpha: 0.5), fontSize: 11)),
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFFF6D00), fontSize: 12, fontWeight: FontWeight.w600)),
           ],
         ],
       ),

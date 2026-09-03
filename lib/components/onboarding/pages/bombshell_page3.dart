@@ -49,7 +49,7 @@ class BombshellPage3 extends StatelessWidget {
                         ),
                         children: [
                           const TextSpan(
-                            text: "With Meowmin, You could be reading\n",
+                            text: "With Meowmin, You will be reading\n",
                           ),
                           const TextSpan(
                             text: '300% more Quran\n',
@@ -65,7 +65,7 @@ class BombshellPage3 extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Spend just 1 minute a day writing your diary, and 1 minute reading verses and stories from the Quran related to what you journal about. It\u2019s a practical start that naturally gets you reflecting on your day through the Quran far more than before.',
+                      "You'll be spending just 1 minute a day writing your thoughts, and 1 minute reading verses from the Quran that relate to what you write about.",
                       style: tt.bodyLarge?.copyWith(
                         color: cs.onSurface.withValues(alpha: 0.7),
                       ),

@@ -21,6 +21,8 @@ import '../screens/manage_account_screen.dart';
 import '../services/user_service.dart';
 import '../services/streak_service.dart';
 import '../services/invite_service.dart';
+import '../services/revenuecat_service.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import '../theme/app_theme.dart';
 import 'stats_card.dart';
 import 'widgets/duo_button.dart';
@@ -828,12 +830,30 @@ class _ProfilePage1State extends State<ProfilePage1>
 
   Future<void> _showPaywall() async {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Meowmin Pro is coming soon!'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      try {
+        final result = await RevenueCatService.instance.presentPaywall(
+          displayCloseButton: true,
+        );
+        if (result == PaywallResult.purchased || result == PaywallResult.restored) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Subscription activated!'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not open subscription page'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
     }
   }
 

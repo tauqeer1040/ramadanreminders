@@ -1,18 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
+import '../services/revenuecat_service.dart';
+import '../services/revenuecat_provider.dart';
 import '../theme/app_theme.dart';
 import '../core/app_background.dart';
 import '../components/widgets/duo_button.dart';
 
-class ManageAccountScreen extends StatelessWidget {
+class ManageAccountScreen extends ConsumerWidget {
   final User user;
 
   const ManageAccountScreen({required this.user, super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final revenueCat = ref.watch(revenueCatProvider);
+    final isPro = revenueCat.isPro;
+    final expiresDate = (() {
+      final ent = revenueCat.customerInfo?.entitlements.active[RevenueCatService.entitlementId];
+      if (ent?.expirationDate == null) return null;
+      return DateTime.tryParse(ent!.expirationDate!);
+    })();
+
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
       appBar: AppBar(
@@ -76,7 +87,119 @@ class ManageAccountScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 48),
+            const SizedBox(height: 28),
+            // ── Subscription card ──
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E2E),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppTheme.neonPurple.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.neonPurple.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(isPro ? Icons.star_rounded : Icons.star_border_rounded, color: AppTheme.starGold, size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isPro ? 'Meowmin Max — Active' : 'Free Plan',
+                              style: const TextStyle(color: AppTheme.starWhite, fontSize: 14, fontWeight: FontWeight.w800),
+                            ),
+                            if (isPro && expiresDate != null)
+                              Text(
+                                'Renews ${expiresDate.day}/${expiresDate.month}/${expiresDate.year}',
+                                style: TextStyle(color: AppTheme.ghostSilver.withValues(alpha: 0.8), fontSize: 11),
+                              )
+                            else
+                              Text(
+                                isPro ? 'Tap Manage to see details' : '3-day trial · 280 chars · upgrade for unlimited',
+                                style: TextStyle(color: AppTheme.ghostSilver.withValues(alpha: 0.8), fontSize: 11),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (isPro)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: AppTheme.starGold.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                          child: const Text('MAX', style: TextStyle(color: AppTheme.starGold, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  DuoButton(
+                    onPressed: () async {
+                      await RevenueCatService.instance.presentCustomerCenter();
+                      if (context.mounted) ref.read(revenueCatProvider.notifier).refresh();
+                    },
+                    backgroundColor: AppTheme.neonPurple,
+                    depthColor: const Color(0xFF6A00FF),
+                    radius: 12,
+                    height: 48,
+                    child: Text(
+                      isPro ? 'Manage Subscription' : 'View Plans',
+                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // ── Pause highlight ──
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.starGold.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.starGold.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(color: AppTheme.starGold.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.pause_circle_rounded, color: AppTheme.starGold, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Need a break? Pause instead of canceling', style: TextStyle(color: AppTheme.starWhite, fontSize: 13, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Pause keeps your shields and streak intact. You can pause for up to 3 months and resume anytime — your 114 Surahs progress stays safe.',
+                          style: TextStyle(color: AppTheme.ghostSilver.withValues(alpha: 0.85), fontSize: 11, height: 1.4),
+                        ),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: () async {
+                            await RevenueCatService.instance.presentCustomerCenter();
+                            if (context.mounted) ref.read(revenueCatProvider.notifier).refresh();
+                          },
+                          child: const Text('Pause in Manage Subscription →', style: TextStyle(color: AppTheme.starGold, fontSize: 12, fontWeight: FontWeight.w700, decoration: TextDecoration.underline, decorationColor: AppTheme.starGold)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
             const Text(
               'ACCOUNT ACTIONS',
               style: TextStyle(

@@ -15,13 +15,24 @@ class RevenueCatService {
   static RevenueCatService get instance => _instance ??= RevenueCatService._();
   RevenueCatService._();
 
-  static const String entitlementId = 'Meowmin  Pro';
+  static const String entitlementId = 'Meowmin Max';
 
-  static const String _defaultApiKey =
-      'test_JaHlwHvOQDMjKOBXtvRVrHQsqsN';
+  // Live keys MUST be injected via --dart-define.
+  // No sandbox defaults ship in release — fail fast if missing.
+  // For local dev without flags, set REVENUECAT_API_KEY / REVENUECAT_WEB_API_KEY
+  // in your shell or use the sandbox values explicitly.
+  static const String _defaultApiKey = String.fromEnvironment(
+    'REVENUECAT_API_KEY_FALLBACK',
+    defaultValue: '',
+  );
 
-  static const String _defaultWebApiKey =
-      'pdl_XjFiWxuHmAwKMGssUknrOGStnEEL';
+  static const String _defaultWebApiKey = String.fromEnvironment(
+    'REVENUECAT_WEB_API_KEY_FALLBACK',
+    defaultValue: '',
+  );
+
+  static const String _sandboxApiKeyForDebug = 'test_JaHlwHvOQDMjKOBXtvRVrHQsqsN';
+  static const String _sandboxWebApiKeyForDebug = 'pdl_XjFiWxuHmAwKMGssUknrOGStnEEL';
 
   final Set<CustomerInfoUpdateListener> _listeners = {};
 
@@ -51,9 +62,41 @@ class RevenueCatService {
     try {
       final apiKey = const String.fromEnvironment('REVENUECAT_API_KEY');
       final webApiKey = const String.fromEnvironment('REVENUECAT_WEB_API_KEY');
-      final effectiveKey = kIsWeb
+      String effectiveKey = kIsWeb
           ? (webApiKey.isNotEmpty ? webApiKey : _defaultWebApiKey)
           : (apiKey.isNotEmpty ? apiKey : _defaultApiKey);
+
+      // Debug convenience: allow sandbox keys via FALLBACK dart-define.
+      // In release, require explicit live keys — never ship sandbox silently.
+      if (effectiveKey.isEmpty && kDebugMode) {
+        effectiveKey = kIsWeb ? _sandboxWebApiKeyForDebug : _sandboxApiKeyForDebug;
+        debugPrint('[RevenueCat] Using DEBUG sandbox fallback key (kDebugMode only)');
+      }
+
+      if (effectiveKey.isEmpty) {
+        throw StateError(
+          'RevenueCat API key missing. Pass --dart-define=REVENUECAT_API_KEY=... '
+          'and --dart-define=REVENUECAT_WEB_API_KEY=... (live keys for release).',
+        );
+      }
+
+      // Guard against accidentally shipping sandbox keys in release.
+      if (kReleaseMode) {
+        final isSandboxKey = effectiveKey.startsWith('test_') ||
+            effectiveKey.startsWith('pdl_') && !effectiveKey.startsWith('pdl_live');
+        // pdl_ sandbox keys start with pdl_; live Paddle keys via RC are distinct.
+        // Generic check: sandbox test_ prefix is a reliable signal.
+        if (effectiveKey.startsWith('test_')) {
+          throw StateError(
+            'Sandbox RevenueCat key (test_...) detected in release mode. '
+            'Provide live keys via --dart-define.',
+          );
+        }
+        // Warn but don't throw for pdl_ — live web keys also start with pdl_ variants.
+        if (isSandboxKey) {
+          debugPrint('[RevenueCat] WARNING: possible sandbox key in release: $effectiveKey');
+        }
+      }
 
       await Purchases.setLogLevel(LogLevel.debug);
       await Purchases.configure(PurchasesConfiguration(effectiveKey));

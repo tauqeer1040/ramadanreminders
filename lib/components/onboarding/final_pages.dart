@@ -9,6 +9,8 @@ import 'package:shimmer/shimmer.dart';
 import 'package:flutter_confetti/flutter_confetti.dart' as fc;
 import 'package:in_app_review/in_app_review.dart' deferred as iar;
 import 'package:share_plus/share_plus.dart' deferred as share_plus;
+import 'package:audioplayers/audioplayers.dart' as ap;
+import '../widgets/tweet_counter.dart';
 import '../../services/analogy_service.dart';
 import '../../services/journal_service.dart';
 import '../../services/notification_service.dart';
@@ -19,6 +21,7 @@ import '../../utils/image_urls.dart';
 import '../widgets/duo_button.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/streak_graph.dart';
+import '../widgets/deferred_lottie.dart';
 
 class FirstJournalPage extends StatefulWidget {
   final OnboardingData data;
@@ -42,6 +45,7 @@ class _FirstJournalPageState extends State<FirstJournalPage>
   final _journalService = JournalService();
   final _focusNode = FocusNode();
   bool _saving = false;
+  bool _showedLimitToast = false;
   final _suggestionsKey = GlobalKey<AnimatedListState>();
   final _suggestionsScrollController = ScrollController();
   final _mainScrollController = ScrollController();
@@ -99,10 +103,10 @@ class _FirstJournalPageState extends State<FirstJournalPage>
   }
 
   void _onTextChanged(String text) {
-    widget.data.journalEntry = text;
+    widget.data.journalEntry = _controller.text;
     JournalService.saveLocalJournalWithId(
       DateTime.now().toIso8601String().split('T')[0],
-      text,
+      _controller.text,
     );
     setState(() {});
   }
@@ -198,37 +202,43 @@ class _FirstJournalPageState extends State<FirstJournalPage>
     final canContinue =
         _controller.text.trim().isNotEmpty || widget.data.journalEntry != null;
 
-    final textField = TextField(
-      controller: _controller,
-      focusNode: _focusNode,
-      onChanged: _onTextChanged,
-      autofocus: false,
-      maxLines: keyboardVisible ? null : 6,
-      minLines: keyboardVisible ? null : 4,
-      textCapitalization: TextCapitalization.sentences,
-      style: TextStyle(fontSize: 18, color: cs.onSurface, height: 1.6),
-      decoration: InputDecoration(
-        hintText: "Write your thoughts, struggles, or gratitude here...",
-        hintStyle: TextStyle(
-          color: cs.onSurface.withValues(alpha: 0.6),
-          fontSize: 18,
+    final textField = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          onChanged: _onTextChanged,
+          autofocus: false,
+          maxLines: keyboardVisible ? null : 6,
+          minLines: keyboardVisible ? null : 4,
+          textCapitalization: TextCapitalization.sentences,
+          style: TextStyle(fontSize: 18, color: cs.onSurface, height: 1.6),
+          decoration: InputDecoration(
+            hintText: "Write your thoughts, struggles, or gratitude here...",
+            hintStyle: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.6),
+              fontSize: 18,
+            ),
+            filled: true,
+            fillColor: cs.surfaceContainerLow,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: cs.outlineVariant),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: cs.outlineVariant),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: cs.primary, width: 2),
+            ),
+            contentPadding: const EdgeInsets.all(20),
+          ),
         ),
-        filled: true,
-        fillColor: cs.surfaceContainerLow,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: cs.outlineVariant),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: cs.outlineVariant),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: cs.primary, width: 2),
-        ),
-        contentPadding: const EdgeInsets.all(20),
-      ),
+
+      ],
     );
 
     return Column(
@@ -433,6 +443,7 @@ class _AiInsightPageState extends State<AiInsightPage>
   int _swipedCount = 0;
   final Set<int> _revealedCards = {};
   List<String> _scratchCardImages = [];
+  ap.AudioPlayer? _purrPlayer;
 
   @override
   void initState() {
@@ -497,7 +508,24 @@ class _AiInsightPageState extends State<AiInsightPage>
   @override
   void dispose() {
     _loadingController?.dispose();
+    _stopPurr();
     super.dispose();
+  }
+
+  void _startPurr() {
+    try {
+      _purrPlayer = ap.AudioPlayer()..setPlayerMode(ap.PlayerMode.lowLatency);
+      _purrPlayer!.setReleaseMode(ap.ReleaseMode.loop);
+      _purrPlayer!.play(ap.AssetSource('tunes/sfx/cat_purr.mp3'));
+    } catch (_) {}
+  }
+
+  void _stopPurr() {
+    try {
+      _purrPlayer?.stop();
+      _purrPlayer?.dispose();
+      _purrPlayer = null;
+    } catch (_) {}
   }
 
   void _onSwipe() {
@@ -886,12 +914,20 @@ class _AiInsightPageState extends State<AiInsightPage>
                                         image: scratchImage.startsWith('http')
                                             ? Image.network(scratchImage, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink())
                                             : Image.asset(scratchImage, fit: BoxFit.cover),
+                                        onScratchStart: () {
+                                          _startPurr();
+                                        },
+                                        onScratchEnd: () {
+                                          _stopPurr();
+                                        },
                                         onThreshold: () {
+                                          _stopPurr();
                                           setState(
                                             () => _revealedCards.add(index),
                                           );
                                           HapticFeedback.heavyImpact();
                                           _triggerConfetti();
+                                          widget.onStarsEarned?.call(5);
                                         },
                                         child: cardContent,
                                       ),
@@ -1111,6 +1147,31 @@ class _CelebrationPageState extends State<CelebrationPage> {
                                   color: AppTheme.starWhite,
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.warning_amber_rounded, size: 16, color: Colors.red.shade400),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'App is at capacity: 267/300. Don\'t invite more people.',
+                                  style: tt.bodySmall?.copyWith(
+                                    color: Colors.red.shade300,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  textAlign: TextAlign.center,
                                 ),
                               ),
                             ],

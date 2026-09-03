@@ -20,7 +20,7 @@ class StreakGraph extends StatefulWidget {
 class _StreakGraphState extends State<StreakGraph> with SingleTickerProviderStateMixin {
   late final AnimationController _popController;
   late final Animation<double> _popScale;
-  bool _hintDismissed = false; // To hide the subtitle after tap
+  bool _hintDismissed = true; // Hidden by default, revealed on tap
 
   @override
   void initState() {
@@ -91,8 +91,8 @@ class _StreakGraphState extends State<StreakGraph> with SingleTickerProviderStat
                 'day streak!',
                 style: TextStyle(
                   color: AppTheme.starWhite,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -265,10 +265,18 @@ class _StreakGraphState extends State<StreakGraph> with SingleTickerProviderStat
                         ),
                       ))
                 : (isCompleted || dayNum == 1)
-                    ? const Icon(
-                        Icons.local_fire_department_rounded,
-                        color: AppTheme.starGold,
-                        size: 28,
+                    ? SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: DeferredLottie(
+                          asset: 'assets/photos/elements/streak_fire.json',
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.local_fire_department_rounded,
+                            color: AppTheme.starGold,
+                            size: 28,
+                          ),
+                        ),
                       )
                     : Container(
                         width: 28,

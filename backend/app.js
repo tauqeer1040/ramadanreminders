@@ -22,11 +22,12 @@ app.use(cors({
 }));
 
 app.use((req, res, next) => {
-  if (req.url === '/api/v2/superwall-webhook') {
+  if (req.url === '/api/paddle-webhook') {
     let data = [];
     req.on('data', chunk => data.push(chunk));
     req.on('end', () => {
       req.rawBody = Buffer.concat(data).toString();
+      try { req.body = JSON.parse(req.rawBody); } catch (_) { req.body = {}; }
       next();
     });
   } else {
@@ -56,14 +57,14 @@ app.use((req, res, next) => {
 
 // Auth middleware
 app.use('/api/v2', (req, res, next) => {
-  if (['/ayah', '/shop/items', '/app-version', '/superwall-webhook', '/internal/poll-ai', '/internal/errors'].includes(req.path)) return next();
+  if (['/ayah', '/shop/items', '/app-version', '/internal/poll-ai', '/internal/errors'].includes(req.path)) return next();
   return verifyAuth(req, res, next);
 });
 
 // App-version middleware
 app.use('/api/v2', (req, res, next) => {
   const p = req.path;
-  if (p === '/ayah' || p === '/shop/items' || p === '/superwall-webhook' || p === '/app-version') return next();
+  if (p === '/ayah' || p === '/shop/items' || p === '/app-version') return next();
   if (!req.uid) return next();
   return verifyAppVersion(req, res, next);
 });
@@ -97,7 +98,7 @@ require('./routes/ai')(app, aiLimiter);
 require('./routes/misc')(app);
 require('./routes/stars')(app);
 require('./routes/shop')(app);
-require('./routes/superwall')(app);
+require('./routes/paddleWebhook')(app);
 require('./routes/trial')(app);
 require('./routes/subscription')(app);
 require('./routes/invites')(app);

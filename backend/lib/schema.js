@@ -16,6 +16,7 @@ const USER_ALTER_COLUMNS = [
   ['ai_calls_date', 'TEXT'],
   ['ai_calls_count', 'INTEGER DEFAULT 0'],
   ['cat_name', 'TEXT'],
+  ['shield_balance', 'INTEGER DEFAULT 0'],
 ];
 
 const JOURNAL_CREATE_COLUMNS = ['id', 'user_id', 'content', 'created_at', 'ai_status', 'ai_attempts', 'ai_last_error', 'ai_next_retry_at'];
@@ -139,6 +140,16 @@ const CREATE_STATEMENTS = [
       user_b_uid TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (user_a_uid, user_b_uid)
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS family_groups (
+      id TEXT PRIMARY KEY,
+      owner_uid TEXT NOT NULL,
+      max_members INTEGER NOT NULL DEFAULT 3,
+      members TEXT NOT NULL DEFAULT '[]',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (owner_uid) REFERENCES users(id) ON DELETE CASCADE
     )
   `,
 ];

@@ -194,7 +194,6 @@ class _JournalListScreenState extends State<JournalListScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       appBar: _selectionMode ? _buildSelectionAppBar(cs) : _buildSearchAppBar(cs),
       body: AppBackground(
         child: _isLoading

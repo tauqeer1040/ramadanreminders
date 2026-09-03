@@ -16,7 +16,7 @@
 | Quran verse display | Low | Proxied from alquran.cloud. |
 | Prayer times (geolocation) | **Medium** | Uses `ACCESS_FINE_LOCATION` via geolocator for adhan calculation. |
 | Daily notifications | Low | Suhoor/iftar/night reminders via `flutter_local_notifications`. |
-| Superwall IAP subscription | **Medium** | $1 trial → $9/mo or $59/yr. Paywall on onboarding. |
+| Paddle + RevenueCat subscription (Meowmin Max) | **Medium** | $1 first 30d → $15/mo, 4-Mo $49.99, Yearly $99.99, Lifetime $199. Paywall via RevenueCat Customer Center on web (`/pricing` Paddle Overlay) + native `WebPaywallScreen`. Supports Pause (Customer Center → Pause 1-3 months). |
 | Home screen streak widget | Low | Read-only widget, no permissions. |
 | Audio player (Quran recitations) | Low | Streams audio from alquran.cloud. |
 | Google Sign-In | Low | Optional auth via Firebase + google_sign_in. |
@@ -31,8 +31,10 @@
 | SDK | Data Collected | Purpose | Shared With Third Parties |
 |-----|---------------|---------|--------------------------|
 | Firebase Auth | Email, UID, auth tokens | User authentication | No (Google infra) |
-| Cloud Firestore | User profile, journal data | User data storage | No |
-| Superwall | User ID, purchase events | Subscription management | No (Superwall processes payments) |
+| Turso (LibSQL) + Cloud Firestore (legacy) | Encrypted journal data, user profile | Journal storage (encrypted) | No |
+| Fanar / OpenRouter | Diary text per request | AI Islamic insights (not stored) | No |
+| Paddle.com Market Ltd | Email, billing address, payment method | Web Merchant of Record, VAT/tax, receipts, refunds (`PADDLE.NET* MEOWMIN`) | Yes — Paddle processes payments |
+| RevenueCat | App user ID, entitlement `Meowmin Max`, purchase events, expiry | Paywall + entitlement sync + Customer Center (pause/cancel/restore) | No (RevenueCat infra) |
 | Google Sign-In | Name, email, profile photo (if used) | Social login | No |
 | Geolocator | Precise location | Prayer time calculation | No |
 | flutter_local_notifications | None | Local notifications | No |
@@ -41,11 +43,11 @@
 | shared_preferences | None | Local cache | No |
 
 ### Privacy Policy Must Cover
-- What data is collected (journal entries, location for prayer times, email if signed in)
-- How AI (OpenRouter) processes journal text to generate insights
-- Third parties: OpenRouter, Superwall (payment processing), Google (Firebase)
-- Data deletion: account deletion via Profile → Delete Account
-- Contact email
+- What data is collected (journal entries encrypted in Turso, location for prayer times only local, email if signed in)
+- How AI (Fanar/OpenRouter) processes journal text per-request (not retained)
+- Third parties: Paddle.com Market Ltd (MoR for web: email, billing address, payment method, VAT), RevenueCat (entitlement sync), Google Firebase Auth, Turso
+- Data deletion: Profile → Manage Account → Delete My Account (30d purge) + via `contact@taucity.xyz` / `/delete-account`
+- Contact email + link in-app Profile → About and on `meowmin.taucity.xyz/privacy, /terms, /refund`
 
 ### Critical: No privacy policy URL found in app
 Add a privacy policy URL and link it in-app (Settings/Profile page) and in Play Console.
@@ -102,21 +104,22 @@ Journals are user-generated content. Play requires:
 
 ---
 
-## 6. Monetization & Superwall IAP
+## 6. Monetization — Paddle + RevenueCat (Meowmin Max)
 
 | Requirement | Status | Notes |
 |------------|--------|-------|
-| Price shown before purchase | ✅ | Superwall handles this server-side |
-| Clear subscription terms | ⚠️ | Verify Superwall dashboard has correct pricing: $1 trial → $9/mo or $59/yr |
-| Restore purchases | ⚠️ | Superwall handles this, verify the restore button is accessible |
-| Cancel path | ✅ | Play Store manages subscription cancellation |
-| Trial auto-renew warning | ✅ | Superwall handles this |
-| Scarcity tactics ("300 slots") | ⚠️ | "Limited to 300 members" and slot counter may be flagged as deceptive urgency by reviewers. Consider softening or removing the slot number. |
+| Price shown before purchase | ✅ | RevenueCat paywall + `/pricing` Paddle overlay show $1→$15/mo, $49.99/4mo, $99.99/yr, $199 lifetime before purchase |
+| Clear subscription terms | ✅ | `pricing.astro` + paywall show billing interval, renewal, `PADDLE.NET* MEOWMIN`, VAT at checkout, auto-renew until cancel |
+| Restore purchases | ✅ | `Manage Account → Manage Subscription → Restore Purchases` via `RevenueCatService.presentCustomerCenter()` + `restorePurchases()` |
+| Cancel / Pause path | ✅ | `Profile → Manage Account → Manage Subscription` → Customer Center → Pause (emphasized gold card), Cancel, Change Plan; also `Profile → Manage Account → Manage Subscription` pause highlight |
+| Trial auto-renew warning | ✅ | 3-day trial (no card) + $1 Starter trial → $15/mo warning on pricing + paywall |
+| Scarcity tactics ("300 slots") | ✅ Removed | Slot counter removed from onboarding (commit `CelebrationPage:1165` warning box remains only as soft capacity note, not paywall) |
 
-### Superwall Configuration
-- **Placement:** `StartTrial`
-- **Identify:** `Superwall.shared.identify(user.uid)` called before placement
-- **PK:** `pk_H_7a9WkW5nHJqKZPKsub1` (hardcoded in `main.dart`)
+### RevenueCat + Paddle Configuration
+- **Entitlement:** `Meowmin Max` (`entl04c6421978`) in project `projd48bfa0c`
+- **Offerings:** `default_v2` (current) + `tier-b-v2`, Paddle live products `pro_01m1h2…`
+- **Customer Center:** Enable **Pause** (1-3 mo) in RevenueCat Dashboard → Customer Center → Support; Play Console → Monetize → Subscriptions → Allow pause
+- **Paddle Default payment link:** `https://meowmin.taucity.xyz/pricing#plans` (approved domain `meowmin.taucity.xyz`)
 
 ---
 
@@ -152,8 +155,8 @@ Must answer **Yes** to:
 
 ```markdown
 ## Test Account
-Email: reviewer@meowmin.app (create a test account)
-Password: (provide in Play Console)
+Email: reviewer@meowmin.app (create a Firebase test account, Meowmin Max active)
+Password: MeowminReview2026! (provide in Play Console → Testers)
 
 ## Sensitive Features
 1. Location permission
@@ -167,20 +170,26 @@ Password: (provide in Play Console)
    - Path: Onboarding → notification toggle
    - If denied: can re-enable from Profile → Enable notifications
 
-3. Subscription
-   - $1 for 3-day trial, then $9/month or $59/year
-   - Subscription unlocks unlimited journal entries + AI insights
-   - Paywall appears during onboarding after free trial entries
-   - Guest users get 3 free journal entries before paywall
+3. Subscription (Paddle + RevenueCat Meowmin Max)
+   - Web: `/pricing` shows $1 first 30d → $15/mo, $49.99/4mo (114 Surahs · 120 Days), $99.99/yr (30 Juz · 12 Months, Recommended), $199 Lifetime (150 shared shields, 3 users), $0.99 shield
+   - Native: `Profile → Manage Account → Manage Subscription` → Customer Center (view plan, expiry, Manage → Pause up to 3 mo, Cancel, Change Plan, Restore)
+   - Trial: 3-day free trial (no card, 280 chars) in app; paywall after trial or via Profile → Subscribe
+   - Guest users: 3-day trial period, not entry-limited, before paywall gate (PaywallGateScreen)
+   - Manage path: Profile (tab) → Email row → Manage Account → Subscription card → Manage Subscription → Customer Center
 
 ## Special Instructions
-- First launch shows onboarding flow with paywall
-- AI insights may take 30–60 seconds after journaling
-- Backend is at: libsql://meowmin-tauqeer.aws-ap-south-1.turso.io
-- Journals sync when app opens or at midnight
+- First launch shows 19-step onboarding (Welcome → Music → Name → Intention → … → First Journal → AiInsight scratch cards → Celebration → Summary)
+- AI insights may take 30–60 seconds after journaling; scratch cards reveal 3 AI insights per journal
+- Backend: https://meowmin.taucity.xyz/api/v2 (Turso + Paddle webhook at /api/paddle-webhook)
+- Journals sync when app opens or at midnight; delete via Profile → Manage Account → Delete My Account (30d purge)
+- UGC: Journals are private UGC. Report via Profile → Delete Account or email contact@taucity.xyz (see Privacy Data Deletion)
 
 ## Privacy Policy
-https://meowmin.sh/privacy.html
+https://meowmin.taucity.xyz/privacy
+## Terms
+https://meowmin.taucity.xyz/terms
+## Refund
+https://meowmin.taucity.xyz/refund
 ```
 
 ---

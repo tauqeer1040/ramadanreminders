@@ -10,6 +10,9 @@ import '../services/app_bootstrap.dart';
 import '../services/analytics_service.dart';
 import '../screens/onboarding_screen.dart';
 import '../screens/main_screen.dart';
+import '../screens/paywall_gate_screen.dart';
+import '../services/local_trial_service.dart';
+import '../services/revenuecat_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -91,8 +94,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       // On web, read the pre-determined value from index.html's inline script.
       // This avoids the async SharedPreferences plugin bridge entirely.
       try {
-        final jsVal = globalContext['splashNeedsOnboarding'];
-        needsOnboarding = jsVal == null || (jsVal as JSBoolean).toDart != true;
+        // HTML script sets window.__splashNeedsOnboarding (double underscore)
+        final jsVal = globalContext['__splashNeedsOnboarding'];
+        needsOnboarding = jsVal == null || jsVal.toString() != 'true';
       } catch (_) {
         needsOnboarding = true;
       }
@@ -141,9 +145,47 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       });
 
       if (!mounted) return;
-      setState(() {
-        _targetScreen = MainScreen(onReady: _onTargetReady);
-      });
+
+      // Check if user needs to see paywall (trial active/expired, no subscription)
+      final isSubscribed = await RevenueCatService.instance.isSubscribed();
+      if (!isSubscribed && mounted) {
+        final trialActive = await LocalTrialService.isActive();
+        final trialStarted = await LocalTrialService.hasStarted();
+        if (trialStarted && trialActive) {
+          // 3-day trial active — show dismissable paywall
+          setState(() {
+            _targetScreen = PaywallGateScreen(
+              isDismissable: true,
+              onSubscribe: () => setState(() {
+                _targetScreen = MainScreen(onReady: _onTargetReady);
+              }),
+              onDismiss: () => setState(() {
+                _targetScreen = MainScreen(onReady: _onTargetReady);
+              }),
+            );
+          });
+        } else if (trialStarted && !trialActive) {
+          // Trial expired — show hard paywall
+          setState(() {
+            _targetScreen = PaywallGateScreen(
+              isDismissable: false,
+              onSubscribe: () => setState(() {
+                _targetScreen = MainScreen(onReady: _onTargetReady);
+              }),
+              onDismiss: () {},
+            );
+          });
+        } else {
+          // No trial started yet — show MainScreen normally
+          setState(() {
+            _targetScreen = MainScreen(onReady: _onTargetReady);
+          });
+        }
+      } else {
+        setState(() {
+          _targetScreen = MainScreen(onReady: _onTargetReady);
+        });
+      }
 
       // Fallback: if MainScreen onReady never fires (e.g. build throws), force transition after 2s
       Future.delayed(const Duration(seconds: 2), () {

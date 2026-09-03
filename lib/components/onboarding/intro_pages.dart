@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show MaxLengthEnforcement;
 import 'onboarding_data.dart';
 import '../../services/audio_service.dart';
 import '../../services/analytics_service.dart';
@@ -93,32 +93,12 @@ class MusicSelectionPage extends StatefulWidget {
 }
 
 class _MusicSelectionPageState extends State<MusicSelectionPage> {
-  Uint8List? _cover;
-  bool _loading = true;
-  bool _played = false;
-
   @override
   void initState() {
     super.initState();
-    _loadCovers();
-  }
-
-  Future<void> _loadCovers() async {
-    try {
-      final bd = await rootBundle.load('assets/photos/elements/cover_am_session.webp');
-      _cover = bd.buffer.asUint8List();
-    } catch (e) {
-      debugPrint("Error loading covers: $e");
-    }
-    if (mounted) {
-      setState(() => _loading = false);
-      // Auto-play study session as default
-      if (!_played) {
-        _played = true;
-        BackgroundMusicService().play('tunes/1_A.M_Study_Session_lofi_hip_hop_5min.m4a');
-        AnalyticsService.instance.logEvent('onboarding_music_selected', params: {'index': '0'});
-      }
-    }
+    // Auto-play study session as default
+    BackgroundMusicService().play('tunes/1_A.M_Study_Session_lofi_hip_hop_5min.m4a');
+    AnalyticsService.instance.logEvent('onboarding_music_selected', params: {'index': '0'});
   }
 
   @override
@@ -141,7 +121,7 @@ class _MusicSelectionPageState extends State<MusicSelectionPage> {
           ),
           const SizedBox(height: 24),
           Text(
-            "Pick some music, get\ncomfortable.",
+            "By the end of it, You'll...",
             style: tt.headlineSmall?.copyWith(
               color: cs.onSurface,
               fontWeight: FontWeight.bold,
@@ -149,44 +129,14 @@ class _MusicSelectionPageState extends State<MusicSelectionPage> {
             ),
           ),
           const SizedBox(height: 24),
-          Text(
-            "By the end, you'd have written your first journal, unlocked 3 scratch cards (containing personalized AI insights from the Holy Quran), named your Cat, and earned 200 stars!",
-            style: tt.bodyLarge?.copyWith(
-              color: cs.onSurface,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
+          _bulletRow(context, "Write your first journal entry"),
+          _bulletRow(context, "Unlock 3 scratch cards with personalized AI Quran insights"),
+          _bulletRow(context, "Receive 3 personalized Quran verses"),
+          _bulletRow(context, "Discover your Spiritual Archetype"),
+          _bulletRow(context, "Start the 30-days journaling + Quran challenge that'll change you"),
+          _bulletRow(context, "Name your cat companion"),
+          _bulletRow(context, "Earn up to 250 stars"),
           const Spacer(flex: 1),
-          if (_loading)
-            const Center(child: CircularProgressIndicator())
-          else
-            Center(
-              child: Column(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: cs.primary, width: 3),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(21),
-                      child: _cover != null
-                          ? Image.memory(_cover!, height: 160, width: 220, fit: BoxFit.cover)
-                          : Container(
-                              height: 160,
-                              width: 220,
-                              color: cs.surfaceContainerHighest,
-                              child: const Icon(Icons.music_note, size: 48),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text("1am study session", style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text("lofi • default", style: tt.labelSmall?.copyWith(color: cs.onSurface.withValues(alpha: 0.6))),
-                ],
-              ),
-            ),
           const Spacer(flex: 1),
           Row(
             children: [
@@ -274,12 +224,10 @@ class _NamePageState extends State<NamePage> {
   @override
   void initState() {
     super.initState();
-    if (widget.data.displayName != null) {
-      _userController.text = widget.data.displayName!;
-    }
-    if (widget.data.catName != null) {
-      _catController.text = widget.data.catName!;
-    }
+    _userController.text = widget.data.displayName ?? '';
+    _catController.text = widget.data.catName ?? '';
+    _userController.addListener(() => setState(() {}));
+    _catController.addListener(() => setState(() {}));
   }
 
   @override
@@ -393,12 +341,15 @@ class _NamePageState extends State<NamePage> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 1,
-                      child: DuoButton(
-                        onPressed: widget.onBack,
+                Builder(
+                  builder: (context) {
+                    final canContinue = _userController.text.trim().isNotEmpty && _catController.text.trim().isNotEmpty;
+                    return Row(
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: DuoButton(
+                            onPressed: widget.onBack,
                         backgroundColor: cs.secondaryContainer,
                         depthColor: cs.secondaryContainer.withValues(
                           alpha: 0.8,
@@ -420,22 +371,17 @@ class _NamePageState extends State<NamePage> {
                     Expanded(
                       flex: 2,
                       child: DuoButton(
-                        onPressed: () {
-                          widget.data.displayName =
-                              _userController.text.trim().isNotEmpty
-                              ? _userController.text.trim()
-                              : null;
-                          widget.data.catName =
-                              _catController.text.trim().isNotEmpty
-                              ? _catController.text.trim()
-                              : null;
+                        onPressed: canContinue ? () {
+                          widget.data.displayName = _userController.text.trim();
+                          widget.data.catName = _catController.text.trim();
                           AnalyticsService.instance.logEvent('onboarding_names_entered');
                           widget.onNext();
-                        },
+                        } : null,
                         backgroundColor: cs.primary,
                         depthColor: cs.primary.withValues(alpha: 0.8),
                         radius: 16,
                         height: 56,
+                        dimOnDisabled: true,
                         sfxType: DuoSfxType.positive,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -459,6 +405,8 @@ class _NamePageState extends State<NamePage> {
                       ),
                     ),
                   ],
+                );
+                  },
                 ),
                 SizedBox(height: isKeyboardVisible ? 24 : 48),
               ],
@@ -468,5 +416,29 @@ class _NamePageState extends State<NamePage> {
       ),
     );
   }
+}
+
+Widget _bulletRow(BuildContext context, String text) {
+  final cs = Theme.of(context).colorScheme;
+  final tt = Theme.of(context).textTheme;
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Icon(Icons.check_circle_rounded, size: 18, color: cs.primary),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: tt.bodyLarge?.copyWith(color: cs.onSurface),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 

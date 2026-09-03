@@ -11,18 +11,18 @@ const description = 'Privacy Policy for Meowmin — what data we collect, how we
       <a class="back inline-block mb-8 font-medium text-brand hover:text-brand-dark transition" href="/">&larr; Meowmin</a>
 
       <h1 class="text-4xl sm:text-5xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-      <p class="subtitle text-gray-500 text-sm mb-10">Meowmin — Last updated: August 2026</p>
+      <p class="subtitle text-gray-500 text-sm mb-10">Meowmin — Last updated: September 2026 · Includes Paddle web billing</p>
 
       <div class="space-y-4 text-gray-700">
         <p>Meowmin ("we", "our", "app") respects your privacy. This policy explains what data we collect, how we use it, and your rights regarding your information.</p>
 
         <h2 class="text-2xl font-semibold text-gray-900 pt-6">Data We Collect</h2>
         <ul class="list-disc pl-6 space-y-2">
-          <li><strong>Diary entries</strong> — The text you write in your daily reflections. Stored securely in Cloud Firestore.</li>
+          <li><strong>Diary entries</strong> — The text you write in your daily reflections. Encrypted and stored securely (Turso DB). Your journal is yours alone.</li>
           <li><strong>Account information</strong> — Email address and display name if you sign in with Google. Anonymous users are not asked for this.</li>
           <li><strong>Approximate location</strong> — Used only for calculating accurate prayer times via the Adhan library. Never uploaded or shared.</li>
           <li><strong>Device information</strong> — Used solely for scheduling reminders (suhoor, iftar, night reminders).</li>
-          <li><strong>Subscription status</strong> — Processed entirely by RevenueCat and Google Play. We never see your payment details.</li>
+          <li><strong>Subscription status</strong> — Processed by <strong>Paddle.com Market Ltd</strong> (our Merchant of Record) and <strong>RevenueCat</strong> for entitlement sync. We never see or store your card, bank, or full payment details.</li>
         </ul>
 
         <h2 class="text-2xl font-semibold text-gray-900 pt-6">How We Use Data</h2>
@@ -38,10 +38,13 @@ const description = 'Privacy Policy for Meowmin — what data we collect, how we
         <h2 class="text-2xl font-semibold text-gray-900 pt-6">Data Sharing</h2>
         <p>We do not sell your data. Data is shared only with essential service providers:</p>
         <ul class="list-disc pl-6 space-y-2">
-          <li><strong>AI provider</strong> — Processes diary text to generate insights. Your text is not stored beyond the request.</li>
-          <li><strong>RevenueCat</strong> — Manages subscription paywall and purchase verification.</li>
-          <li><strong>Google (Firebase)</strong> — Provides authentication (Firebase Auth) and data storage (Cloud Firestore).</li>
+          <li><strong>Paddle.com Market Ltd</strong> — Our <strong>Merchant of Record</strong> for all web payments. Paddle collects your email, billing address, and payment method to process checkout, calculate VAT/GST, handle invoicing, and issue refunds. Your statement shows <code class="bg-gray-100 px-1.5 py-0.5 rounded text-sm">PADDLE.NET* MEOWMIN</code>. We never see your card or bank details — Paddle does.</li>
+          <li><strong>RevenueCat</strong> — Manages subscription entitlements, paywalls, and purchase verification (synced with Paddle). No payment details pass through our servers.</li>
+          <li><strong>AI providers (Fanar / OpenRouter)</strong> — Process diary text to generate personalized Islamic reflections, Surah stories, and tasks. Your text is sent per request and not retained beyond processing.</li>
+          <li><strong>Google (Firebase)</strong> — Provides authentication (Firebase Auth). Anonymous sign-in available.</li>
+          <li><strong>Turso (LibSQL)</strong> — Our encrypted database for journal storage.</li>
         </ul>
+        <p class="text-sm text-gray-500">For web checkout, Paddle is the data controller for payment information under Paddle’s <a href="https://www.paddle.com/privacy" target="_blank" rel="noopener" class="underline hover:text-gray-700">privacy policy</a>; we are the controller for your journal and account data. RevenueCat processes subscription status as a processor. See also our <a href="/refund" class="text-brand underline">Refund Policy</a> (all web refunds via Paddle) and <a href="/pricing" class="text-brand underline">Pricing</a>.</p>
 
         <h2 class="text-2xl font-semibold text-gray-900 pt-6">Data Deletion</h2>
         <p>You can delete your account and all associated data at any time from within the app: <strong>Profile → Delete Account</strong>. Data is permanently removed from our servers within 30 days of deletion.</p>

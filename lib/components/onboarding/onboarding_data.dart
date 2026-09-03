@@ -21,6 +21,7 @@ class OnboardingData {
   String? lastGeneratedJournalEntry;
 
   String? commitmentLevel;
+  bool chosenHard = false;
 
   bool notificationsEnabled = false;
   bool locationEnabled = false;

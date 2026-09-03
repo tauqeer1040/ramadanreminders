@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import ScratchDemo from '../components/ScratchDemo.astro';
 
 const features = [
   {
@@ -78,15 +79,20 @@ const features = [
           </h1>
           <div class="flex items-start gap-3 mb-6 animate-fade-up delay-300" style="max-width: 480px;">
             <img src="/images/face.png" alt="" class="h-10 w-auto mt-0.5 flex-shrink-0" />
-            <p class="text-lg text-gray-600 leading-relaxed">
+            <p class="text-lg text-gray-600 leading-relaxed text-left">
               Ever feel the Quran speaks to your heart, but not to your day? Meowmin closes that gap &mdash; angry day, worried day, grateful day, you get the verse that matches what you lived.
             </p>
           </div>
           <div class="flex flex-col items-center lg:items-start animate-fade-up delay-400">
-            <a href="/app" class="inline-flex items-center gap-2 bg-brand text-white px-8 py-4 rounded-2xl hover:bg-brand-dark transition-all duration-200 shadow-lg shadow-brand/20 mb-3 font-semibold text-lg">
-              Open Meowmin
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
-            </a>
+            <div class="flex flex-col sm:flex-row gap-3 mb-3 w-full sm:w-auto">
+              <a href="/app" class="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-4 rounded-2xl hover:bg-brand-dark transition-all duration-200 shadow-lg shadow-brand/20 font-semibold text-lg">
+                Open Meowmin
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+              </a>
+              <a href="/pricing#plans" class="inline-flex items-center justify-center gap-2 bg-white text-brand border-2 border-brand px-8 py-4 rounded-2xl hover:bg-brand/5 transition-all duration-200 font-semibold text-lg">
+                Get Max
+              </a>
+            </div>
             <p class="text-xs text-gray-400 mt-1 animate-fade-up delay-400">
               Free to use · No credit card required
             </p>
@@ -102,6 +108,31 @@ const features = [
           </div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- Play Store Carousel - auto moving -->
+  <section aria-label="App screenshots" class="py-8 sm:py-10 bg-white border-y border-gray-100 overflow-hidden">
+    <div class="max-w-6xl mx-auto px-6 lg:px-8 flex items-center justify-between mb-6">
+      <p class="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">Seen on Play Store</p>
+      <a href="https://play.google.com/store/apps/details?id=com.taucity.meowmin" target="_blank" rel="noopener" class="text-sm font-semibold text-brand hover:text-brand-dark transition">View on Play Store →</a>
+    </div>
+    <div class="relative">
+      <div class="flex gap-4 w-max animate-marquee hover:[animation-play-state:paused] will-change-transform" aria-hidden="false">
+        {[1,2,3,4,5,6,1,2,3,4,5,6].map((n) => (
+          <img src={`/screenshots/playstore/${n}.webp`} alt={`Meowmin screenshot ${n}`} width="240" height="426" loading="lazy" decoding="async" class="w-[160px] sm:w-[190px] md:w-[220px] lg:w-[240px] h-auto rounded-[1.75rem] border border-gray-200 shadow-sm flex-shrink-0" />
+        ))}
+      </div>
+      <div class="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-white to-transparent"></div>
+      <div class="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white to-transparent"></div>
+    </div>
+    <style>
+      @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+      .animate-marquee { animation: marquee 28s linear infinite; }
+      @media (prefers-reduced-motion: reduce) { .animate-marquee { animation: none; } }
+    </style>
+    <div class="max-w-6xl mx-auto px-6 lg:px-8 mt-6 text-center">
+      <a href="/pricing#plans" class="inline-flex items-center justify-center gap-2 bg-white text-brand border-2 border-brand px-6 py-3 rounded-2xl font-semibold hover:bg-brand/5 transition">Get Max</a>
     </div>
   </section>
 
@@ -137,81 +168,16 @@ const features = [
           </div>
         </div>
       </div>
-      <!-- The Thread: narrative examples -->
+      <!-- The Thread: scratch card demo (3 hardcoded, interactive) -->
       <div class="mt-20 sm:mt-28">
         <h3 class="font-display text-3xl sm:text-4xl font-bold text-gray-900 text-center mb-3">Your day has a verse</h3>
-        <p class="text-gray-500 text-lg text-center mb-14">Every feeling you carry, every moment you live &mdash; there's an aayah that meets you there. <span class="text-gray-400">Every verse, chosen for your day &mdash; never random, always for you.</span></p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
-          <!-- Example 1: Anger -->
-          <div class="flex flex-col items-center">
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 w-full text-center min-h-[120px] flex items-center justify-center">
-              <p class="text-gray-700 leading-relaxed">Lost my temper in traffic. Sat in the car after, feeling guilty.</p>
-            </div>
-            <div class="my-5 flex-shrink-0 flex items-center justify-center">
-              <svg width="36" height="56" viewBox="0 0 36 56" fill="none" class="hidden md:block"><path d="M18 0 C6 10 30 18 18 28 C6 38 30 46 18 56" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-              <svg width="56" height="36" viewBox="0 0 56 36" fill="none" class="md:hidden"><path d="M0 18 C10 6 18 30 28 18 C38 6 46 30 56 18" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-            </div>
-            <div class="bg-brand/10 rounded-2xl p-6 border border-brand/20 w-full text-center min-h-[120px] flex flex-col items-center justify-center gap-3">
-              <p class="text-gray-800 italic text-lg leading-relaxed">&hellip;and when they are angry, they forgive.</p>
-              <span class="text-brand text-sm font-semibold">42:37</span>
-            </div>
-          </div>
-          <!-- Example 2: Worry -->
-          <div class="flex flex-col items-center">
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 w-full text-center min-h-[120px] flex items-center justify-center">
-              <p class="text-gray-700 leading-relaxed">Checked my bank balance three times before bed. Still couldn't sleep.</p>
-            </div>
-            <div class="my-5 flex-shrink-0 flex items-center justify-center">
-              <svg width="36" height="56" viewBox="0 0 36 56" fill="none" class="hidden md:block"><path d="M18 0 C30 10 6 18 18 28 C30 38 6 46 18 56" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-              <svg width="56" height="36" viewBox="0 0 56 36" fill="none" class="md:hidden"><path d="M0 18 C10 30 18 6 28 18 C38 30 46 6 56 18" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-            </div>
-            <div class="bg-brand/10 rounded-2xl p-6 border border-brand/20 w-full text-center min-h-[120px] flex flex-col items-center justify-center gap-3">
-              <p class="text-gray-800 italic text-lg leading-relaxed">&hellip;and whoever puts their trust in Allah, He will be enough for them.</p>
-              <span class="text-brand text-sm font-semibold">65:3</span>
-            </div>
-          </div>
-          <!-- Example 3: Gratitude -->
-          <div class="flex flex-col items-center">
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 w-full text-center min-h-[120px] flex items-center justify-center">
-              <p class="text-gray-700 leading-relaxed">My daughter held my hand crossing the street today. Small thing, but it made my whole week.</p>
-            </div>
-            <div class="my-5 flex-shrink-0 flex items-center justify-center">
-              <svg width="36" height="56" viewBox="0 0 36 56" fill="none" class="hidden md:block"><path d="M18 0 C6 10 30 18 18 28 C6 38 30 46 18 56" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-              <svg width="56" height="36" viewBox="0 0 56 36" fill="none" class="md:hidden"><path d="M0 18 C10 6 18 30 28 18 C38 6 46 30 56 18" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-            </div>
-            <div class="bg-brand/10 rounded-2xl p-6 border border-brand/20 w-full text-center min-h-[120px] flex flex-col items-center justify-center gap-3">
-              <p class="text-gray-800 italic text-lg leading-relaxed">If you are grateful, I will surely increase you.</p>
-              <span class="text-brand text-sm font-semibold">14:7</span>
-            </div>
-          </div>
-          <!-- Example 4: Loneliness -->
-          <div class="flex flex-col items-center">
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 w-full text-center min-h-[120px] flex items-center justify-center">
-              <p class="text-gray-700 leading-relaxed">Came home to an empty apartment. Turned on the TV just to hear voices.</p>
-            </div>
-            <div class="my-5 flex-shrink-0 flex items-center justify-center">
-              <svg width="36" height="56" viewBox="0 0 36 56" fill="none" class="hidden md:block"><path d="M18 0 C30 10 6 18 18 28 C30 38 6 46 18 56" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-              <svg width="56" height="36" viewBox="0 0 56 36" fill="none" class="md:hidden"><path d="M0 18 C10 30 18 6 28 18 C38 30 46 6 56 18" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-            </div>
-            <div class="bg-brand/10 rounded-2xl p-6 border border-brand/20 w-full text-center min-h-[120px] flex flex-col items-center justify-center gap-3">
-              <p class="text-gray-800 italic text-lg leading-relaxed">&hellip;Indeed, I am with you both. I hear and I see.</p>
-              <span class="text-brand text-sm font-semibold">20:46</span>
-            </div>
-          </div>
-          <!-- Example 5: Grief -->
-          <div class="flex flex-col items-center">
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 w-full text-center min-h-[120px] flex items-center justify-center">
-              <p class="text-gray-700 leading-relaxed">Buried my father last week. Some days I forget he's gone, then it hits me all over again.</p>
-            </div>
-            <div class="my-5 flex-shrink-0 flex items-center justify-center">
-              <svg width="36" height="56" viewBox="0 0 36 56" fill="none" class="hidden md:block"><path d="M18 0 C6 10 30 18 18 28 C6 38 30 46 18 56" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-              <svg width="56" height="36" viewBox="0 0 56 36" fill="none" class="md:hidden"><path d="M0 18 C10 6 18 30 28 18 C38 6 46 30 56 18" stroke="#9d50ff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
-            </div>
-            <div class="bg-brand/10 rounded-2xl p-6 border border-brand/20 w-full text-center min-h-[120px] flex flex-col items-center justify-center gap-3">
-              <p class="text-gray-800 italic text-lg leading-relaxed">&hellip;Indeed, with hardship comes ease.</p>
-              <span class="text-brand text-sm font-semibold">94:6</span>
-            </div>
-          </div>
+        <p class="text-gray-500 text-lg text-center mb-4">Every feeling you carry, every moment you live — there's an aayah that meets you there.</p>
+        <p class="text-gray-400 text-sm text-center mb-10 flex items-center justify-center gap-2"><span class="inline-block w-2 h-2 bg-brand rounded-full animate-pulse"></span> Scratch to reveal — never random, always for you <span class="inline-block w-2 h-2 bg-brand rounded-full animate-pulse"></span></p>
+        <ScratchDemo />
+        <p class="text-center text-xs text-gray-400 mt-6">Demo cards — your real insights are personalized to your journal in the app</p>
+        <div class="text-center mt-8">
+          <a href="/pricing#plans" class="inline-flex items-center gap-2 bg-brand text-white px-7 py-3.5 rounded-2xl font-bold hover:bg-brand-dark transition shadow-lg">Get Max — shield your streak →</a>
+          <p class="text-xs text-gray-400 mt-2">114 Surahs · 30 Juz · habit over burnout</p>
         </div>
       </div>
     </div>
@@ -233,6 +199,9 @@ const features = [
           </div>
         ))}
       </div>
+      <div class="text-center mt-12">
+        <a href="/pricing#plans" class="inline-flex items-center gap-2 bg-white border-2 border-brand text-brand px-7 py-3 rounded-2xl font-bold hover:bg-brand/5 transition">Get Max — simple, not complex →</a>
+      </div>
     </div>
   </section>
 
@@ -250,12 +219,12 @@ const features = [
           <p class="text-gray-600 leading-relaxed">Yes. Meowmin is a quran journal: every entry returns real Quran verses with Arabic, transliteration, and English, so you understand the revelation behind your day.</p>
         </div>
         <div>
-          <h3 class="text-xl font-semibold text-gray-900 mb-2">Does Meowmin include dhikr and tasbih?</h3>
-          <p class="text-gray-600 leading-relaxed">It does. A built-in dhikr and tasbih counter helps you track daily remembrance of Allah alongside your gratitude journal and mood check-ins.</p>
+          <h3 class="text-xl font-semibold text-gray-900 mb-2">Is Meowmin the best journal for dhikr?</h3>
+          <p class="text-gray-600 leading-relaxed">Meowmin <em>is</em> dhikr — the best journal for remembering Allah through your own life. Every reflection returns a verse that meets your day, so remembrance happens naturally as you write. There's no separate tasbih to manage; mindfulness is the feature.</p>
         </div>
         <div>
           <h3 class="text-xl font-semibold text-gray-900 mb-2">Can I use Meowmin during Ramadan?</h3>
-          <p class="text-gray-600 leading-relaxed">Meowmin is ramadan-ready — capture your fasting, reflection, and Qur'an habits in one private, encrypted space to build a consistent spiritual routine.</p>
+          <p class="text-gray-600 leading-relaxed">Absolutely — Meowmin was made for this. Ramadan isn't about logging fasts in another tracker; it's about being a more mindful Muslim. By writing a little each day, you carry the Quran with you through the month — more present, more connected, without adding another habit to manage.</p>
         </div>
       </div>
     </div>

@@ -52,9 +52,7 @@ class _JournalHistoryScreenState extends State<JournalHistoryScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
           'Journal History',

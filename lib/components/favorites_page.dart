@@ -51,9 +51,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
           'Favorite Insights',

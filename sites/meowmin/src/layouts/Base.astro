@@ -77,8 +77,8 @@ const pageTitle = Astro.url.pathname === '/'
     })} />
   </head>
   <body>
-    <!-- Navbar -->
-    <nav style="padding-top: 15px;" class="fixed top-0 left-0 right-0 z-50 bg-gray-900/70 backdrop-blur-xl border-b border-white/10">
+    <!-- Navbar - dark purple overlay -->
+    <nav style="padding-top: 15px;" class="fixed top-0 left-0 right-0 z-50 bg-[#1a0533]/80 backdrop-blur-xl border-b border-white/10">
       <div class="max-w-7xl mx-auto px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">
           <div class="flex items-center gap-2">
@@ -91,8 +91,11 @@ const pageTitle = Astro.url.pathname === '/'
             <a href="/#how" class="text-white/80 hover:text-white transition text-sm lg:text-base">How it works</a>
             <a href="/#features" class="text-white/80 hover:text-white transition text-sm lg:text-base">Features</a>
             <a href="/blog" class="text-white/80 hover:text-white transition text-sm lg:text-base">Blog</a>
+            <a href="/pricing" class="text-white/80 hover:text-white transition text-sm lg:text-base">Pricing</a>
+            <a href="/refund" class="text-white/80 hover:text-white transition text-sm lg:text-base">Refund</a>
             <a href="/privacy" class="text-white/80 hover:text-white transition text-sm lg:text-base">Privacy</a>
             <a href="/terms" class="text-white/80 hover:text-white transition text-sm lg:text-base">Terms</a>
+            <a href="/pricing#plans" class="hidden lg:inline-flex items-center gap-1 bg-white text-gray-900 px-4 py-2 rounded-full text-sm font-bold hover:bg-gray-100 transition shadow-sm">Get Max</a>
             <a href="/app" class="inline-flex items-center gap-2 bg-brand text-white px-5 lg:px-6 rounded-2xl text-sm lg:text-base whitespace-nowrap font-semibold shadow-lg shadow-brand/20 hover:bg-brand-dark transition-all duration-200">
               Open Meowmin
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
@@ -105,15 +108,18 @@ const pageTitle = Astro.url.pathname === '/'
           </button>
         </div>
       </div>
-      <!-- Mobile menu -->
-      <div id="mobile-menu" class="hidden md:hidden bg-gray-900/90 backdrop-blur-xl border-t border-white/10 px-6 pb-4">
+      <!-- Mobile menu - dark purple -->
+      <div id="mobile-menu" class="hidden md:hidden bg-[#1a0533]/95 backdrop-blur-xl border-t border-white/10 px-6 pb-4">
         <div class="flex flex-col space-y-3 pt-3">
           <a href="/#how" class="text-white/80 hover:text-white transition text-sm">How it works</a>
-          <a href="/#features" class="text-white/80 hover:text-white transition text-sm">Features</a>
-          <a href="/blog" class="text-white/80 hover:text-white transition text-sm">Blog</a>
-          <a href="/privacy" class="text-white/80 hover:text-white transition text-sm">Privacy</a>
-          <a href="/terms" class="text-white/80 hover:text-white transition text-sm">Terms</a>
-          <a href="/app" class="inline-flex items-center justify-center gap-2 bg-brand text-white px-5 py-2.5 rounded-2xl text-sm text-center whitespace-nowrap w-fit font-semibold shadow-lg shadow-brand/20 hover:bg-brand-dark transition-all duration-200">
+            <a href="/#features" class="text-white/80 hover:text-white transition text-sm">Features</a>
+            <a href="/blog" class="text-white/80 hover:text-white transition text-sm">Blog</a>
+            <a href="/pricing" class="text-white/80 hover:text-white transition text-sm">Pricing</a>
+            <a href="/pricing#plans" class="text-brand font-bold hover:text-brand-dark transition text-sm">Get Max</a>
+            <a href="/refund" class="text-white/80 hover:text-white transition text-sm">Refund</a>
+            <a href="/privacy" class="text-white/80 hover:text-white transition text-sm">Privacy</a>
+            <a href="/terms" class="text-white/80 hover:text-white transition text-sm">Terms</a>
+            <a href="/app" class="inline-flex items-center justify-center gap-2 bg-brand text-white px-5 py-2.5 rounded-2xl text-sm text-center whitespace-nowrap w-fit font-semibold shadow-lg shadow-brand/20 hover:bg-brand-dark transition-all duration-200">
             Open Meowmin
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
           </a>
@@ -162,6 +168,8 @@ const pageTitle = Astro.url.pathname === '/'
           <div>
             <h3 class="font-semibold text-xs sm:text-sm uppercase tracking-wider mb-4 text-white/80">Company</h3>
             <ul class="space-y-2 sm:space-y-3 text-sm sm:text-base">
+              <li><a href="/pricing" class="hover:text-white/70 transition">Pricing</a></li>
+              <li><a href="/refund" class="hover:text-white/70 transition">Refund Policy</a></li>
               <li><a href="/privacy" class="hover:text-white/70 transition">Privacy Policy</a></li>
               <li><a href="/terms" class="hover:text-white/70 transition">Terms of Service</a></li>
               <li><a href="mailto:contact@taucity.xyz" class="hover:text-white/70 transition">Contact</a></li>

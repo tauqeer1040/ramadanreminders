@@ -45,8 +45,8 @@ class NotificationService {
     if (kIsWeb) {
       if (!_webNotificationsSupported) return false;
       try {
-        final result = await Notification.requestPermission().toDart;
-        return result.toDart == 'granted';
+        final result = await Notification.requestPermission();
+        return result?.toString() == 'granted';
       } catch (_) {
         return false;
       }
@@ -155,7 +155,7 @@ class NotificationService {
       body: body,
       scheduledDate: dateTime,
       notificationDetails: notificationDetails,
-      androidScheduleMode: fln.AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: fln.AndroidScheduleMode.exactAllowWhileIdle,
       matchDateTimeComponents: fln.DateTimeComponents.time,
     );
   }
