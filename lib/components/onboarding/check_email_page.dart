@@ -29,6 +29,10 @@ class CheckEmailScreen extends StatefulWidget {
   /// Overrides the skip button label (default "Continue without email…").
   final String? skipLabel;
 
+  /// Hides the inline skip row so the host can render its own
+  /// (e.g. bigger, pinned to the bottom).
+  final bool hideSkip;
+
   const CheckEmailScreen({
     super.key,
     required this.email,
@@ -38,6 +42,7 @@ class CheckEmailScreen extends StatefulWidget {
     this.onSkip,
     this.title,
     this.skipLabel,
+    this.hideSkip = false,
   });
 
   @override
@@ -234,48 +239,51 @@ class _CheckEmailScreenState extends State<CheckEmailScreen> {
         children: [
           const SizedBox(height: 24),
           SizedBox(
-            width: 112,
-            height: 112,
+            width: 120,
+            height: 120,
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: cs.primary.withValues(alpha: 0.12),
-                  ),
-                  child: ClipOval(
-                    child: Image.asset(
-                      'assets/photos/mascot/face.webp',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(
-                        Icons.mark_email_read_rounded,
-                        color: cs.primary,
-                        size: 44,
-                      ),
+                ClipOval(
+                  child: Image.asset(
+                    'assets/photos/mascot/face.webp',
+                    width: 104,
+                    height: 104,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.mark_email_read_rounded,
+                      color: cs.primary,
+                      size: 44,
                     ),
                   ),
                 ),
                 Positioned(
-                  right: -2,
-                  bottom: -2,
+                  right: 10,
+                  bottom: 8,
                   child: Container(
-                    width: 40,
-                    height: 40,
+                    width: 46,
+                    height: 46,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: cs.primary,
+                      color: Colors.white,
                       border: Border.all(
                         color: cs.surface,
-                        width: 3,
+                        width: 2,
                       ),
                     ),
-                    child: Icon(
-                      Icons.mark_email_read_rounded,
-                      color: Colors.white,
-                      size: 20,
+                    child: ClipOval(
+                      child: Padding(
+                        padding: const EdgeInsets.all(9),
+                        child: Image.asset(
+                          'assets/photos/elements/gmail_logo.png',
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => Icon(
+                            Icons.mark_email_read_rounded,
+                            color: cs.primary,
+                            size: 22,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -331,12 +339,12 @@ class _CheckEmailScreenState extends State<CheckEmailScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'Waiting for purchase… this screen unlocks automatically.',
+                'Waiting for registration… this screen unlocks automatically.',
                 style: tt.bodySmall?.copyWith(color: cs.onSurface.withValues(alpha: 0.5)),
                 textAlign: TextAlign.center,
               ),
             ),
-          if (!widget.hard && widget.onSkip != null) ...[
+          if (!widget.hideSkip && !widget.hard && widget.onSkip != null) ...[
             const SizedBox(height: 16),
             if (widget.skipLabel != null)
               TextButton(

@@ -1,11 +1,60 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/app_background.dart';
 import '../../services/analytics_service.dart';
+import '../../services/email_continue_service.dart';
 import '../../services/revenuecat_service.dart';
 import '../../theme/app_theme.dart';
 import '../onboarding/check_email_page.dart';
+import '../onboarding/onboarding_data.dart';
+import '../onboarding/pages/email_page.dart';
 import 'duo_button.dart';
 import 'glass_container.dart';
+
+/// "Confirm registration": opens onboarding step 19 as a standalone route
+/// while simultaneously minting a continue-token so the Resend registration
+/// email goes out instantly. Fire-and-forget mint — failures never block.
+Future<void> openConfirmRegistration(BuildContext context) async {
+  HapticFeedback.mediumImpact();
+  String email = FirebaseAuth.instance.currentUser?.email ?? '';
+  if (email.isEmpty) {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      email = prefs.getString('onboarding_email') ?? '';
+    } catch (_) {}
+  }
+  try {
+    AnalyticsService.instance.logEvent('confirm_registration_opened');
+  } catch (_) {}
+  if (email.isNotEmpty) {
+    EmailContinueService.mint(email: email).then((res) {
+      debugPrint(
+        '[Registration] background mint: emailed=${res?['emailed']}',
+      );
+    }).catchError((_) {});
+  }
+  if (!context.mounted) return;
+  final data = OnboardingData()..email = email.isNotEmpty ? email : null;
+  await Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => Scaffold(
+        body: AppBackground(
+          backgroundImage: 'assets/photos/elements/onboarding.webp',
+          overlayOpacity: 0.35,
+          child: SafeArea(
+            child: EmailPage(
+              data: data,
+              onNext: () => Navigator.of(context).pop(),
+              onBack: () => Navigator.of(context).pop(),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
 
 /// Email-only membership entry. Collects the user's email, then opens the
 /// existing [CheckEmailScreen] (soft mode: skippable, unlocks automatically

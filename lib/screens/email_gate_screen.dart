@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../components/onboarding/check_email_page.dart';
 import '../core/app_background.dart';
 import '../services/analytics_service.dart';
-import '../services/revenuecat_service.dart';
 import 'main_screen.dart';
 
 /// Shown on every launch until the user subscribes to Max: the same
@@ -49,27 +48,11 @@ class _EmailGateScreenState extends State<EmailGateScreen> {
     );
   }
 
-  Future<void> _restore() async {
-    HapticFeedback.lightImpact();
+  void _skip() {
     try {
-      final info = await RevenueCatService.instance.restorePurchases();
-      final ok =
-          RevenueCatService.instance.hasActiveEntitlement(info);
-      if (!mounted) return;
-      if (ok) {
-        _goMain();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No purchases found to restore')),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No purchases found to restore')),
-        );
-      }
-    }
+      AnalyticsService.instance.logEvent('email_gate_skipped');
+    } catch (_) {}
+    _goMain();
   }
 
   @override
@@ -91,30 +74,31 @@ class _EmailGateScreenState extends State<EmailGateScreen> {
                           email: _email,
                           title:
                               'Check your email to complete registration',
-                          skipLabel: 'Skip for now',
-                          onSkip: () {
-                            try {
-                              AnalyticsService.instance.logEvent(
-                                'email_gate_skipped',
-                              );
-                            } catch (_) {}
-                            _goMain();
-                          },
+                          hideSkip: true,
                           onUnlocked: _goMain,
                         ),
                       ),
                     ),
                     TextButton(
-                      onPressed: _restore,
+                      onPressed: _skip,
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        surfaceTintColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
                       child: Text(
-                        'Restore purchases',
-                        style: tt.bodySmall?.copyWith(
-                          color:
-                              cs.onSurface.withValues(alpha: 0.5),
+                        'Skip for now',
+                        style: tt.headlineSmall?.copyWith(
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
                   ],
                 ),
         ),

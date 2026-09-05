@@ -69,7 +69,8 @@ flutter:
     - assets/shop/thumbs/
     - assets/shop/full/
     - assets/shop/widget/
-    - assets/splash/
+    # Splash: only splash.gif (no webp/webm variants).
+    - assets/splash/splash.gif
   fonts:
     - family: Amiri
       fonts:

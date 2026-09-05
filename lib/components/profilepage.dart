@@ -821,14 +821,14 @@ class _ProfilePage1State extends State<ProfilePage1>
             children: [
               Icon(Icons.person_add_rounded, color: Colors.black, size: 20),
               SizedBox(width: 10),
-              Text(
-                'Complete registration',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
+          Text(
+            'Confirm registration',
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
             ],
           ),
         ),
@@ -839,10 +839,9 @@ class _ProfilePage1State extends State<ProfilePage1>
 
   Future<void> _openRegistration() async {
     if (!mounted) return;
-    HapticFeedback.lightImpact();
     final email = _currentUser?.email ?? '';
     if (email.isNotEmpty) return;
-    await showCompleteRegistrationSheet(context);
+    await openConfirmRegistration(context);
     if (mounted) setState(() {});
   }
 

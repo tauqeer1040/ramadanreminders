@@ -54,7 +54,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
-        precacheImage(const AssetImage('assets/splash/gif.webp'), context);
+        precacheImage(const AssetImage('assets/splash/splash.gif'), context);
       } catch (e) {
         debugPrint('[Splash] precache gif failed: $e');
       }
@@ -304,7 +304,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 color: Colors.black,
                 child: Center(
                   child: Image.asset(
-                    'assets/splash/gif.webp',
+                    'assets/splash/splash.gif',
                     fit: BoxFit.contain,
                   ),
                 ),

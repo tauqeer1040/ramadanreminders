@@ -248,10 +248,9 @@ class _SubscribeButton extends StatelessWidget {
   const _SubscribeButton();
 
   Future<void> _openRegistration(BuildContext context) async {
-    HapticFeedback.mediumImpact();
     final email = FirebaseAuth.instance.currentUser?.email ?? '';
     if (email.isNotEmpty) return;
-    await showCompleteRegistrationSheet(context);
+    await openConfirmRegistration(context);
   }
 
   @override
@@ -273,7 +272,7 @@ class _SubscribeButton extends StatelessWidget {
           Icon(Icons.person_add_rounded, color: Colors.black, size: 22),
           SizedBox(width: 10),
           Text(
-            'Complete registration',
+            'Confirm registration',
             style: TextStyle(
               color: Colors.black,
               fontSize: 16,
