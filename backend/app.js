@@ -57,7 +57,7 @@ app.use((req, res, next) => {
 
 // Auth middleware
 app.use('/api/v2', (req, res, next) => {
-  if (['/ayah', '/shop/items', '/app-version', '/internal/poll-ai', '/internal/errors'].includes(req.path)) return next();
+  if (['/ayah', '/shop/items', '/app-version', '/internal/poll-ai', '/internal/errors', '/external-offer/resolve'].includes(req.path)) return next();
   return verifyAuth(req, res, next);
 });
 
@@ -96,6 +96,8 @@ require('./routes/users')(app);
 require('./routes/journals')(app, apiLimiter);
 require('./routes/ai')(app, aiLimiter);
 require('./routes/misc')(app);
+require('./routes/emailContinue')(app);
+require('./routes/externalOffer')(app);
 require('./routes/stars')(app);
 require('./routes/shop')(app);
 require('./routes/paddleWebhook')(app);

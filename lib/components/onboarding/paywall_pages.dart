@@ -444,7 +444,7 @@ class _PaywallPage3State extends State<PaywallPage3> {
                               ),
                             ),
                             Text(
-                              'Then \$59/yr or \$9/mo',
+                              'Starts at \$1 for 3 days, then \$49.99/4mo',
                               style: TextStyle(
                                 color: AppTheme.ghostSilver.withValues(alpha: 0.8),
                                 fontSize: 12,

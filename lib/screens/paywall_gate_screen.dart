@@ -2,11 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ramadan_reflections/services/revenuecat_service.dart';
 import 'package:ramadan_reflections/services/revenuecat_provider.dart';
 import '../theme/app_theme.dart';
 import '../components/widgets/duo_button.dart';
+import '../components/onboarding/check_email_page.dart';
 import '../services/trial_service.dart';
 
 class PaywallGateScreen extends ConsumerStatefulWidget {
@@ -28,7 +30,7 @@ class PaywallGateScreen extends ConsumerStatefulWidget {
 class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
   int _remainingSeconds = 0;
   Timer? _timer;
-  bool _presentingPaywall = false;
+  bool _emailPromptDone = true;
 
   @override
   void initState() {
@@ -45,34 +47,34 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
 
   Future<void> _loadRemaining() async {
     final status = await TrialService.getStatus();
-    if (mounted) setState(() => _remainingSeconds = (status.graceMs / 1000).ceil().clamp(0, 99999));
+    if (!mounted) return;
+    setState(() {
+      _remainingSeconds = (status.graceMs / 1000).ceil().clamp(0, 99999);
+      // Trial is email-free: never surface the email check while the gate
+      // is dismissable. The post-expiry hard gate carries its own
+      // mandatory email check.
+      if (widget.isDismissable) {
+        _emailPromptDone = true;
+      } else {
+        _emailPromptDone = false;
+      }
+    });
+  }
+
+  String get _gateEmail => FirebaseAuth.instance.currentUser?.email ?? '';
+
+  Future<void> _dismissPrompt() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('lastEmailPromptDay', DateTime.now().toIso8601String().substring(0, 10));
+    } catch (_) {}
+    if (mounted) setState(() => _emailPromptDone = true);
   }
 
   String _formatTime(int totalSeconds) {
     final min = totalSeconds ~/ 60;
     final sec = totalSeconds % 60;
     return '${min}m ${sec}s';
-  }
-
-  Future<void> _showPaywall() async {
-    if (_presentingPaywall) return;
-    _presentingPaywall = true;
-    HapticFeedback.mediumImpact();
-
-    try {
-      final result = await RevenueCatService.instance.presentPaywall(
-        displayCloseButton: widget.isDismissable,
-      );
-
-      if (result == PaywallResult.purchased || result == PaywallResult.restored) {
-        if (mounted) {
-          ref.read(revenueCatProvider.notifier).refresh();
-          widget.onSubscribe();
-        }
-      }
-    } finally {
-      _presentingPaywall = false;
-    }
   }
 
   Future<void> _restorePurchases() async {
@@ -123,6 +125,13 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Column(
                 children: [
+                  if (widget.isDismissable && !_emailPromptDone)
+                    CheckEmailScreen(
+                      email: _gateEmail,
+                      onSkip: _dismissPrompt,
+                      onUnlocked: widget.onSubscribe,
+                    )
+                  else ...[
                   const SizedBox(height: 60),
                   Container(
                     width: 120,
@@ -166,71 +175,35 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF6D00).withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: const Color(0xFFFF6D00).withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '\$1',
-                          style: TextStyle(
-                            color: Color(0xFFFF6D00),
-                            fontSize: 40,
+                  const SizedBox(height: 24),
+                  if (!widget.isDismissable)
+                    // Trial expired: mandatory email check. No purchase UI,
+                    // prices, or checkout links on Android (companion model).
+                    // Exits: purchase detected, sign-in/restore, resend/edit.
+                    CheckEmailScreen(
+                      email: _gateEmail,
+                      hard: true,
+                      onUnlocked: widget.onSubscribe,
+                    )
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      child: DuoButton(
+                        onPressed: () => widget.onDismiss(),
+                        backgroundColor: AppTheme.starGold,
+                        depthColor: const Color(0xFFD4A20C),
+                        radius: 16,
+                        height: 56,
+                        child: Text(
+                          'Continue free trial — ${_formatTime(_remainingSeconds)} left',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                        SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '30-Day Trial',
-                              style: TextStyle(
-                                color: AppTheme.starWhite,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            Text(
-                              'Then \$79.99/yr or \$9.99/mo',
-                              style: TextStyle(
-                                color: AppTheme.ghostSilver,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: DuoButton(
-                      onPressed: _showPaywall,
-                      backgroundColor: const Color(0xFFFF6D00),
-                      depthColor: const Color(0xFFE65100),
-                      radius: 16,
-                      height: 56,
-                      child: const Text(
-                        'Start Your \$1 Trial',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
                       ),
                     ),
-                  ),
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: _restorePurchases,
@@ -273,7 +246,7 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Text(
-                        'Your free trial has ended. Subscribe to continue using Meowmin.',
+                        'Your free trial has ended. Check your email above to continue using Meowmin.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: AppTheme.ghostSilver.withValues(alpha: 0.6),
@@ -284,6 +257,7 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
                     ),
                   ],
                   const SizedBox(height: 48),
+                  ],
                 ],
               ),
             ),

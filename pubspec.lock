@@ -374,6 +374,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.5.1"
+  flutter_inapp_purchase:
+    dependency: "direct main"
+    description:
+      name: flutter_inapp_purchase
+      sha256: "25c6713a6aaa49a7506ddf817f2947e0f080e93ae827709e371405a35f5d628c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "10.6.0"
   flutter_launcher_icons:
     dependency: "direct dev"
     description:

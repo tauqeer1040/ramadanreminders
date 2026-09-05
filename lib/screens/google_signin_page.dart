@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/analytics_service.dart';
+import '../services/revenuecat_service.dart';
 import '../components/widgets/duo_button.dart';
 
 class GoogleSignInPage extends StatefulWidget {
@@ -28,6 +29,14 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
     try {
       final cred = await AuthService.signInWithGoogle();
       AnalyticsService.instance.logEvent('onboarding_google_sign_in', params: {'action': 'completed'});
+      // Link the Firebase identity to RevenueCat so web purchases made with
+      // this email resolve to Max on next entitlement check. Never blocks login.
+      try {
+        final uid = cred?.user?.uid;
+        if (uid != null && uid.isNotEmpty) {
+          await RevenueCatService.instance.identify(uid);
+        }
+      } catch (_) {}
       if (mounted) {
         setState(() {
           _loggedIn = true;
@@ -142,7 +151,9 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
               Expanded(
                 flex: 2,
                 child: DuoButton(
-                  onPressed: widget.onFinish,
+                  // Mandatory sign-in: Continue stays disabled until signed in.
+                  onPressed: _loggedIn ? widget.onFinish : null,
+                  dimOnDisabled: true,
                   backgroundColor: cs.primary,
                   depthColor: cs.primary.withValues(alpha: 0.8),
                   radius: 16,

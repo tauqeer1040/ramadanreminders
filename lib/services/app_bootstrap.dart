@@ -108,9 +108,21 @@ class AppBootstrap {
 
     _coreInitialized = true;
 
-    // Log app open event for analytics
+    // Funnel: Install (first_open + custom app_install with browser/os) — deduped
     try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('install_logged') != true) {
+        await AnalyticsService.instance.logInstall(
+          installSource: kIsWeb ? 'web' : (defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android'),
+          platform: kIsWeb ? 'web' : defaultTargetPlatform.name,
+        );
+        await prefs.setBool('install_logged', true);
+      }
       AnalyticsService.instance.logAppOpen();
+      // Browser for iOS targeting
+      try {
+        AnalyticsService.instance.logBrowserInfo(browser: kIsWeb ? 'web' : 'native', os: kIsWeb ? 'web' : defaultTargetPlatform.name);
+      } catch (_) {}
     } catch (_) {}
 
     // Capture + accept any pending friend invite, and refresh the linked

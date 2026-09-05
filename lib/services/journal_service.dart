@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/bullet_item.dart';
+import 'analytics_service.dart';
 import 'journal_local_storage.dart';
 import 'journal_remote_storage.dart';
 import 'journal_sync_service.dart';
@@ -34,6 +36,29 @@ class JournalService {
     await JournalLocalStorage.saveText(id, text);
     JournalSyncService.triggerSync();
     notifyJournalsChanged();
+    _logFirstJournalAction(text);
+    _incrementJournalCount();
+  }
+
+  static Future<void> _incrementJournalCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final current = prefs.getInt('habit_tick_journal_count') ?? 0;
+      await prefs.setInt('habit_tick_journal_count', current + 1);
+    } catch (_) {}
+  }
+
+  static Future<void> _logFirstJournalAction(String text) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('first_true_action_logged') == true) return;
+      await prefs.setBool('first_true_action_logged', true);
+      AnalyticsService.instance.logFirstTrueAction(
+        which: 'journal',
+        action: 'save',
+        wordCount: text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length,
+      );
+    } catch (_) {}
   }
 
   static Future<Map<String, String>?> loadTodayJournal() async {

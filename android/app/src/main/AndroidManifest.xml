@@ -86,5 +86,12 @@
             <data
                 android:mimeType="text/plain"/>
         </intent>
+        <!-- Let resolveActivity() see email apps (Android 11+ package
+             visibility), so "Open email app" finds Gmail / mail clients. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.APP_EMAIL" />
+        </intent>
+        <package android:name="com.google.android.gm" />
     </queries>
 </manifest>

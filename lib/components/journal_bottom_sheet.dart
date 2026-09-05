@@ -363,9 +363,15 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
               border: InputBorder.none,
             ),
           ),
-          TweetCounter(
-            currentLength: _controller.text.length,
-            maxLength: _maxChars,
+          // Rebuilds on every keystroke (controller is a ValueNotifier),
+          // so the ring fills live — including while the keyboard is open.
+          // Only this subtree repaints; the TextField keeps focus.
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _controller,
+            builder: (_, value, __) => TweetCounter(
+              currentLength: value.text.length,
+              maxLength: _maxChars,
+            ),
           ),
         ],
       ),

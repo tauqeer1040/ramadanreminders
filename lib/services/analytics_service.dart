@@ -1,4 +1,5 @@
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:flutter/foundation.dart';
 import 'analytics_protocol.dart';
 
 class AnalyticsService implements AnalyticsProtocol {
@@ -13,8 +14,10 @@ class AnalyticsService implements AnalyticsProtocol {
   FirebaseAnalyticsObserver get observer => _observer;
 
   @override
-  Future<void> logEvent(String name, {Map<String, String>? params}) =>
-      _ensureAnalytics.logEvent(name: name, parameters: params);
+  Future<void> logEvent(String name, {Map<String, String>? params}) {
+    // also attach browser info for iOS audience
+    return _ensureAnalytics.logEvent(name: name, parameters: params);
+  }
 
   @override
   Future<void> setUserProperty(String name, String? value) =>
@@ -82,4 +85,78 @@ class AnalyticsService implements AnalyticsProtocol {
   @override
   Future<void> logShareContent(String contentType) =>
       logEvent('share_content', params: {'content_type': contentType});
+
+  @override
+  Future<void> logInstall({String? installSource, String? platform, String? browser, String? os}) => logEvent('app_install', params: {
+        if (installSource != null) 'install_source': installSource,
+        'platform': platform ?? (kIsWeb ? 'web' : defaultTargetPlatform.name),
+        if (browser != null) 'browser': browser,
+        if (os != null) 'os': os,
+      });
+
+  @override
+  Future<void> logSignUp({String? method, int? onboardingStepsCompleted, int? timeToSignUpMs}) => logEvent('sign_up', params: {
+        if (method != null) 'method': method,
+        if (onboardingStepsCompleted != null) 'onboarding_steps_completed': onboardingStepsCompleted.toString(),
+        if (timeToSignUpMs != null) 'time_to_sign_up_ms': timeToSignUpMs.toString(),
+      });
+
+  @override
+  Future<void> logFirstTrueAction({required String which, String? action, int? wordCount}) {
+    // which: journal | scratch | any
+    return logEvent('first_true_action', params: {
+      'which': which,
+      if (action != null) 'action': action,
+      if (wordCount != null) 'word_count': wordCount.toString(),
+    });
+  }
+
+  @override
+  Future<void> logTrialStarted({String? trialType, String? trialId, String? priceAfter}) => logEvent('trial_started', params: {
+        if (trialType != null) 'trial_type': trialType,
+        if (trialId != null) 'trial_id': trialId,
+        if (priceAfter != null) 'price_after': priceAfter,
+      });
+
+  @override
+  Future<void> logPurchase({String? value, String? currency, String? transactionId, String? priceId, String? plan, double? valueBeforeDiscount}) => logEvent('purchase', params: {
+        if (value != null) 'value': value,
+        if (currency != null) 'currency': currency,
+        if (transactionId != null) 'transaction_id': transactionId,
+        if (priceId != null) 'price_id': priceId,
+        if (plan != null) 'plan': plan,
+        if (valueBeforeDiscount != null) 'value_before_discount': valueBeforeDiscount.toString(),
+      });
+
+  @override
+  Future<void> logOnboardingStep({required String page, required int index, String? stepName}) {
+    setUserProperty('last_onboarding_step', page);
+    return logEvent('onboarding_step_viewed', params: {
+      'page': page,
+      'step_index': index.toString(),
+      if (stepName != null) 'step_name': stepName,
+    });
+  }
+
+  @override
+  Future<void> logBrowserInfo({String? browser, String? browserVersion, String? os, String? deviceCategory}) {
+    if (browser != null) setUserProperty('browser', browser);
+    if (os != null) setUserProperty('os', os);
+    return logEvent('browser_info', params: {
+      if (browser != null) 'browser': browser,
+      if (browserVersion != null) 'browser_version': browserVersion,
+      if (os != null) 'os': os,
+      if (deviceCategory != null) 'device_category': deviceCategory,
+    });
+  }
+
+  @override
+  Future<void> logHabitTick({required int activeDaysLast7, required int streakLen, required int totalJournalCount}) {
+    setUserProperty('active_days_7d', activeDaysLast7.toString());
+    return logEvent('habit_tick', params: {
+      'active_days_7d': activeDaysLast7.toString(),
+      'streak_len': streakLen.toString(),
+      'total_journal_count': totalJournalCount.toString(),
+    });
+  }
 }

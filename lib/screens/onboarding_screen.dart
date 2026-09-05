@@ -8,7 +8,7 @@ import '../services/version_check_service.dart';
 import '../services/local_trial_service.dart';
 import '../services/revenuecat_service.dart';
 import 'main_screen.dart';
-import 'paywall_gate_screen.dart';
+import '../services/email_continue_service.dart';
 import '../components/onboarding/onboarding_data.dart';
 import '../components/onboarding/onboarding_step.dart';
 import '../core/app_background.dart';
@@ -33,14 +33,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   // Star tracking
   int _totalStars = 0;
   int _oldStars = 0;
-  // 18 steps: Welcome, Music, Name, Intention, MillionDollars, Wakeup, Conclusion, PhoneHours, Bombshell1, Bombshell2, Bombshell3, Bridge, FirstJournal, AiInsight, Celebration, Summary, AppFeedback, GoogleSignIn (Qualifying hidden, replaced by RevenueCat popup)
+  // 19 steps: Welcome, Music, Name, Intention, MillionDollars, Wakeup, Conclusion, PhoneHours, Bombshell1, Bombshell2, Bombshell3, Bridge, FirstJournal, AiInsight, Celebration, Summary, AppFeedback, GoogleSignIn, Email (Qualifying hidden, replaced by RevenueCat popup)
   static const List<int> _stepStars = [
     5,  5,  10, // Welcome, Music, Name (action: user types name)
     5,  5,  5,  5,  30, // Intention, MillionDollars, Wakeup, Conclusion, PhoneHours (fingerprint reward)
     5,  5,  10, 10, // Bombshell1, Bombshell2, Bombshell3, Bridge
     50, 60, // FirstJournal (action: write journal), AiInsight (action: scratch cards)
     15, 15, // Celebration, Summary
-    0,  0, // AppFeedback, GoogleSignIn (Qualifying hidden)
+    0,  0,  5, // AppFeedback, GoogleSignIn, Email (Qualifying hidden)
   ];
 
   @override
@@ -57,6 +57,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   void _logPageView() {
     AnalyticsService.instance.logEvent('onboarding_page_viewed', params: {'page': _currentStep.name});
+    AnalyticsService.instance.logOnboardingStep(page: _currentStep.name, index: _currentIndex, stepName: _currentStep.name);
   }
 
   @override
@@ -120,7 +121,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   void _skipToLogin() {
-    final loginIndex = OnboardingStep.all.length - 1;
+    // "Skip to login" always lands on the GoogleSignIn step (index 17),
+    // even though the Email step (18) is now last.
+    const loginIndex = 17;
     _currentIndex = loginIndex;
     _currentStep = OnboardingStep.fromIndex(_currentIndex);
     _logPageView();
@@ -132,7 +135,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   Future<void> _finishOnboarding() async {
+    final timeToSignUpMs = DateTime.now().difference(_data.startTime).inMilliseconds;
     AnalyticsService.instance.logEvent('onboarding_complete');
+    AnalyticsService.instance.logSignUp(
+      method: FirebaseAuth.instance.currentUser == null ? 'anonymous' : 'google',
+      onboardingStepsCompleted: OnboardingStep.all.length,
+      timeToSignUpMs: timeToSignUpMs,
+    );
+    try { AnalyticsService.instance.logBrowserInfo(browser: 'onboarding', os: 'app'); } catch (_) {}
     AnalyticsService.instance.setUserProperty('onboarding_completed', 'true');
     if (_data.age != null) {
       AnalyticsService.instance.setUserProperty(
@@ -202,35 +212,45 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       // Hide Qualifying page — start 3-day trial and show RevenueCat popup (dismissable for 3 days)
       if (!await LocalTrialService.hasStarted()) {
         await LocalTrialService.startTrial();
+        final startMs = DateTime.now().millisecondsSinceEpoch;
+        await AnalyticsService.instance.logTrialStarted(trialType: '3_day_free', trialId: startMs.toString(), priceAfter: '1_usd');
       }
       final isSubscribed = await RevenueCatService.instance.isSubscribed();
-      if (isSubscribed) {
+      // Trial runs free with no registration. Email (step 19) is optional:
+      // head straight home; mint a continue-token in the background when an
+      // address was given so later member flows already have one.
+      void goMain() {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const MainScreen()),
           (route) => false,
         );
-      } else {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => PaywallGateScreen(
-              isDismissable: true, // first popup dismissable for 3 days; Splash will show hard paywall after expiry
-              onSubscribe: () {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const MainScreen()),
-                  (route) => false,
-                );
-              },
-              onDismiss: () {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const MainScreen()),
-                  (route) => false,
-                );
-              },
-            ),
-          ),
-          (route) => false,
-        );
       }
+
+      final onboardEmail = (_data.email ?? '').trim().isNotEmpty
+          ? _data.email!.trim()
+          : (FirebaseAuth.instance.currentUser?.email ?? '').trim();
+      if (onboardEmail.isNotEmpty) {
+        try {
+          await prefs.setString('onboarding_email', onboardEmail);
+        } catch (_) {}
+        final journal = _data.journalEntry;
+        final mins = DateTime.now().difference(_data.startTime).inMinutes;
+        EmailContinueService.mint(
+          email: onboardEmail,
+          snapshot: {
+            'intention': _data.intentionAnswer,
+            'journalExcerpt': journal == null
+                ? null
+                : (journal.length > 500 ? journal.substring(0, 500) : journal),
+            'insights': _data.journalAnalogies.take(3).toList(),
+            'timeSpent': mins < 1 ? 'a few mindful minutes' : '${mins}m',
+          },
+        ).then((_) {
+          debugPrint('[Onboarding] background continue-token minted');
+        }).catchError((_) {});
+      }
+      if (!mounted) return;
+      goMain();
     }
   }
 

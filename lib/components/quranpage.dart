@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_card_swiper/flutter_card_swiper.dart';
+import '../services/growth_prompt_service.dart';
 import 'package:scratcher/scratcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
@@ -19,6 +21,7 @@ import '../services/audio_service.dart';
 import './reflect_card.dart';
 import './insight_card_shimmer.dart';
 import './favorites_page.dart';
+import 'widgets/delight_action_sheet.dart';
 import 'widgets/mascot_empty_state.dart';
 import '../utils/image_urls.dart';
 import '../theme/app_theme.dart';
@@ -240,6 +243,46 @@ class _QuranPageState extends State<QuranPage>
         reference: card.reference ?? card.storyReference,
       ));
     }
+  }
+
+  /// One second after a double-tap like, offer a single rotating
+  /// growth action (review/share). Policy — 24h throttle, review at
+  /// most once per version (5-star stops forever), share max twice
+  /// per week, 7-day snooze — lives in [GrowthPromptService].
+  /// Never stacks over another route.
+  void _scheduleDelightSheet() {
+    Future.delayed(const Duration(seconds: 1), () async {
+      if (!mounted) return;
+      final route = ModalRoute.of(context);
+      if (route != null && !route.isCurrent) return;
+      try {
+        if (!await GrowthPromptService.shouldShowSheet()) return;
+        var actionName = await GrowthPromptService.nextActionName();
+        var action = actionName == 'share'
+            ? DelightAction.share
+            : DelightAction.review;
+        if (action == DelightAction.review) {
+          if (kIsWeb || !await GrowthPromptService.shouldOfferReview()) {
+            action = DelightAction.share;
+          }
+        }
+        if (action == DelightAction.share &&
+            !await GrowthPromptService.shouldOfferShare()) {
+          return;
+        }
+        await GrowthPromptService.flipNextAction(action.name);
+        await GrowthPromptService.recordSheetShown();
+        if (action == DelightAction.review) {
+          await GrowthPromptService.recordReviewOffered();
+        }
+        if (!mounted) return;
+        final routeNow = ModalRoute.of(context);
+        if (routeNow != null && !routeNow.isCurrent) return;
+        await showDelightActionSheet(context, action);
+      } catch (_) {
+        // Never interrupt journaling for a growth prompt.
+      }
+    });
   }
 
   void _triggerConfetti() {
@@ -814,6 +857,9 @@ class _QuranPageState extends State<QuranPage>
                                             _triggerConfetti();
                                             _rewardPlayer.play(AssetSource('tunes/positive_tone_a6b6.wav'));
                                             ShopService.awardStars('quran_read');
+                                            if (_revealedCards.length == 1) {
+                                              AnalyticsService.instance.logFirstTrueAction(which: 'scratch', action: 'reveal');
+                                            }
                                             // If all 3 now revealed, next open will fetch next batch
                                           },
                                           child: card,
@@ -837,6 +883,7 @@ class _QuranPageState extends State<QuranPage>
                                         _showHeart();
                                         _favoriteCurrentInsight(index);
                                         HapticFeedback.mediumImpact();
+                                        _scheduleDelightSheet();
                                       },
                                       child: Stack(
                                         children: [

@@ -5,11 +5,12 @@ import 'package:in_app_review/in_app_review.dart' deferred as iar;
 import 'package:share_plus/share_plus.dart' deferred as share_plus;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:ramadan_reflections/services/revenuecat_service.dart' deferred as rc;
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/growth_prompt_service.dart';
 import '../theme/app_theme.dart';
 import 'onboarding_screen.dart';
 import '../components/widgets/duo_button.dart';
+import '../components/widgets/complete_registration_sheet.dart';
 import '../services/invite_service.dart';
 
 class AboutScreen extends StatelessWidget {
@@ -38,7 +39,6 @@ class AboutScreen extends StatelessWidget {
             const _ActionButtons(),
             const SizedBox(height: 12),
             const _SubscribeButton(),
-            const SizedBox(height: 12),
             const _JoinWhatsAppButton(),
             const SizedBox(height: 32),
             const _OtherAppsSection(),
@@ -159,42 +159,53 @@ class _ActionButtons extends StatelessWidget {
     return Column(
       children: [
         if (!kIsWeb) ...[
-          DuoButton(
-            onPressed: () async {
-              HapticFeedback.lightImpact();
-              await iar.loadLibrary();
-              final inAppReview = iar.InAppReview.instance;
-              if (await inAppReview.isAvailable()) {
-                inAppReview.requestReview();
-              } else {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Review not available on this device.')),
-                  );
-                }
-              }
-            },
-            backgroundColor: AppTheme.neonPurple,
-            depthColor: const Color(0xFF6A00FF),
-            radius: 16,
-            height: 56,
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.star_rounded, color: AppTheme.starWhite, size: 22),
-                SizedBox(width: 10),
-                Text(
-                  'Leave a Review',
-                  style: TextStyle(
-                    color: AppTheme.starWhite,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
+          FutureBuilder<bool>(
+            future: GrowthPromptService.hasHighRating(),
+            builder: (context, snap) {
+              // Hide the review button once the user rated 4-5 stars.
+              if (snap.data == true) return const SizedBox.shrink();
+              return Column(
+                children: [
+                  DuoButton(
+                    onPressed: () async {
+                      HapticFeedback.lightImpact();
+                      await iar.loadLibrary();
+                      final inAppReview = iar.InAppReview.instance;
+                      if (await inAppReview.isAvailable()) {
+                        inAppReview.requestReview();
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Review not available on this device.')),
+                          );
+                        }
+                      }
+                    },
+                    backgroundColor: AppTheme.neonPurple,
+                    depthColor: const Color(0xFF6A00FF),
+                    radius: 16,
+                    height: 56,
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.star_rounded, color: AppTheme.starWhite, size: 22),
+                        SizedBox(width: 10),
+                        Text(
+                          'Leave a Review',
+                          style: TextStyle(
+                            color: AppTheme.starWhite,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(height: 12),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 12),
         ],
         DuoButton(
           onPressed: () async {
@@ -236,32 +247,35 @@ class _ActionButtons extends StatelessWidget {
 class _SubscribeButton extends StatelessWidget {
   const _SubscribeButton();
 
+  Future<void> _openRegistration(BuildContext context) async {
+    HapticFeedback.mediumImpact();
+    final email = FirebaseAuth.instance.currentUser?.email ?? '';
+    if (email.isNotEmpty) return;
+    await showCompleteRegistrationSheet(context);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final email = FirebaseAuth.instance.currentUser?.email ?? '';
+    // Email-only membership: hide once the user has an email.
+    if (email.isNotEmpty) return const SizedBox.shrink();
     return DuoButton(
-      onPressed: () async {
-        HapticFeedback.lightImpact();
-        try {
-          final user = FirebaseAuth.instance.currentUser;
-          if (user != null) {
-            await rc.loadLibrary();
-            rc.RevenueCatService.instance.identify(user.uid);
-          }
-        } catch (_) {}
-      },
-      backgroundColor: const Color(0xFFFF6B1A),
-      depthColor: const Color(0xFFCC4400),
+      onPressed: () => _openRegistration(context),
+      backgroundColor: Colors.white,
+      depthColor: Colors.black,
+      borderGradientColors: kRainbowBorderColors,
+      animateBorder: true,
       radius: 16,
       height: 56,
       child: const Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.workspace_premium_rounded, color: AppTheme.starWhite, size: 22),
+          Icon(Icons.person_add_rounded, color: Colors.black, size: 22),
           SizedBox(width: 10),
           Text(
-            'Subscribe Premium',
+            'Complete registration',
             style: TextStyle(
-              color: AppTheme.starWhite,
+              color: Colors.black,
               fontSize: 16,
               fontWeight: FontWeight.w900,
             ),
@@ -541,11 +555,11 @@ class _PrivacyPolicyLink extends StatelessWidget {
                 _p('Last updated: May 2026'),
                 _p('Meowmin ("we", "our", "app") respects your privacy. This policy explains how we handle your data.'),
                 _section('Data We Collect'),
-                _p('• Journal entries you write (stored securely on our server)\n• Email and display name (if you sign in with Google)\n• Approximate location (only for prayer time calculation)\n• Device information for push notifications'),
+                _p('• Journal entries you write (stored securely on our server)\n• Email and display name (if you sign in with Google)\n• Device information for push notifications'),
                 _section('How We Use Data'),
-                _p('• Journal text is processed by AI (OpenRouter) to generate insights and suggested tasks\n• Location is used locally for adhan prayer times — never uploaded or shared\n• Email is used only for account identification'),
+                _p('• Journal text is processed by AI (OpenRouter) to generate insights and suggested tasks\n• Email is used only for account identification'),
                 _section('Data Sharing'),
-                _p('We do not sell your data. Journal content is sent to OpenRouter for AI analysis. Payments are processed by RevenueCat — we never see your payment details.'),
+                _p('We do not sell your data. Journal content is sent to OpenRouter for AI analysis. Membership payments are processed securely on our website by Paddle.com Market Ltd (Merchant of Record) — we never see your payment details.'),
                 _section('Data Deletion'),
                 _p('You can delete your account and all associated data from Profile → Delete Account. Data is permanently removed within 30 days.'),
                 _section('Contact'),

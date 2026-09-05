@@ -15,6 +15,7 @@ import '../../services/analogy_service.dart';
 import '../../services/journal_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/analytics_service.dart';
+import '../../services/growth_prompt_service.dart';
 import '../../services/invite_service.dart';
 import 'onboarding_data.dart';
 import '../../utils/image_urls.dart';
@@ -533,6 +534,9 @@ class _AiInsightPageState extends State<AiInsightPage>
     _swipedCount++;
     widget.onStarsEarned?.call(20);
     AnalyticsService.instance.logEvent('onboarding_scratch_revealed', params: {'count': _swipedCount.toString()});
+    if (_swipedCount == 1) {
+      AnalyticsService.instance.logFirstTrueAction(which: 'scratch', action: 'reveal');
+    }
   }
 
   void _triggerConfetti() {
@@ -1544,7 +1548,12 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
     HapticFeedback.mediumImpact();
     await iar.loadLibrary();
     _inAppReview = iar.InAppReview.instance;
-    if (await _inAppReview.isAvailable()) {
+    // Auto-fire only if review prompts are still allowed (no 5-star on
+    // record, not snoozed, not already offered this version). The
+    // explicit "Rate on Google Play" button below always stays available.
+    if (await GrowthPromptService.shouldOfferReview() &&
+        await _inAppReview.isAvailable()) {
+      await GrowthPromptService.recordReviewOffered();
       await _inAppReview.requestReview();
     }
   }
@@ -1694,11 +1703,22 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
           DuoButton(
             onPressed: () async {
               HapticFeedback.heavyImpact();
-              if (_inAppReview == null) {
-                await iar.loadLibrary();
-                _inAppReview = iar.InAppReview.instance;
+              try {
+                if (_inAppReview == null) {
+                  await iar.loadLibrary();
+                  _inAppReview = iar.InAppReview.instance;
+                }
+                await _inAppReview.openStoreListing();
+              } catch (_) {
+                // Listing unresolvable (e.g. unpublished track): stay in flow.
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Thanks for the love! You can rate us on Google Play anytime.'),
+                    ),
+                  );
+                }
               }
-              await _inAppReview.openStoreListing();
             },
             backgroundColor: cs.primary,
             depthColor: cs.primary.withOpacity(0.8),
@@ -1852,7 +1872,7 @@ class _SetupPageState extends State<SetupPage> {
             tt,
             Icons.location_on_rounded,
             "Prayer Times",
-            "Automatic prayer times based on your location",
+            "Prayer-time reminders (location-based times coming soon)",
             _locationEnabled,
             () async {
               // Geolocator.requestPermission() would be called here

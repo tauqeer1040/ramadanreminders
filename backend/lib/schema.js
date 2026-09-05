@@ -115,6 +115,64 @@ const CREATE_STATEMENTS = [
     )
   `,
   `
+    CREATE TABLE IF NOT EXISTS continue_tokens (
+      tok_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      rc_customer_id TEXT,
+      snapshot TEXT,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      consumed_at INTEGER,
+      resend_count INTEGER DEFAULT 0,
+      last_sent_at INTEGER,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS external_offer_sessions (
+      sid TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      rc_customer_id TEXT,
+      external_transaction_token TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      consumed_at INTEGER,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS google_external_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      external_transaction_id TEXT NOT NULL UNIQUE,
+      paddle_event_id TEXT,
+      paddle_transaction_id TEXT,
+      paddle_subscription_id TEXT,
+      user_id TEXT,
+      kind TEXT NOT NULL,
+      amount_micros INTEGER,
+      currency TEXT,
+      country_code TEXT,
+      fee_micros INTEGER,
+      status TEXT NOT NULL DEFAULT 'pending',
+      google_error TEXT,
+      reported_at INTEGER,
+      created_at INTEGER NOT NULL
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS entitlement_transfer_tokens (
+      token TEXT PRIMARY KEY,
+      from_uid TEXT NOT NULL,
+      product_id TEXT,
+      expires_at_ms INTEGER,
+      status TEXT NOT NULL DEFAULT 'pending',
+      claimed_by_uid TEXT,
+      created_at INTEGER NOT NULL,
+      claimed_at INTEGER,
+      FOREIGN KEY (from_uid) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `,
+  `
     CREATE TABLE IF NOT EXISTS error_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -317,7 +375,19 @@ async function initDB() {
     ...missingColumnAlters(state, 'user_task_tag_maps', TAG_MAP_CREATE_COLUMNS, TAG_MAP_ALTER_COLUMNS),
   ];
 
-  await db.batch([...CREATE_STATEMENTS, ...USER_TAG_MAP_INDEXES, ...ERROR_LOG_INDEXES, ...alterations], 'write');
+  // Statement-by-statement (NOT one db.batch): the libsql web client has
+  // silently dropped trailing CREATEs from large batches before
+  // (continue_tokens, external_offer_* needed manual backfill). Per-statement
+  // executes make any failure loud instead of silent.
+  for (const stmt of [...CREATE_STATEMENTS, ...USER_TAG_MAP_INDEXES, ...ERROR_LOG_INDEXES, ...alterations]) {
+    try {
+      await db.execute(stmt);
+    } catch (e) {
+      const preview = String(typeof stmt === 'string' ? stmt : stmt.sql).replace(/\s+/g, ' ').slice(0, 140);
+      console.error('[DB] schema statement failed:', String(e.message).slice(0, 200), '|', preview);
+      throw e;
+    }
+  }
 
   if (state.names.has('journals')) {
     await db.execute(`

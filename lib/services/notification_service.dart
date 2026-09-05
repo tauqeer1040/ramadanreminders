@@ -1,14 +1,14 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'web_bridge.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart' deferred as fln;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    as fln;
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
-  static dynamic _notificationsPlugin;
+  static fln.FlutterLocalNotificationsPlugin? _notificationsPlugin;
 
   static Future<void> init() async {
-    await fln.loadLibrary();
     _notificationsPlugin = fln.FlutterLocalNotificationsPlugin();
     tz.initializeTimeZones();
 
@@ -51,11 +51,12 @@ class NotificationService {
         return false;
       }
     }
-    final androidImplementation =
-        (_notificationsPlugin as dynamic)
-            ?.resolvePlatformSpecificImplementation(
-              fln.AndroidFlutterLocalNotificationsPlugin,
-            );
+    // v20+: generic-only API — passing the type as a positional argument
+    // throws NoSuchMethodError at runtime (dynamic call, invisible to analyze).
+    final androidImplementation = _notificationsPlugin
+        ?.resolvePlatformSpecificImplementation<
+          fln.AndroidFlutterLocalNotificationsPlugin
+        >();
 
     final bool? granted = await androidImplementation
         ?.requestNotificationsPermission();
@@ -71,11 +72,10 @@ class NotificationService {
         return false;
       }
     }
-    final androidImplementation =
-        (_notificationsPlugin as dynamic)
-            ?.resolvePlatformSpecificImplementation(
-              fln.AndroidFlutterLocalNotificationsPlugin,
-            );
+    final androidImplementation = _notificationsPlugin
+        ?.resolvePlatformSpecificImplementation<
+          fln.AndroidFlutterLocalNotificationsPlugin
+        >();
 
     final bool? granted = await androidImplementation
         ?.areNotificationsEnabled();
@@ -83,7 +83,7 @@ class NotificationService {
   }
 
   static Future<void> scheduleDailyNotifications({String username = 'you'}) async {
-    await (_notificationsPlugin as dynamic)?.cancelAll();
+    await _notificationsPlugin?.cancelAll();
 
     final now = DateTime.now();
     final local = tz.local;
@@ -149,7 +149,7 @@ class NotificationService {
       android: androidDetails,
     );
 
-    await (_notificationsPlugin as dynamic)?.zonedSchedule(
+    await _notificationsPlugin?.zonedSchedule(
       id: id,
       title: title,
       body: body,

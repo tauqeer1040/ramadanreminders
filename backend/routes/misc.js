@@ -1,6 +1,23 @@
 const db = require('../lib/db');
 
 module.exports = function (app) {
+  // Lightweight analytics event endpoint (fire-and-forget from web pages)
+  app.post('/api/analytics-event', async (req, res) => {
+    try {
+      const { event, params } = req.body || {};
+      if (!event) return res.status(400).json({ error: 'Missing event' });
+      await db.execute(
+        'INSERT INTO webhook_events (event_type, payload, source) VALUES (?, ?, ?)',
+        [event, JSON.stringify(params || {}), 'web_frontend']
+      );
+      res.json({ ok: true });
+    } catch (error) {
+      // Non-critical — don't fail hard
+      console.error('[analytics-event]', error.message);
+      res.json({ ok: true });
+    }
+  });
+
   app.get('/api/v2/app-version', async (req, res) => {
     try {
       const cfg = await db.execute("SELECT key, value FROM app_config");

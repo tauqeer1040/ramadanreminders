@@ -104,6 +104,12 @@ class _ProUpsellBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Paid upsell hidden: email-only membership for now (companion mode).
+    // Ring + count above stay live. Restore by deleting this line.
+    return const SizedBox.shrink();
+  }
+
+  Widget _legacyBuild(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     return GestureDetector(
       onTap: () async {

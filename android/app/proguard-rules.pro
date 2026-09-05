@@ -1,3 +1,7 @@
+# Google Play Billing Library (External Offers)
+-keep class com.android.billingclient.** { *; }
+-dontwarn com.android.billingclient.**
+
 # Flutter
 -keep class io.flutter.** { *; }
 -keep class io.flutter.plugins.** { *; }

@@ -2,7 +2,7 @@ name: ramadan_reflections
 description: "Meowmin AI Diary — write your daily diary, get Quran stories and verses that match your day."
 publish_to: "none"
 
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.9.2
@@ -48,6 +48,7 @@ dependencies:
   cryptography: ^2.7.0
   purchases_flutter: ^10.6.0
   purchases_ui_flutter: ^10.6.0
+  flutter_inapp_purchase: ^10.6.0
   web: ^1.1.0
 
 dev_dependencies:

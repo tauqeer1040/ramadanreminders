@@ -5,6 +5,7 @@ import 'package:in_app_review/in_app_review.dart' deferred as iar;
 import 'package:share_plus/share_plus.dart' deferred as share_plus;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
+import '../services/growth_prompt_service.dart';
 import '../screens/onboarding_screen.dart';
 import 'widgets/duo_button.dart';
 import '../services/invite_service.dart';
@@ -128,42 +129,53 @@ class _ActionButtons extends StatelessWidget {
     return Column(
       children: [
         if (!kIsWeb) ...[
-          DuoButton(
-            onPressed: () async {
-              HapticFeedback.lightImpact();
-              await iar.loadLibrary();
-              final inAppReview = iar.InAppReview.instance;
-              if (await inAppReview.isAvailable()) {
-                inAppReview.requestReview();
-              } else {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Review not available on this device.')),
-                  );
-                }
-              }
-            },
-            backgroundColor: AppTheme.neonPurple,
-            depthColor: const Color(0xFF6A00FF),
-            radius: 16,
-            height: 56,
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.star_rounded, color: AppTheme.starWhite, size: 22),
-                SizedBox(width: 10),
-                Text(
-                  'Leave a Review',
-                  style: TextStyle(
-                    color: AppTheme.starWhite,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
+          FutureBuilder<bool>(
+            future: GrowthPromptService.hasHighRating(),
+            builder: (context, snap) {
+              // Hide the review button once the user rated 4-5 stars.
+              if (snap.data == true) return const SizedBox.shrink();
+              return Column(
+                children: [
+                  DuoButton(
+                    onPressed: () async {
+                      HapticFeedback.lightImpact();
+                      await iar.loadLibrary();
+                      final inAppReview = iar.InAppReview.instance;
+                      if (await inAppReview.isAvailable()) {
+                        inAppReview.requestReview();
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Review not available on this device.')),
+                          );
+                        }
+                      }
+                    },
+                    backgroundColor: AppTheme.neonPurple,
+                    depthColor: const Color(0xFF6A00FF),
+                    radius: 16,
+                    height: 56,
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.star_rounded, color: AppTheme.starWhite, size: 22),
+                        SizedBox(width: 10),
+                        Text(
+                          'Leave a Review',
+                          style: TextStyle(
+                            color: AppTheme.starWhite,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(height: 12),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 12),
         ],
         DuoButton(
           onPressed: () async {

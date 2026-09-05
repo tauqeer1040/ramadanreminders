@@ -21,8 +21,7 @@ import '../screens/manage_account_screen.dart';
 import '../services/user_service.dart';
 import '../services/streak_service.dart';
 import '../services/invite_service.dart';
-import '../services/revenuecat_service.dart';
-import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
+import 'widgets/complete_registration_sheet.dart';
 import '../theme/app_theme.dart';
 import 'stats_card.dart';
 import 'widgets/duo_button.dart';
@@ -373,7 +372,7 @@ class _ProfilePage1State extends State<ProfilePage1>
                       ),
                     ),
                 InkWell(
-                  onTap: _showPaywall,
+                  onTap: _openRegistration,
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
                     width: 56,
@@ -383,7 +382,7 @@ class _ProfilePage1State extends State<ProfilePage1>
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
-                      Icons.workspace_premium,
+                      Icons.person_add_rounded,
                       color: AppTheme.starGold,
                       size: 28,
                     ),
@@ -485,7 +484,6 @@ class _ProfilePage1State extends State<ProfilePage1>
             const SizedBox(height: 16),
 
             _subscribeCard(),
-            const SizedBox(height: 16),
             DuoButton(
               onPressed: _openWhatsApp,
               backgroundColor: const Color(0xFF25D366),
@@ -804,57 +802,48 @@ class _ProfilePage1State extends State<ProfilePage1>
   // ── SUBSCRIPTION CARD ──────────────────────────────────────────────────────
 
   Widget _subscribeCard() {
-    return DuoButton(
-      onPressed: _showPaywall,
-      backgroundColor: const Color(0xFFFF6D00),
-      depthColor: const Color(0xFFE65100),
-      radius: 16,
-      height: 56,
-      child: const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.workspace_premium, color: Colors.white, size: 20),
-          SizedBox(width: 10),
-          Text(
-            'Subscribe',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-            ),
+    // Email-only membership: show only when the user has no email yet.
+    // Spacing lives inside so no gap remains when hidden.
+    final email = _currentUser?.email ?? '';
+    if (email.isNotEmpty) return const SizedBox.shrink();
+    return Column(
+      children: [
+        DuoButton(
+          onPressed: _openRegistration,
+          backgroundColor: Colors.white,
+          depthColor: Colors.black,
+          borderGradientColors: kRainbowBorderColors,
+          animateBorder: true,
+          radius: 16,
+          height: 56,
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.person_add_rounded, color: Colors.black, size: 20),
+              SizedBox(width: 10),
+              Text(
+                'Complete registration',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 
-  Future<void> _showPaywall() async {
-    if (mounted) {
-      try {
-        final result = await RevenueCatService.instance.presentPaywall(
-          displayCloseButton: true,
-        );
-        if (result == PaywallResult.purchased || result == PaywallResult.restored) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Subscription activated!'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not open subscription page'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      }
-    }
+  Future<void> _openRegistration() async {
+    if (!mounted) return;
+    HapticFeedback.lightImpact();
+    final email = _currentUser?.email ?? '';
+    if (email.isNotEmpty) return;
+    await showCompleteRegistrationSheet(context);
+    if (mounted) setState(() {});
   }
 
   // ── DEBUG ───────────────────────────────────────────────────────────────────

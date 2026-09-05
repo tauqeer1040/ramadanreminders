@@ -605,16 +605,16 @@ class _WebPaywallScreenState extends State<WebPaywallScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _link(context, 'Terms', 'https://www.taucity.com/terms'),
+              _link(context, 'Terms', 'https://meowmin.taucity.xyz/terms'),
               const SizedBox(width: 16),
-              _link(context, 'Privacy', 'https://www.taucity.com/privacy'),
+              _link(context, 'Privacy', 'https://meowmin.taucity.xyz/privacy'),
             ],
           ),
           const SizedBox(height: 20),
           DuoButton(
             onPressed: () => kIsWeb ? _continueToWeb(p!) : _purchase(p!),
-            backgroundColor: AppTheme.neonPurple,
-            depthColor: const Color(0xFF6A00FF),
+            backgroundColor: AppTheme.starGold,
+            depthColor: const Color(0xFFD4A20C),
             radius: 16,
             height: 54,
             child: Row(

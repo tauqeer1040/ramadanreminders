@@ -8,7 +8,9 @@ import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import '../core/constants.dart';
 import '../core/api_client.dart';
 import '../core/app_navigator.dart';
+import '../screens/demo_paywall_screen.dart';
 import '../screens/web_paywall_screen.dart';
+import 'analytics_service.dart';
 
 class RevenueCatService {
   static RevenueCatService? _instance;
@@ -228,6 +230,21 @@ class RevenueCatService {
       );
       _cachedCustomerInfo = result.customerInfo;
       await _syncToBackend(result.customerInfo);
+      // Log purchase for GA4 funnel
+      try {
+        final customerInfo = result.customerInfo;
+        final activeEntitlements = customerInfo.entitlements.active;
+        String? plan;
+        if (activeEntitlements.containsKey('Meowmin Max')) {
+          plan = 'Meowmin Max';
+        }
+        AnalyticsService.instance.logPurchase(
+          plan: plan,
+          value: package.storeProduct.price.toString(),
+          currency: package.storeProduct.currencyCode,
+          transactionId: customerInfo.originalPurchaseDate,
+        );
+      } catch (_) {}
       return result;
     } on PlatformException catch (e) {
       if (PurchasesErrorHelper.getErrorCode(e) ==
@@ -266,14 +283,60 @@ class RevenueCatService {
           displayCloseButton: displayCloseButton,
         );
       }
-      return await RevenueCatUI.presentPaywall(
+      // Debug: present the "demo" Test Store offering so the RevenueCat
+      // paywall renders without Play products. Release always uses the
+      // current (production) offering.
+      if (offering == null && kDebugMode) {
+        try {
+          await ensureInitialized();
+          final offerings = await Purchases.getOfferings();
+          final demo = offerings.all['demo'];
+          if (demo != null) offering = demo;
+        } catch (_) {}
+      }
+      final result = await RevenueCatUI.presentPaywall(
         offering: offering,
         displayCloseButton: displayCloseButton,
       );
+      // Dashboard misconfiguration (e.g. Error 23: no Test Store products)
+      // would otherwise leave the user staring at an error screen — show
+      // the clearly-labeled demo paywall instead so the flow stays visible.
+      if (result == PaywallResult.error) {
+        return await _presentDemoPaywall(
+          displayCloseButton: displayCloseButton,
+        );
+      }
+      return result;
     } catch (e) {
       debugPrint('[RevenueCat] presentPaywall failed: $e');
+      return await _presentDemoPaywall(
+        displayCloseButton: displayCloseButton,
+      );
+    }
+  }
+
+  Future<PaywallResult> _presentDemoPaywall({
+    bool displayCloseButton = true,
+  }) async {
+    // Demo fallback is debug-only: release builds must never surface a
+    // paywall while on email-only membership (companion mode, Play policy).
+    if (!kDebugMode) {
+      debugPrint('[RevenueCat] demo paywall suppressed in release');
       return PaywallResult.error;
     }
+    final navigator = appNavigatorKey.currentState;
+    if (navigator == null) {
+      debugPrint('[RevenueCat] demo paywall: navigator not ready');
+      return PaywallResult.error;
+    }
+    final result = await navigator.push<PaywallResult>(
+      MaterialPageRoute(
+        builder: (_) => DemoPaywallScreen(
+          displayCloseButton: displayCloseButton,
+        ),
+      ),
+    );
+    return result ?? PaywallResult.cancelled;
   }
 
   /// Presents the custom Flutter paywall on the web, where RevenueCatUI is

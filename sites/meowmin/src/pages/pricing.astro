@@ -295,16 +295,44 @@ const description = 'Meowmin pricing — start with a 3-day free trial (no card 
     } catch (e) { console.error(e); }
 
     document.querySelectorAll('.paddle-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const priceId = btn.dataset.price;
         if (!window.Paddle) return showStatus('Paddle not loaded — check domain approval', true);
         let appUserId = null;
         try { appUserId = localStorage.getItem('firebase:authUser') || localStorage.getItem('appUserId') || null; } catch(_) {}
-        const customData = appUserId ? { appUserId } : undefined;
+        // Email-continuation attribution (?tok= from the delight email) +
+        // email prefill. Token is opaque; raw value only transits to Paddle.
+        const qs = new URLSearchParams(window.location.search);
+        const emailParam = qs.get('email');
+        const tokParam = qs.get('tok');
+        const tokOk = tokParam && /^[A-Za-z0-9_-]{16,128}$/.test(tokParam);
+        const customData = { ...(appUserId ? { appUserId, app_user_id: appUserId } : {}), ...(tokOk ? { continue_token: tokParam } : {}) };
+        // External-offer attribution (?sid= from the Android app). Program
+        // rules forbid PII in the link URL, so resolve the opaque sid
+        // server-side into the app user id. Fail-open: checkout proceeds
+        // unattributed rather than blocking the purchase.
+        const sidParam = qs.get('sid');
+        const sidOk = sidParam && /^[A-Za-z0-9_-]{32,128}$/.test(sidParam);
+        if (sidOk) {
+          customData.external_offer_sid = sidParam;
+          if (!appUserId) {
+            try {
+              const r = await fetch('/api/v2/external-offer/resolve?sid=' + encodeURIComponent(sidParam));
+              if (r.ok) {
+                const j = await r.json();
+                if (j && j.app_user_id) {
+                  customData.appUserId = j.app_user_id;
+                  customData.app_user_id = j.app_user_id;
+                }
+              }
+            } catch (_) {}
+          }
+        }
         try {
           Paddle.Checkout.open({
             items: [{ priceId, quantity: 1 }],
-            customData,
+            customer: emailParam && emailParam.includes('@') ? { email: emailParam } : undefined,
+            customData: Object.keys(customData).length ? customData : undefined,
             settings: { displayMode: 'overlay', theme: 'light', successUrl: window.location.origin + '/pricing?checkout=success' }
           });
         } catch (e) { showStatus('Checkout failed: ' + e.message, true); }
@@ -317,6 +345,21 @@ const description = 'Meowmin pricing — start with a 3-day free trial (no card 
         if (data && data.event === 'checkout.completed') {
           const ctm = data.data?.customer?.id;
           if (ctm) localStorage.setItem('paddle_customer_id', ctm);
+          // Log purchase event to backend for analytics funnel
+          try {
+            fetch('/api/analytics-event', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                event: 'purchase',
+                params: {
+                  source: 'paddle_web',
+                  currency: data.data?.currency_code || 'USD',
+                  value: data.data?.total ? String(data.data.total / 100) : undefined,
+                }
+              }),
+            }).catch(() => {});
+          } catch (_) {}
           showCelebration();
         }
       } catch(_) {}
@@ -326,6 +369,7 @@ const description = 'Meowmin pricing — start with a 3-day free trial (no card 
       const params = new URLSearchParams(window.location.search);
       if (params.get('checkout') === 'success') showCelebration();
       if (params.get('checkout') === 'canceled') showStatus('Checkout canceled — try again anytime.', true);
+      if (params.get('sid')) showStatus('You arrived from the Meowmin app. After paying, return to the app — Meowmin Max unlocks automatically.', false);
       // auto-open if ?price=pri_... is present (pricing now IS checkout)
       const priceId = params.get('price');
       if (priceId && /^pri_[a-z0-9]{26}$/.test(priceId)) {

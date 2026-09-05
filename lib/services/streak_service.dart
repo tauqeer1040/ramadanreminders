@@ -170,6 +170,19 @@ class StreakService {
       _analytics.logStreakRecorded(result.streak);
     } catch (_) {}
 
+    // Log habit tick: active days in last 7 days + streak for WSR tracking
+    try {
+      final last7 = await getLast7Days();
+      final activeDays = last7.where((d) => d).length;
+      final prefs = await SharedPreferences.getInstance();
+      final totalCount = prefs.getInt('habit_tick_journal_count') ?? 0;
+      _analytics.logHabitTick(
+        activeDaysLast7: activeDays,
+        streakLen: result.streak,
+        totalJournalCount: totalCount,
+      );
+    } catch (_) {}
+
     // Push the new streak to the backend so a linked friend can read it for
     // the shared "shielded" streak. Fire-and-forget.
     unawaited(InviteService.pushMyStreak(result.streak));

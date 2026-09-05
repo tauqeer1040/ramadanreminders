@@ -23,6 +23,8 @@ class OnboardingData {
   String? commitmentLevel;
   bool chosenHard = false;
 
+  String? email;
+
   bool notificationsEnabled = false;
   bool locationEnabled = false;
   List<String> scratchCardIds = [];
