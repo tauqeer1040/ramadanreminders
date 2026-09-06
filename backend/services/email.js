@@ -93,6 +93,9 @@ function delightHtml({ name, email, tok, d }) {
   const cta = (label) =>
     `<a href="${link}" style="display:inline-block;background:#1a0533;color:#fff;font-weight:700;padding:14px 28px;border-radius:14px;text-decoration:none;">${label}</a>`;
   return `<!doctype html><html><body style="font-family:sans-serif;color:#222;max-width:560px;margin:auto;padding:24px;">
+    <div style="text-align:center;margin-bottom:8px;">
+      <img src="${PUBLIC_WEB_URL}/images/face.png" alt="Meowmin" width="72" height="72" style="border-radius:50%;display:block;margin:auto;" />
+    </div>
     <p>Assalamu alaikum ${first} 🌙</p>
     <p><strong>Your 3-day Meowmin trial is ready — finish setup (no card needed):</strong></p>
     <p>${cta('Continue setup — claim your trial →')}</p>

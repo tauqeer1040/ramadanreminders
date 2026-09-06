@@ -36,6 +36,16 @@ module.exports = function (app) {
     validate: { xForwardedForHeader: false },
   });
 
+  // Polling is cheap reads at 6/min from every open gate — it gets its
+  // own lenient bucket so it can never starve mint/resend (the bug that
+  // made Resend fail with 429 right after screen open).
+  const pollLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+    keyGenerator: (req) => req.uid || clientIp(req),
+    validate: { xForwardedForHeader: false },
+  });
+
   // Mint (or re-mint) a continue token + send the delight email.
   app.post('/api/v2/email-continue', limiter, async (req, res) => {
     try {
@@ -201,7 +211,7 @@ module.exports = function (app) {
   });
 
   // Poll target for the app: is this token valid, and did they purchase?
-  app.get('/api/v2/continue-status', limiter, async (req, res) => {
+  app.get('/api/v2/continue-status', pollLimiter, async (req, res) => {
     try {
       const tok = String(req.query.tok || '');
       if (!tok) return res.status(400).json({ error: 'Missing tok' });

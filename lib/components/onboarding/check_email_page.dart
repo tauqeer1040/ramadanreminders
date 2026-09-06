@@ -318,6 +318,32 @@ class _CheckEmailScreenState extends State<CheckEmailScreen> {
             style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () async {
+              HapticFeedback.lightImpact();
+              await Clipboard.setData(
+                const ClipboardData(text: 'https://meowmin.taucity.xyz'),
+              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Link copied')),
+                );
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                'Or visit meowmin.taucity.xyz instead',
+                style: tt.bodyMedium?.copyWith(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
           Text(
             _sending
