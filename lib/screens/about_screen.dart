@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/growth_prompt_service.dart';
+import '../services/revenuecat_service.dart';
+import 'google_signin_page.dart';
 import '../theme/app_theme.dart';
 import 'onboarding_screen.dart';
 import '../components/widgets/duo_button.dart';
@@ -244,43 +246,94 @@ class _ActionButtons extends StatelessWidget {
   }
 }
 
-class _SubscribeButton extends StatelessWidget {
+class _SubscribeButton extends StatefulWidget {
   const _SubscribeButton();
 
+  @override
+  State<_SubscribeButton> createState() => _SubscribeButtonState();
+}
+
+class _SubscribeButtonState extends State<_SubscribeButton> {
+  late Future<bool> _subscribed;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribed = _loadSubscribed();
+  }
+
+  Future<bool> _loadSubscribed() async {
+    try {
+      return await RevenueCatService.instance.isSubscribed();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// No email (or anonymous) → step-18 Google sign-in first, then chain
+  /// into step 19. Email present → straight to step 19.
   Future<void> _openRegistration(BuildContext context) async {
-    final email = FirebaseAuth.instance.currentUser?.email ?? '';
-    if (email.isNotEmpty) return;
+    try {
+      if (await RevenueCatService.instance.isSubscribed()) {
+        if (mounted) setState(() {});
+        return;
+      }
+    } catch (_) {}
+    final user = FirebaseAuth.instance.currentUser;
+    final email = user?.email ?? '';
+    if (!context.mounted) return;
+    if (user == null || user.isAnonymous || email.isEmpty) {
+      final signedIn = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => GoogleSignInPage(
+            onFinish: () => Navigator.of(context).pop(true),
+            onBack: () => Navigator.of(context).pop(false),
+          ),
+        ),
+      );
+      if (!context.mounted) return;
+      if (signedIn != true) return;
+    }
     await openConfirmRegistration(context);
+    if (mounted) {
+      setState(() {
+        _subscribed = _loadSubscribed();
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final email = FirebaseAuth.instance.currentUser?.email ?? '';
-    // Email-only membership: hide once the user has an email.
-    if (email.isNotEmpty) return const SizedBox.shrink();
-    return DuoButton(
-      onPressed: () => _openRegistration(context),
-      backgroundColor: Colors.white,
-      depthColor: Colors.black,
-      borderGradientColors: kRainbowBorderColors,
-      animateBorder: true,
-      radius: 16,
-      height: 56,
-      child: const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.person_add_rounded, color: Colors.black, size: 22),
-          SizedBox(width: 10),
-          Text(
-            'Confirm registration',
-            style: TextStyle(
-              color: Colors.black,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-            ),
+    // Visible to everyone WITHOUT an active membership (trial included).
+    return FutureBuilder<bool>(
+      future: _subscribed,
+      builder: (context, snap) {
+        if (snap.data == true) return const SizedBox.shrink();
+        return DuoButton(
+          onPressed: () => _openRegistration(context),
+          backgroundColor: Colors.white,
+          depthColor: Colors.black,
+          borderGradientColors: kRainbowBorderColors,
+          animateBorder: true,
+          radius: 16,
+          height: 56,
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.person_add_rounded, color: Colors.black, size: 22),
+              SizedBox(width: 10),
+              Text(
+                'Confirm registration',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

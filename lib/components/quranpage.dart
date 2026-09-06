@@ -182,7 +182,8 @@ class _QuranPageState extends State<QuranPage>
       final existing = validOrdered.toSet();
       final newItems = unlockedScratchIds.where((id) => !existing.contains(id)).toList();
 
-      final order = [...validOrdered, ...newItems];
+      // Random order every load: purchased faces rotate unpredictably.
+      final order = [...validOrdered, ...newItems]..shuffle();
       final urls = order.map((id) => shopFullUrl(int.parse(id.split('_').last))).toList();
 
       await prefs.setStringList(orderKey, order);
@@ -209,6 +210,12 @@ class _QuranPageState extends State<QuranPage>
       _revealedCards.toList(),
     );
   }
+
+  /// True when the deck is the backend daily-verse fallback
+  /// (no eligible journal) rather than personal insight cards.
+  bool get _isFallbackDeck =>
+      _insightCards.isNotEmpty &&
+      (_insightCards.first.id ?? '').startsWith('card_daily-');
 
   void _showHeart() {
     final burst = _HeartBurst();
@@ -797,6 +804,39 @@ class _QuranPageState extends State<QuranPage>
             Expanded(
               child: Column(
                 children: [
+                  if (_isFallbackDeck)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.starGold.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.wb_sunny_rounded,
+                              color: AppTheme.starGold,
+                              size: 14,
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              'Daily verse — journal to unlock personal insights',
+                              style: TextStyle(
+                                color: AppTheme.starGold,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   Expanded(
                     child: Center(
                       child: SizedBox(

@@ -4,6 +4,109 @@ const { buildInsightCardsFromRows, loadSimilarMatchesForJournal } = require('./j
 
 const FETCH_TIMEOUT_MS = 5000;
 
+// Daily-verse fallback pool: used when the user has no eligible journal
+// (nothing completed yet, or everything revealed). Rotates deterministically
+// by date — stable all day, fresh tomorrow. Entries mirror the normal
+// 3-card schema so renderers need no changes.
+const DAILY_VERSES = [
+  {
+    reference: '94:5', english: 'Indeed, with hardship comes ease.',
+    story: 'The Prophet ﷺ received these words in Mecca, in some of the hardest years of his life — and ease did come.',
+    storyReference: 'Surah Ash-Sharh', lesson: 'Hard seasons end; keep walking.',
+    taskTitle: 'Name one ease', taskDescription: 'Write down one small ease hidden inside today.',
+  },
+  {
+    reference: '2:286', english: 'Allah does not burden a soul beyond what it can bear.',
+    story: 'Prophet Yunus, alone in the belly of the whale, in total darkness — and even that was not beyond bearing.',
+    storyReference: 'Surah Al-Anbiya', lesson: 'You were built for this weight.',
+    taskTitle: 'Carry one thing', taskDescription: 'Pick the single heaviest task today and do just that one.',
+  },
+  {
+    reference: '39:53', english: 'Do not despair of the mercy of Allah.',
+    story: 'Musa stood before the sea with an army behind him — and the sea split.',
+    storyReference: 'Surah Az-Zumar', lesson: 'No dead end is final with Allah.',
+    taskTitle: 'Return once', taskDescription: 'Make one sincere du\u2019a for the thing you gave up on.',
+  },
+  {
+    reference: '65:3', english: 'And whoever relies upon Allah — He is sufficient for them.',
+    story: 'Hajar ran between Safa and Marwa with a crying infant — and Zamzam burst forth where she least expected.',
+    storyReference: 'Surah At-Talaq', lesson: 'Effort plus trust opens doors.',
+    taskTitle: 'Delegate one worry', taskDescription: 'Hand one worry to Allah today and act on what you can.',
+  },
+  {
+    reference: '3:139', english: 'Do not lose heart, nor grieve — you will be superior, if you are believers.',
+    story: 'After the losses at Uhud, the believers were told not to grieve — and they rose again.',
+    storyReference: 'Surah Aal-Imran', lesson: 'Setbacks are chapters, not endings.',
+    taskTitle: 'Reframe one loss', taskDescription: 'Write what one recent setback taught you.',
+  },
+  {
+    reference: '2:152', english: 'So remember Me; I will remember you.',
+    story: 'Maryam, alone in childbirth pain, was told to shake the palm tree — remembrance met provision.',
+    storyReference: 'Surah Al-Baqarah', lesson: 'One remembrance is never one-sided.',
+    taskTitle: 'Remember once', taskDescription: 'Say one dhikr slowly, meaning every word.',
+  },
+  {
+    reference: '13:28', english: 'Verily, in the remembrance of Allah do hearts find rest.',
+    story: 'Yusuf, betrayed and imprisoned for years, kept a tranquil heart — and walked out to honor.',
+    storyReference: 'Surah Ar-Ra’d', lesson: 'Calm is a practice, not a place.',
+    taskTitle: 'Two quiet minutes', taskDescription: 'Sit still for two minutes and remember Allah.',
+  },
+  {
+    reference: '20:114', english: 'My Lord, increase me in knowledge.',
+    story: 'Musa traveled far simply to learn from Khidr — knowledge was worth the journey.',
+    storyReference: 'Surah Ta-Ha', lesson: 'Keep learning, one verse at a time.',
+    taskTitle: 'Learn one ayah', taskDescription: 'Read one ayah with its meaning today.',
+  },
+  {
+    reference: '55:13', english: 'So which of the favors of your Lord would you deny?',
+    story: 'Ibrahim was thrown into fire for his faith — and the fire was made cool and safe for him.',
+    storyReference: 'Surah Ar-Rahman', lesson: 'Count favors before fears.',
+    taskTitle: 'List three favors', taskDescription: 'Write three blessings you used today.',
+  },
+];
+
+function buildDailyFallback(dateStr) {
+  const dayNum = Math.floor(Date.parse(`${dateStr}T00:00:00Z`) / 86400000);
+  const start = ((Number.isFinite(dayNum) ? dayNum : 0) % DAILY_VERSES.length + DAILY_VERSES.length) % DAILY_VERSES.length;
+  const pick = [0, 1, 2].map((k) => DAILY_VERSES[(start + k) % DAILY_VERSES.length]);
+  const journalId = `daily-${dateStr}`;
+  const insightCards = [
+    {
+      id: `card_${journalId}_0`,
+      date: dateStr,
+      type: 'personalized_insight',
+      journalExcerpt: 'A fresh page, a fresh mercy.',
+      insight: `Today the Quran meets you where you are. "${pick[0].english}" — hold that close while you journal, and let it answer something you carried in.`,
+      quote: pick[0].english,
+      reference: `Quran ${pick[0].reference}`,
+    },
+    {
+      id: `card_${journalId}_1`,
+      date: dateStr,
+      type: 'surah_guidance',
+      reference: pick[1].reference,
+      explanation: `"${pick[1].english}" Keep this verse with you today like a traveling companion — especially when things feel heavy.`,
+    },
+    {
+      id: `card_${journalId}_2`,
+      date: dateStr,
+      type: 'story_and_task',
+      story: pick[2].story,
+      storyReference: pick[2].storyReference,
+      lesson: pick[2].lesson,
+      taskTitle: pick[2].taskTitle,
+      taskDescription: pick[2].taskDescription,
+    },
+  ];
+  return {
+    journalId,
+    insightCards,
+    related: { journalId, reflectionTags: [], taskTags: [], similarReflections: [], similarTasks: [] },
+    featuredReference: pick[1].reference,
+    fallback: true,
+  };
+}
+
 function fetchWithTimeout(url, opts = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -94,14 +197,12 @@ async function buildScratchBatch(uid, { excludeIds = [], dayKeys = [] } = {}) {
   }
 
   if (!rows.length) {
-    const empty = {
-      journalId: null,
-      insightCards: [],
-      related: { journalId: null, reflectionTags: [], taskTags: [], similarReflections: [], similarTasks: [] },
-      featuredReference: null,
-    };
-    setCache(cacheKey, empty);
-    return empty;
+    // No eligible journal: daily-verse fallback (stable all day, rotates
+    // tomorrow) instead of an empty deck.
+    const fbDate = (dayKeys[0] || new Date().toISOString().slice(0, 10));
+    const fb = buildDailyFallback(fbDate);
+    setCache(cacheKey, fb);
+    return fb;
   }
 
   const insightCards = buildInsightCardsFromRows(rows, uid);

@@ -21,6 +21,8 @@ import '../screens/manage_account_screen.dart';
 import '../services/user_service.dart';
 import '../services/streak_service.dart';
 import '../services/invite_service.dart';
+import '../services/revenuecat_service.dart';
+import '../screens/google_signin_page.dart';
 import 'widgets/complete_registration_sheet.dart';
 import '../theme/app_theme.dart';
 import 'stats_card.dart';
@@ -802,45 +804,71 @@ class _ProfilePage1State extends State<ProfilePage1>
   // ── SUBSCRIPTION CARD ──────────────────────────────────────────────────────
 
   Widget _subscribeCard() {
-    // Email-only membership: show only when the user has no email yet.
+    // Visible to everyone WITHOUT an active membership (trial included).
     // Spacing lives inside so no gap remains when hidden.
-    final email = _currentUser?.email ?? '';
-    if (email.isNotEmpty) return const SizedBox.shrink();
-    return Column(
-      children: [
-        DuoButton(
-          onPressed: _openRegistration,
-          backgroundColor: Colors.white,
-          depthColor: Colors.black,
-          borderGradientColors: kRainbowBorderColors,
-          animateBorder: true,
-          radius: 16,
-          height: 56,
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.person_add_rounded, color: Colors.black, size: 20),
-              SizedBox(width: 10),
-          Text(
-            'Confirm registration',
-            style: TextStyle(
-              color: Colors.black,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
+    return FutureBuilder<bool>(
+      future: RevenueCatService.instance.isSubscribed(),
+      builder: (context, snap) {
+        if (snap.data == true) return const SizedBox.shrink();
+        return Column(
+          children: [
+            DuoButton(
+              onPressed: _openRegistration,
+              backgroundColor: Colors.white,
+              depthColor: Colors.black,
+              borderGradientColors: kRainbowBorderColors,
+              animateBorder: true,
+              radius: 16,
+              height: 56,
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.person_add_rounded, color: Colors.black, size: 20),
+                  SizedBox(width: 10),
+                  Text(
+                    'Confirm registration',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
+            const SizedBox(height: 16),
+          ],
+        );
+      },
     );
   }
 
+  /// No email (or anonymous) → step-18 Google sign-in first, then chain
+  /// into step 19. Email present → straight to step 19. Members never
+  /// reach here (button hidden + live re-check below).
   Future<void> _openRegistration() async {
     if (!mounted) return;
-    final email = _currentUser?.email ?? '';
-    if (email.isNotEmpty) return;
+    try {
+      if (await RevenueCatService.instance.isSubscribed()) {
+        if (mounted) setState(() {});
+        return;
+      }
+    } catch (_) {}
+    final user = FirebaseAuth.instance.currentUser;
+    final email = user?.email ?? '';
+    if (!mounted) return;
+    if (user == null || user.isAnonymous || email.isEmpty) {
+      final signedIn = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => GoogleSignInPage(
+            onFinish: () => Navigator.of(context).pop(true),
+            onBack: () => Navigator.of(context).pop(false),
+          ),
+        ),
+      );
+      if (!mounted) return;
+      if (signedIn != true) return;
+    }
     await openConfirmRegistration(context);
     if (mounted) setState(() {});
   }

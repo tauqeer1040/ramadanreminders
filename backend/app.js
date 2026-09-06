@@ -57,7 +57,7 @@ app.use((req, res, next) => {
 
 // Auth middleware
 app.use('/api/v2', (req, res, next) => {
-  if (['/ayah', '/shop/items', '/app-version', '/internal/poll-ai', '/internal/errors', '/external-offer/resolve'].includes(req.path)) return next();
+  if (['/ayah', '/shop/items', '/app-version', '/internal/poll-ai', '/internal/errors', '/internal/email-status', '/external-offer/resolve'].includes(req.path)) return next();
   return verifyAuth(req, res, next);
 });
 

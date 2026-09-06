@@ -79,6 +79,9 @@ async function verifyAuth(req, res, next) {
   try {
     const decoded = await verifyIdToken(authHeader.slice('Bearer '.length).trim());
     req.uid = decoded.uid;
+    // Token email claim (Google sign-in) — lets self-only endpoints resolve
+    // the recipient server-side without trusting client input.
+    req.email = typeof decoded.email === 'string' ? decoded.email : null;
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Invalid or expired token' });

@@ -14,8 +14,9 @@ import 'duo_button.dart';
 import 'glass_container.dart';
 
 /// "Confirm registration": opens onboarding step 19 as a standalone route
-/// while simultaneously minting a continue-token so the Resend registration
-/// email goes out instantly. Fire-and-forget mint — failures never block.
+/// while simultaneously firing the welcome email. The server resolves the
+/// recipient itself, so no address is needed here. Fire-and-forget — failures
+/// never block navigation.
 Future<void> openConfirmRegistration(BuildContext context) async {
   HapticFeedback.mediumImpact();
   String email = FirebaseAuth.instance.currentUser?.email ?? '';
@@ -28,13 +29,12 @@ Future<void> openConfirmRegistration(BuildContext context) async {
   try {
     AnalyticsService.instance.logEvent('confirm_registration_opened');
   } catch (_) {}
-  if (email.isNotEmpty) {
-    EmailContinueService.mint(email: email).then((res) {
-      debugPrint(
-        '[Registration] background mint: emailed=${res?['emailed']}',
-      );
-    }).catchError((_) {});
-  }
+  // Explicit tap: manual trigger forces a send (bypasses daily dedupe).
+  EmailContinueService.sendWelcome(force: true).then((res) {
+    debugPrint(
+      '[Registration] welcome: emailed=${res?['emailed']} queued=${res?['queued']}',
+    );
+  }).catchError((_) {});
   if (!context.mounted) return;
   final data = OnboardingData()..email = email.isNotEmpty ? email : null;
   await Navigator.of(context).push(

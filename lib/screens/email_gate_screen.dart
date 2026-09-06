@@ -92,7 +92,7 @@ class _EmailGateScreenState extends State<EmailGateScreen> {
                       ),
                       child: Text(
                         'Skip for now',
-                        style: tt.headlineSmall?.copyWith(
+                        style: tt.bodyMedium?.copyWith(
                           color: Colors.grey,
                           fontWeight: FontWeight.w600,
                         ),

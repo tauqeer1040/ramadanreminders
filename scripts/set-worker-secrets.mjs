@@ -25,6 +25,8 @@ const FROM_ENV = [
   'FANAR_BASE_URL',
   'AI_POLL_INTERVAL_MS',
   'AI_INITIAL_DELAY_HOURS',
+  'RESEND_API_KEY',
+  'EMAIL_FROM',
 ];
 
 function setSecret(name, value) {

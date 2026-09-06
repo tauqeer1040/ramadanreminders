@@ -39,6 +39,20 @@ async function pollPendingJournals() {
   isProcessing = true;
 
   try {
+    // Early-warning counts (stuck pipeline visibility).
+    const s = await db.execute({
+      sql: `SELECT ai_status AS st, COUNT(*) AS n FROM journal_entries
+            WHERE ai_status IN ('pending','processing','failed')
+            GROUP BY ai_status`,
+      args: [],
+    });
+    const parts = s.rows.map((r) => `${r.st}=${r.n}`);
+    if (parts.length) console.log(`[AI] queue: ${parts.join(' ')}`);
+  } catch (_) {
+    // counts are best-effort; never block the poll
+  }
+
+  try {
     const pending = await db.execute(
       `
         SELECT id, user_id, content, ai_attempts, created_at
@@ -68,7 +82,7 @@ async function pollPendingJournals() {
             ai_status = 'processing',
             ai_attempts = COALESCE(ai_attempts, 0) + 1,
             ai_last_error = NULL,
-            ai_next_retry_at = NULL
+            ai_next_retry_at = DATETIME('now', '+15 minutes')
           WHERE id = ?
         `,
         args: [journal.id],
@@ -157,17 +171,36 @@ async function pollPendingJournals() {
         });
         const attemptNumber = Number(journal.ai_attempts || 0) + 1;
         const retryDelayMinutes = getRetryDelayMinutes(attemptNumber);
-        await db.execute({
-          sql: `
-            UPDATE journal_entries
-            SET
-              ai_status = 'failed',
-              ai_last_error = ?,
-              ai_next_retry_at = DATETIME('now', ?)
-            WHERE id = ?
-          `,
-          args: [error.message.slice(0, 500), `+${retryDelayMinutes} minutes`, journal.id],
-        });
+        if (attemptNumber >= 5) {
+          // Slow lane: keep retrying once daily instead of dying forever.
+          // Resetting attempts to 4 keeps the row eligible under the
+          // poller's attempts < 5 predicate.
+          await db.execute({
+            sql: `
+              UPDATE journal_entries
+              SET
+                ai_status = 'failed',
+                ai_last_error = ?,
+                ai_attempts = 4,
+                ai_next_retry_at = DATETIME('now', '+24 hours')
+              WHERE id = ?
+            `,
+            args: [`[slow-lane] ${error.message.slice(0, 480)}`, journal.id],
+          });
+          console.warn(`[AI] ${journal.id} moved to slow-lane daily retry`);
+        } else {
+          await db.execute({
+            sql: `
+              UPDATE journal_entries
+              SET
+                ai_status = 'failed',
+                ai_last_error = ?,
+                ai_next_retry_at = DATETIME('now', ?)
+              WHERE id = ?
+            `,
+            args: [error.message.slice(0, 500), `+${retryDelayMinutes} minutes`, journal.id],
+          });
+        }
         clearJournalCache(journal.id);
       }
     }
@@ -184,6 +217,26 @@ async function pollPendingJournals() {
 }
 
 function startPolling() {
+  // Provider visibility: Fanar is first priority, OpenRouter is fallback.
+  // Log key presence (never values) so silent-fallback is diagnosable.
+  console.log(
+    `[AI] providers: fanar=${process.env.FANAR_API_KEY ? 'key-set' : 'MISSING'} ` +
+    `openrouter=${process.env.OPENROUTER_API_KEY ? 'key-set' : 'MISSING'}`
+  );  // Reaper: rows left in 'processing' by a crash/restart (lease expired)
+  // go back to pending instead of stalling forever. At startup no worker
+  // is legitimately processing, so any expired lease is stale.
+  db.execute({
+    sql: `UPDATE journal_entries SET ai_status = 'pending', ai_next_retry_at = NULL
+          WHERE ai_status = 'processing'
+          AND (ai_next_retry_at IS NULL OR ai_next_retry_at <= CURRENT_TIMESTAMP)`,
+    args: [],
+  }).then(
+    (r) => {
+      const n = Number(r.rowsAffected || 0);
+      if (n > 0) console.warn(`[AI] reaper: ${n} stuck processing row(s) back to pending`);
+    },
+    (e) => console.error('[AI] reaper failed:', e.message),
+  );
   setInterval(pollPendingJournals, AI_POLL_INTERVAL_MS);
 }
 

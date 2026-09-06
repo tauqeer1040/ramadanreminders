@@ -85,6 +85,7 @@ const emailContinueSchema = z.object({
   displayName: z.string().max(120).nullish(),
   consentUpdates: z.boolean().nullish(),
   snapshot: emailContinueSnapshotSchema,
+  trigger: z.enum(['auto', 'manual']).nullish(),
 });
 
 const externalOfferSessionSchema = z.object({

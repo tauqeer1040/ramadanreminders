@@ -109,6 +109,9 @@ class JournalSyncService {
         }
         await prefs.setString('last_sync_at', DateTime.now().toIso8601String());
         await InsightService.invalidateCache();
+        // A new journal means new insight cards: drop the scratch batch so
+        // the next fetch pulls fresh content instead of the old deck.
+        await InsightService.invalidateScratchCache();
       } else {
         throw Exception('Sync failed with status ${response.statusCode}: ${response.body}');
       }

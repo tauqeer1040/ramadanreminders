@@ -24,6 +24,10 @@ import 'pwa_install_service.dart';
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     if (task == 'rescheduleNotifications') {
+      // Background isolate has no initialized plugin — init (incl.
+      // timezone) before scheduling, otherwise this is a silent no-op
+      // and boot-time alarms are never restored.
+      await NotificationService.init();
       final username = inputData?['username'] as String? ?? 'you';
       await NotificationService.scheduleDailyNotifications(username: username);
     }
@@ -175,7 +179,9 @@ class AppBootstrap {
 
     if (!kIsWeb) {
       // Local notifications and Workmanager are mobile-only plugins.
-      NotificationService.init();
+      // init() is awaited: scheduling against a half-initialized plugin
+      // silently no-ops (null plugin), which dropped reminders entirely.
+      await NotificationService.init();
       await Workmanager().initialize(callbackDispatcher);
 
       final prefs = await SharedPreferences.getInstance();

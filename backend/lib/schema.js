@@ -115,7 +115,7 @@ const CREATE_STATEMENTS = [
     )
   `,
   `
-    CREATE TABLE IF NOT EXISTS continue_tokens (
+     CREATE TABLE IF NOT EXISTS continue_tokens (
       tok_hash TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
       rc_customer_id TEXT,
@@ -125,6 +125,27 @@ const CREATE_STATEMENTS = [
       consumed_at INTEGER,
       resend_count INTEGER DEFAULT 0,
       last_sent_at INTEGER,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS email_jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'mint',
+      tok_hash TEXT,
+      tok_enc TEXT,
+      snapshot TEXT,
+      display_name TEXT,
+      status TEXT NOT NULL DEFAULT 'queued',
+      attempts INTEGER DEFAULT 0,
+      next_retry_at INTEGER,
+      lease_expires_at INTEGER,
+      resend_id TEXT,
+      last_error TEXT,
+      created_at INTEGER NOT NULL,
+      sent_at INTEGER,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `,

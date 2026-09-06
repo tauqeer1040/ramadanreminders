@@ -50,6 +50,7 @@ dependencies:
   purchases_ui_flutter: ^10.6.0
   flutter_inapp_purchase: ^10.6.0
   web: ^1.1.0
+  flutter_timezone: ^5.1.0
 
 dev_dependencies:
   flutter_test:

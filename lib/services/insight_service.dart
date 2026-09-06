@@ -196,6 +196,7 @@ class InsightService {
   static Future<void> _saveScratchBatch(Map<String, dynamic> payload) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      payload['_date'] = _today();
       await prefs.setString(_scratchBatchKey, jsonEncode(payload));
     } catch (_) {}
   }
@@ -216,20 +217,27 @@ class InsightService {
     final user = _auth.currentUser;
     if (user == null) return [];
 
-    // Try cache first (unless forceRefresh)
+    // Try cache first (unless forceRefresh). A batch saved on a previous
+    // day is stale: skip it so the morning deck is fresh, but keep it as
+    // last-resort fallback if the network yields nothing.
+    Map<String, dynamic>? staleBatch;
     if (!forceRefresh) {
       final cached = await _loadCachedScratchBatch();
       if (cached != null) {
-        final cardsRaw = cached['insightCards'];
-        if (cardsRaw is List && cardsRaw.isNotEmpty) {
-          final revealed = await loadRevealedIds();
-          if (!_isBatchFullyRevealed(cardsRaw, revealed)) {
-            return cardsRaw
-                .map((e) => InsightCard.fromJson(Map<String, dynamic>.from(e as Map)))
-                .where((c) => c.type.isNotEmpty)
-                .toList();
+        if (cached['_date'] == _today()) {
+          final cardsRaw = cached['insightCards'];
+          if (cardsRaw is List && cardsRaw.isNotEmpty) {
+            final revealed = await loadRevealedIds();
+            if (!_isBatchFullyRevealed(cardsRaw, revealed)) {
+              return cardsRaw
+                  .map((e) => InsightCard.fromJson(Map<String, dynamic>.from(e as Map)))
+                  .where((c) => c.type.isNotEmpty)
+                  .toList();
+            }
+            // Fully revealed -> fall through to fetch next batch
           }
-          // Fully revealed -> fall through to fetch next batch
+        } else {
+          staleBatch = cached;
         }
       }
     }

@@ -1,6 +1,7 @@
 const http = require('http');
 const { initDB } = require('./lib/schema');
 const { startPolling } = require('./lib/ai-engine');
+const { startEmailWorker } = require('./lib/email-queue');
 const { isWorker } = require('./lib/runtime');
 const app = require('./app');
 
@@ -15,6 +16,7 @@ function createServer() {
         ? http.createServer(app)
         : app.listen(PORT, () => console.log(`[App] Turso Backend running on port ${PORT}`));
       startPolling();
+      startEmailWorker();
       return server;
     })
     .catch((error) => {

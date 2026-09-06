@@ -52,6 +52,8 @@ class CheckEmailScreen extends StatefulWidget {
 class _CheckEmailScreenState extends State<CheckEmailScreen> {
   late String _email;
   bool _sending = true;
+  bool _sendFailed = false;
+  bool _sendQueued = false;
   String? _tok;
   bool _mailOpened = false;
   bool _resending = false;
@@ -101,7 +103,11 @@ class _CheckEmailScreenState extends State<CheckEmailScreen> {
   }
 
   Future<void> _mint() async {
-    setState(() => _sending = true);
+    setState(() {
+      _sending = true;
+      _sendFailed = false;
+      _sendQueued = false;
+    });
     final res = await EmailContinueService.mint(
       email: _email,
       snapshot: widget.snapshot,
@@ -110,7 +116,13 @@ class _CheckEmailScreenState extends State<CheckEmailScreen> {
     setState(() {
       _sending = false;
       _tok = res?['tok'] as String?;
+      // Honest send state: sent now, queued for worker retry, or failed.
+      _sendFailed = res != null && res['emailed'] == false && res['queued'] != true;
+      _sendQueued = res != null && res['emailed'] == false && res['queued'] == true;
     });
+    debugPrint(
+      '[EmailGate] mint emailed=${res?['emailed']} queued=${res?['queued']} id=${res?['email_id']}',
+    );
     _startPolling();
   }
 
@@ -162,8 +174,15 @@ class _CheckEmailScreenState extends State<CheckEmailScreen> {
       _resending = false;
       final tok = res?['tok'] as String?;
       if (tok != null && tok.isNotEmpty) _tok = tok;
+      if (res != null) {
+        _sendFailed = res['emailed'] == false && res['queued'] != true;
+        _sendQueued = res['emailed'] == false && res['queued'] == true;
+      }
       _resendCooldown = 60;
     });
+    debugPrint(
+      '[EmailGate] resend emailed=${res?['emailed']} queued=${res?['queued']} id=${res?['email_id']}',
+    );
     _cooldownTimer?.cancel();
     _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
@@ -303,10 +322,16 @@ class _CheckEmailScreenState extends State<CheckEmailScreen> {
           Text(
             _sending
                 ? 'Preparing your spiritual profile…'
-                : 'We sent $masked a link with your spiritual profile card, '
-                    'your first journal, and your AI insights.',
+                : _sendQueued
+                    ? 'Email on its way — check inbox + spam in a minute.'
+                    : _sendFailed
+                        ? 'We couldn\'t send to $masked just now — check your connection and tap Resend email below.'
+                        : 'We sent $masked a link with your spiritual profile card, '
+                            'your first journal, and your AI insights.',
             style: tt.bodyLarge?.copyWith(
-              color: cs.onSurface.withValues(alpha: 0.65),
+              color: _sendFailed && !_sending
+                  ? const Color(0xFFFFAD1F)
+                  : cs.onSurface.withValues(alpha: 0.65),
               height: 1.5,
             ),
             textAlign: TextAlign.center,
@@ -330,6 +355,14 @@ class _CheckEmailScreenState extends State<CheckEmailScreen> {
             children: [
               TextButton(
                 onPressed: (_resending || _resendCooldown > 0) ? null : _resend,
+                style: TextButton.styleFrom(
+                  // Disabled (cooldown) uses the same readable colors as the
+                  // enabled state — the theme's washed-out disabled style
+                  // made "Resend in Ns" unreadable.
+                  disabledBackgroundColor:
+                      cs.primary.withValues(alpha: 0.9),
+                  disabledForegroundColor: Colors.white,
+                ),
                 child: Text(_resendCooldown > 0 ? 'Resend in ${_resendCooldown}s' : 'Resend email'),
               ),
               TextButton(onPressed: _editEmail, child: const Text('Edit email')),

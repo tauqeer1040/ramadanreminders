@@ -33,12 +33,43 @@ class EmailContinueService {
     await _storage.delete(key: _emailKey);
   }
 
-  /// Mint a continue token + send the delight email. Returns backend JSON
-  /// ({tok, emailed, email_masked, expires_in}) or null on failure.
+  /// One-line welcome sender: GETs the server-resolved send endpoint.
+  /// No address to pass (the server mails *you*), nothing to build.
+  /// [force] true bypasses the daily auto-dedupe (explicit taps).
+  /// Returns backend JSON ({ok, emailed, queued, tok}) or null on failure.
+  static Future<Map<String, dynamic>?> sendWelcome({bool force = false}) async {
+    try {
+      final headers = await ApiClient.authHeaders();
+      final uri = Uri.parse(
+        '${AppConstants.backendUrl}/email-continue/send'
+        '${force ? '?trigger=manual' : ''}',
+      );
+      final res = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200) return null;
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      try {
+        AnalyticsService.instance.logEvent(
+          'welcome_email_sent',
+          params: {'forced': '$force'},
+        );
+      } catch (_) {}
+      return json;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Mint a continue token + queue the delight email. Returns backend JSON
+  /// ({tok, emailed, queued, deduped, email_id, expires_in}) or null on
+  /// transport failure. [trigger] 'manual' forces a send (explicit taps);
+  /// anything else dedupes to one auto-send per day.
   static Future<Map<String, dynamic>?> mint({
     required String email,
     String? displayName,
     Map<String, dynamic>? snapshot,
+    String? trigger,
   }) async {
     try {
       final headers = await ApiClient.postHeaders();
@@ -50,6 +81,7 @@ class EmailContinueService {
               'email': email,
               if (displayName != null) 'displayName': displayName,
               'snapshot': snapshot,
+              if (trigger != null) 'trigger': trigger,
             }),
           )
           .timeout(const Duration(seconds: 20));

@@ -2,15 +2,25 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'web_bridge.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
   static fln.FlutterLocalNotificationsPlugin? _notificationsPlugin;
+  static bool _exactAlarmsGranted = false;
 
   static Future<void> init() async {
-    _notificationsPlugin = fln.FlutterLocalNotificationsPlugin();
+    _notificationsPlugin ??= fln.FlutterLocalNotificationsPlugin();
     tz.initializeTimeZones();
+    // Device-local timezone — without this tz.local stays UTC and daily
+    // reminders fire at the wrong wall-clock hour.
+    try {
+      final tzInfo = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(tzInfo.identifier));
+    } catch (_) {
+      // UTC fallback; times still scheduled, just possibly offset.
+    }
 
     final initializationSettingsAndroid =
         fln.AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -82,7 +92,26 @@ class NotificationService {
     return granted ?? false;
   }
 
+  /// Android 12+: exact alarms need runtime user consent (denied by
+  /// default on 14+). Without it, exact scheduling silently degrades, so
+  /// fall back to inexact and still deliver approximately on time.
+  static Future<void> _ensureExactAlarms() async {
+    if (kIsWeb) return;
+    try {
+      final android = _notificationsPlugin
+          ?.resolvePlatformSpecificImplementation<
+            fln.AndroidFlutterLocalNotificationsPlugin
+          >();
+      _exactAlarmsGranted =
+          await android?.requestExactAlarmsPermission() ?? false;
+    } catch (_) {
+      _exactAlarmsGranted = false;
+    }
+  }
+
   static Future<void> scheduleDailyNotifications({String username = 'you'}) async {
+    if (_notificationsPlugin == null) await init();
+    await _ensureExactAlarms();
     await _notificationsPlugin?.cancelAll();
 
     final now = DateTime.now();
@@ -155,7 +184,9 @@ class NotificationService {
       body: body,
       scheduledDate: dateTime,
       notificationDetails: notificationDetails,
-      androidScheduleMode: fln.AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: _exactAlarmsGranted
+          ? fln.AndroidScheduleMode.exactAllowWhileIdle
+          : fln.AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: fln.DateTimeComponents.time,
     );
   }
