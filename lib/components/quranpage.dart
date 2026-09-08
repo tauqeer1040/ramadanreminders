@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import '../services/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -13,6 +15,7 @@ import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../services/insight_service.dart';
+import '../services/deck_queue_logic.dart';
 import 'widgets/deferred_lottie.dart';
 import '../services/favorites_service.dart';
 import '../services/shop_service.dart';
@@ -70,6 +73,11 @@ class _QuranPageState extends State<QuranPage>
   String _preparedUrl = '';
 
   List<InsightCard> _insightCards = [];
+  String? _deckId;
+  int _queueDepth = 0;
+
+  bool get _fullyRevealed => isDeckFullyRevealed(
+        _insightCards.map((c) => c.id ?? '').toSet(), _revealedCards);
 
   final CardSwiperController _swiperController = CardSwiperController();
 
@@ -132,7 +140,18 @@ class _QuranPageState extends State<QuranPage>
 
   Future<void> _loadInsightLocallyOnly() async {
     try {
-      // Prefer scratch-batch cache (stable ids, persistent until all revealed)
+      // Deck queue first: today's served deck is sticky all day (1 deck/day).
+      final deck = await InsightService.fetchTodayDeck();
+      if (mounted && deck.cards.isNotEmpty) {
+        setState(() {
+          _deckId = deck.deckId;
+          _insightCards = deck.cards;
+          _queueDepth = deck.queueDepth;
+          _buildDeck();
+        });
+        return;
+      }
+      // Legacy caches: instant paint for upgraders before the first deck fetch.
       final scratchCached = await InsightService.loadScratchCacheInternal();
       final cached = scratchCached ?? await InsightService.loadCacheInternal();
       if (mounted && cached != null && cached.isNotEmpty) {
@@ -147,20 +166,44 @@ class _QuranPageState extends State<QuranPage>
   Future<void> _fetchFreshDataSilently() async {
     if (FirebaseAuth.instance.currentUser != null) {
       try {
-        final cards = await InsightService.fetchScratchBatch(forceRefresh: false);
-        if (mounted && cards.isNotEmpty) {
-          // Only replace if not already showing same journal batch to avoid flicker
-          final newIds = cards.map((c) => c.id ?? '').toSet();
+        // Background revalidation: the server is the source of truth (an
+        // edited journal regenerates today's deck). Never yank cards
+        // mid-scratch — swap only when untouched or fully revealed.
+        final deck = await InsightService.fetchTodayDeck(forceRefresh: true);
+        if (mounted && deck.cards.isNotEmpty) {
+          final newIds = deck.cards.map((c) => c.id ?? '').toSet();
           final curIds = _insightCards.map((c) => c.id ?? '').toSet();
-          if (newIds.isEmpty || curIds.isEmpty || !newIds.every(curIds.contains)) {
-            setState(() {
-              _insightCards = cards;
-              _buildDeck();
-            });
+          switch (deckSwapAction(
+            fetchedDeckId: deck.deckId,
+            fetchedCardIds: newIds,
+            currentDeckId: _deckId,
+            currentCardIds: curIds,
+            revealedCardIds: _revealedCards,
+          )) {
+            case DeckSwapAction.keep:
+              break;
+            case DeckSwapAction.refreshMetadata:
+              // Same deck: just refresh queue metadata, no flicker.
+              setState(() => _queueDepth = deck.queueDepth);
+              break;
+            case DeckSwapAction.swap:
+              setState(() {
+                _deckId = deck.deckId;
+                _insightCards = deck.cards;
+                _queueDepth = deck.queueDepth;
+                _buildDeck();
+              });
+              break;
           }
-        } else if (cards.isEmpty && _insightCards.isNotEmpty) {
-          // Keep existing cached batch if new fetch is empty (no unread)
+        } else if (deck.cards.isEmpty && _insightCards.isNotEmpty) {
+          // Keep existing deck if revalidation comes back empty.
         }
+        // Warm tomorrow's deck in the background (read-only server-side).
+        InsightService.prefetchNextDeck(excludeDeckId: _deckId).then((next) {
+          if (mounted && next != null) {
+            setState(() => _queueDepth = next.queueDepth);
+          }
+        });
       } catch (_) {
         // Silently fail as before
       }
@@ -211,12 +254,6 @@ class _QuranPageState extends State<QuranPage>
     );
   }
 
-  /// True when the deck is the backend daily-verse fallback
-  /// (no eligible journal) rather than personal insight cards.
-  bool get _isFallbackDeck =>
-      _insightCards.isNotEmpty &&
-      (_insightCards.first.id ?? '').startsWith('card_daily-');
-
   void _showHeart() {
     final burst = _HeartBurst();
     setState(() => _hearts.add(burst));
@@ -265,12 +302,28 @@ class _QuranPageState extends State<QuranPage>
       try {
         if (!await GrowthPromptService.shouldShowSheet()) return;
         var actionName = await GrowthPromptService.nextActionName();
-        var action = actionName == 'share'
-            ? DelightAction.share
-            : DelightAction.review;
+        var action = switch (actionName) {
+          'share' => DelightAction.share,
+          'reminders' => DelightAction.reminders,
+          _ => DelightAction.review,
+        };
         if (action == DelightAction.review) {
           if (kIsWeb || !await GrowthPromptService.shouldOfferReview()) {
             action = DelightAction.share;
+          }
+        }
+        if (action == DelightAction.reminders) {
+          // Never offer reminders on web, and never to users who already
+          // granted — skip this arm (rotation still advanced below).
+          var granted = false;
+          try {
+            granted = kIsWeb
+                ? true
+                : await NotificationService.checkPermissions();
+          } catch (_) {}
+          if (granted) {
+            await GrowthPromptService.flipNextAction(action.name);
+            return;
           }
         }
         if (action == DelightAction.share &&
@@ -686,6 +739,68 @@ class _QuranPageState extends State<QuranPage>
   }
 
 
+  // TODO(RELEASE): remove debug day-override (counter, tap hook, sheet).
+  int _debugTapCount = 0;
+
+  void _onLogoTap() {
+    if (!kDebugMode) return;
+    _debugTapCount++;
+    if (_debugTapCount >= 5) {
+      _debugTapCount = 0;
+      _showDebugDaySheet();
+    }
+  }
+
+  Future<void> _showDebugDaySheet() async {
+    final controller = TextEditingController(
+      text: InsightService.debugDayOverride ?? '',
+    );
+    final applied = await showDialog<String?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Debug: mock day'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Effective day: ${InsightService.effectiveDay}\n'
+              'Deck: ${_deckId ?? 'none'} · queue: $_queueDepth',
+              style: Theme.of(ctx).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: 'YYYY-MM-DD (empty = device date)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ''),
+            child: const Text('Clear'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (applied == null || !mounted) return;
+    InsightService.setDebugDayOverride(applied.isEmpty ? null : applied);
+    // Reload through the normal path (cache paint + background revalidate).
+    _initData();
+  }
+
   Future<bool> _onSwipe(
     int previousIndex,
     int? currentIndex,
@@ -762,7 +877,7 @@ class _QuranPageState extends State<QuranPage>
                     Expanded(
                       child: Center(
                         child: GestureDetector(
-                          onTap: () {},
+                          onTap: _onLogoTap,
                         child: Image.asset(
                           'assets/photos/elements/meowmin.webp',
                           width: 120,
@@ -804,48 +919,24 @@ class _QuranPageState extends State<QuranPage>
             Expanded(
               child: Column(
                 children: [
-                  if (_isFallbackDeck)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.starGold.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.wb_sunny_rounded,
-                              color: AppTheme.starGold,
-                              size: 14,
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              'Daily verse — journal to unlock personal insights',
-                              style: TextStyle(
-                                color: AppTheme.starGold,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                   Expanded(
                     child: Center(
-                      child: SizedBox(
-                        width: MediaQuery.of(context).size.width * 0.9,
-                        height: 620,
-                        child: _isLoading
-                            ? const InsightCardShimmer()
-                            : _deck.isNotEmpty
-                                ? CardSwiper(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) => SizedBox(
+                          width: MediaQuery.of(context).size.width * 0.9,
+                          // +40% card height (620 → 868), clamped to what
+                          // fits so small screens never overflow. Card text
+                          // scrolls internally (ReflectCard), so taller type
+                          // can't clip.
+                          height: math.min(868.0, constraints.maxHeight),
+                          child: MediaQuery(
+                            data: MediaQuery.of(context).copyWith(
+                              textScaler: const TextScaler.linear(1.4),
+                            ),
+                            child: _isLoading
+                                ? const InsightCardShimmer()
+                                : _deck.isNotEmpty
+                                    ? CardSwiper(
                               controller: _swiperController,
                               cardsCount: _deck.length,
                               numberOfCardsDisplayed: _deck.length > 1 ? 2 : 1,
@@ -900,7 +991,20 @@ class _QuranPageState extends State<QuranPage>
                                             if (_revealedCards.length == 1) {
                                               AnalyticsService.instance.logFirstTrueAction(which: 'scratch', action: 'reveal');
                                             }
-                                            // If all 3 now revealed, next open will fetch next batch
+                                            // Full reveal: ack server-side (idempotent) so
+                                            // tomorrow's serve advances. No same-day swap:
+                                            // 1 deck/day, revealed cards stay readable.
+                                            if (isDeckFullyRevealed(
+                                                _insightCards
+                                                    .map((c) => c.id ?? '')
+                                                    .toSet(),
+                                                _revealedCards)) {
+                                              final ids = _insightCards
+                                                  .map((c) => c.id ?? '')
+                                                  .where((id) => id.isNotEmpty)
+                                                  .toList();
+                                              InsightService.ackDeckRevealed(_deckId, ids);
+                                            }
                                           },
                                           child: card,
                                         ),
@@ -948,9 +1052,24 @@ class _QuranPageState extends State<QuranPage>
                 ),
                     ),
                     ),
+                ),
+                ),
                 ],
               ),
             ),
+            if (_fullyRevealed && _queueDepth > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  _queueDepth == 1
+                      ? '1 more deck is brewing for tomorrow'
+                      : '$_queueDepth more decks are brewing — one a day',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white.withValues(alpha: 0.55),
+                  ),
+                ),
+              ),
             const SizedBox(height: 32),
           ],
         ),

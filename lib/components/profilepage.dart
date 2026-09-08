@@ -238,11 +238,24 @@ class _ProfilePage1State extends State<ProfilePage1>
   }
 
   Future<void> _toggleNotifications() async {
-    if (_notificationsGranted) return;
+    // ON → mute everything. OFF → permission flow, then schedule.
+    if (_notificationsGranted) {
+      await NotificationService.cancelAll();
+      if (mounted) {
+        setState(() => _notificationsGranted = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reminders muted. Tap again any time to re-enable.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
     final granted = await NotificationService.requestPermissions();
     if (mounted) setState(() => _notificationsGranted = granted);
     if (granted && mounted) {
-      if (!kIsWeb) NotificationService.scheduleDailyNotifications();
+      if (!kIsWeb) await NotificationService.scheduleDailyNotifications();
       await _incrementStars(100);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -258,6 +271,19 @@ class _ProfilePage1State extends State<ProfilePage1>
           ),
         );
       }
+    } else if (mounted) {
+      // Denied (possibly permanently — Android stops showing the dialog
+      // after two denials). Offer the settings page instead of dead-ending.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Turn on reminders in Settings to earn +100 ⭐'),
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'SETTINGS',
+            onPressed: () => NotificationService.openAppSettings(),
+          ),
+        ),
+      );
     }
   }
 
@@ -406,6 +432,8 @@ class _ProfilePage1State extends State<ProfilePage1>
 
 
             // ── Notifications ───────────────────────────────────────────────
+            // Shown only while reminders are off: once enabled, the
+            // button (and its mute state) hides entirely.
             if (!_notificationsGranted) ...[
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -519,21 +547,26 @@ class _ProfilePage1State extends State<ProfilePage1>
   }
 
   Widget _buildNotificationCard() {
+    final on = _notificationsGranted;
     return DuoButton(
       onPressed: _toggleNotifications,
-      backgroundColor: const Color(0xFFFFC107),
-      depthColor: const Color(0xFFE6A800),
+      backgroundColor: on ? const Color(0xFF2E7D32) : const Color(0xFFFFC107),
+      depthColor: on ? const Color(0xFF1B5E20) : const Color(0xFFE6A800),
       radius: 16,
       height: 56,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Icon(Icons.notifications_active_rounded, size: 20, color: Color(0xFF1A1A1A)),
-          SizedBox(width: 10),
+        children: [
+          Icon(
+            on ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
+            size: 20,
+            color: on ? Colors.white : const Color(0xFF1A1A1A),
+          ),
+          const SizedBox(width: 10),
           Text(
-            'Enable Reminders +100 ⭐',
+            on ? 'Reminders On — tap to mute' : 'Enable Reminders +100 ⭐',
             style: TextStyle(
-              color: Color(0xFF1A1A1A),
+              color: on ? Colors.white : const Color(0xFF1A1A1A),
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
@@ -1133,6 +1166,8 @@ class _ProfilePage1State extends State<ProfilePage1>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _loadStats();
+      // Permissions may have changed in system settings while away.
+      _checkNotificationStatus();
     }
   }
 }

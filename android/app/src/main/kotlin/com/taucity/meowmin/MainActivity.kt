@@ -48,6 +48,18 @@ class MainActivity : FlutterFragmentActivity() {
                         result.success(false)
                     }
                 }
+            } else if (call.method == "openAppSettings") {
+                // System settings page for this app (notification toggles
+                // live here once the OS stops showing the permission dialog).
+                try {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    intent.data = android.net.Uri.fromParts("package", packageName, null)
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(intent)
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.success(false)
+                }
             } else {
                 result.notImplemented()
             }

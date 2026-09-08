@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "1001153353947-9tsrpgi7rq9t1p405asegljoc4ad1qau.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.taucity.meowmin",
+            "certificate_hash": "400923784f80008e4df579cb59d27b1e0b382776"
+          }
+        },
+        {
           "client_id": "1001153353947-u5sgc1ia5krm2beiluphggmbjannf6og.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

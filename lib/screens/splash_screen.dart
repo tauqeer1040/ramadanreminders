@@ -118,8 +118,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         final prefs = await SharedPreferences.getInstance();
         final asked = prefs.getBool('notification_permission_asked') ?? false;
         if (!asked) {
+          // Ask first, record after: a Definitive granted/denied outcome.
+          // (Previously the flag was set before the call, so an init race
+          // that returned false without showing any dialog burned it.)
+          await NotificationService.requestPermissions();
           await prefs.setBool('notification_permission_asked', true);
-          NotificationService.requestPermissions();
         }
       }
       await _performScratchMigration();

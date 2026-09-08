@@ -484,3 +484,33 @@ class CheckEmailPage extends StatelessWidget {
     );
   }
 }
+
+/// Pushable email-continuation route for in-app entry points (Manage
+/// Account, registration buttons). Soft mode: skippable, unlocks
+/// automatically on purchase. Pops back on skip or unlock.
+class EmailContinueRoute extends StatelessWidget {
+  final String email;
+
+  const EmailContinueRoute({super.key, this.email = ''});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: AppBackground(
+        backgroundImage: 'assets/photos/elements/onboarding.webp',
+        overlayOpacity: 0.35,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: CheckEmailScreen(
+              email: email,
+              title: 'Check your email to complete registration',
+              skipLabel: 'Skip for now',
+              onSkip: () => Navigator.of(context).pop(),
+              onUnlocked: () => Navigator.of(context).pop(true),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

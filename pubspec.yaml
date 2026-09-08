@@ -2,7 +2,7 @@ name: ramadan_reflections
 description: "Meowmin AI Diary — write your daily diary, get Quran stories and verses that match your day."
 publish_to: "none"
 
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: ^3.9.2

@@ -3,23 +3,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:in_app_review/in_app_review.dart' deferred as iar;
 import 'package:share_plus/share_plus.dart' deferred as share_plus;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../services/analytics_service.dart';
 import '../../../services/growth_prompt_service.dart';
 import '../../../services/invite_service.dart';
+import '../../../services/notification_service.dart';
 import '../../../theme/app_theme.dart';
 import 'duo_button.dart';
 import 'glass_container.dart';
 
 /// Single rotating post-like action offered after a scratch-card like:
-/// either a store review ask or an app share. Prompt policy (throttle,
-/// rotation, snooze, 5-star stop) lives in [GrowthPromptService]; this
-/// sheet only renders one action.
-enum DelightAction { review, share }
+/// a store review ask, an app share, or a reminders opt-in. Prompt policy
+/// (throttle, rotation, snooze, 5-star stop) lives in [GrowthPromptService];
+/// this sheet only renders one action.
+enum DelightAction { review, share, reminders }
 
 Future<void> showDelightActionSheet(
   BuildContext context,
   DelightAction action,
 ) async {
+  // Reminders arm never renders when already granted — no mute UI anywhere.
+  if (action == DelightAction.reminders) {
+    try {
+      if (await NotificationService.checkPermissions()) return;
+    } catch (_) {}
+  }
   HapticFeedback.lightImpact();
   try {
     AnalyticsService.instance.logEvent(
@@ -65,6 +73,7 @@ class _DelightSheetState extends State<_DelightSheet> {
   bool _busy = false;
 
   bool get _isReview => widget.action == DelightAction.review;
+  bool get _isReminders => widget.action == DelightAction.reminders;
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +95,11 @@ class _DelightSheetState extends State<_DelightSheet> {
             ),
             const SizedBox(height: 16),
             Text(
-              _isReview ? 'Loving Meowmin?' : 'Share the barakah',
+              _isReview
+                  ? 'Loving Meowmin?'
+                  : _isReminders
+                      ? 'Never miss a day?'
+                      : 'Share the barakah',
               style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
@@ -98,7 +111,9 @@ class _DelightSheetState extends State<_DelightSheet> {
                       : _askingEnjoy
                           ? 'Are you enjoying Meowmin?'
                           : 'A quick rating helps more hearts find the Quran.')
-                  : 'Invite a friend and shield each other\'s streaks.',
+                  : _isReminders
+                      ? 'Daily reminders keep your streak alive. +100 ⭐'
+                      : 'Invite a friend and shield each other\'s streaks.',
               style: tt.bodyMedium?.copyWith(
                 color: cs.onSurface.withValues(alpha: 0.65),
               ),
@@ -163,30 +178,49 @@ class _DelightSheetState extends State<_DelightSheet> {
                         HapticFeedback.mediumImpact();
                         if (_isReview) {
                           setState(() => _askingEnjoy = true);
+                        } else if (_isReminders) {
+                          await _doReminders(context);
                         } else {
                           await _doShare(context);
                         }
                       },
-                backgroundColor:
-                    _isReview ? AppTheme.starGold : const Color(0xFFE91E63),
+                backgroundColor: _isReview
+                    ? AppTheme.starGold
+                    : _isReminders
+                        ? const Color(0xFFFFC107)
+                        : const Color(0xFFE91E63),
                 depthColor: _isReview
                     ? const Color(0xFFD4A20C)
-                    : const Color(0xFFAD1457),
+                    : _isReminders
+                        ? const Color(0xFFE6A800)
+                        : const Color(0xFFAD1457),
                 radius: 16,
                 height: 56,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      _isReview ? Icons.star_rounded : Icons.share_rounded,
-                      color: AppTheme.starWhite,
+                      _isReview
+                          ? Icons.star_rounded
+                          : _isReminders
+                              ? Icons.notifications_active_rounded
+                              : Icons.share_rounded,
+                      color: _isReminders
+                          ? const Color(0xFF1A1A1A)
+                          : AppTheme.starWhite,
                       size: 22,
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      _isReview ? 'Leave a Review' : 'Share with a Friend',
-                      style: const TextStyle(
-                        color: AppTheme.starWhite,
+                      _isReview
+                          ? 'Leave a Review'
+                          : _isReminders
+                              ? 'Enable reminders'
+                              : 'Share with a Friend',
+                      style: TextStyle(
+                        color: _isReminders
+                            ? const Color(0xFF1A1A1A)
+                            : AppTheme.starWhite,
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
                       ),
@@ -205,13 +239,26 @@ class _DelightSheetState extends State<_DelightSheet> {
                 } catch (_) {}
                 Navigator.of(context).pop();
               },
-              child: Text(
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFFE6D9F5),
+                foregroundColor: Colors.black87,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: const Text(
                 'Maybe later',
-                style: tt.bodyMedium?.copyWith(
-                  color: cs.onSurface.withValues(alpha: 0.55),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
+            const SizedBox(height: 8),
             TextButton(
               onPressed: _busy
                   ? null
@@ -225,10 +272,24 @@ class _DelightSheetState extends State<_DelightSheet> {
                       } catch (_) {}
                       if (context.mounted) Navigator.of(context).pop();
                     },
-              child: Text(
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFFE6D9F5),
+                foregroundColor: Colors.black87,
+                disabledBackgroundColor: const Color(0xFFE6D9F5)
+                    .withValues(alpha: 0.5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: const Text(
                 'Don\'t remind me for 7 days',
-                style: tt.bodySmall?.copyWith(
-                  color: cs.onSurface.withValues(alpha: 0.45),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
@@ -285,6 +346,53 @@ class _DelightSheetState extends State<_DelightSheet> {
         );
       } catch (_) {}
     } catch (_) {}
+  }
+
+  Future<void> _doReminders(BuildContext context) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final granted = await NotificationService.requestPermissions();
+      if (!context.mounted) return;
+      if (granted) {
+        await NotificationService.scheduleDailyNotifications();
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt(
+            'total_stars',
+            (prefs.getInt('total_stars') ?? 0) + 100,
+          );
+        } catch (_) {}
+        try {
+          AnalyticsService.instance.logEvent(
+            'delight_sheet_action',
+            params: {'action': 'reminders'},
+          );
+        } catch (_) {}
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Reminders on! +100 ⭐')),
+          );
+          Navigator.of(context).pop();
+        }
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Turn on reminders in Settings'),
+              action: SnackBarAction(
+                label: 'SETTINGS',
+                onPressed: () =>
+                    NotificationService.openAppSettings(),
+              ),
+            ),
+          );
+        }
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _doShare(BuildContext context) async {

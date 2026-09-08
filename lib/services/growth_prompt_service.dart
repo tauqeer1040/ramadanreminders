@@ -132,16 +132,25 @@ class GrowthPromptService {
     );
   }
 
+  static const List<String> rotationOrder = [
+    'review',
+    'share',
+    'reminders',
+  ];
+
   static Future<String> nextActionName() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_nextAction) ?? 'review';
+    final stored = prefs.getString(_nextAction) ?? 'review';
+    // Migrate unknown/legacy values (e.g. widget arm added later).
+    return rotationOrder.contains(stored) ? stored : 'review';
   }
 
   static Future<void> flipNextAction(String shown) async {
     final prefs = await SharedPreferences.getInstance();
+    final idx = rotationOrder.indexOf(shown);
     await prefs.setString(
       _nextAction,
-      shown == 'review' ? 'share' : 'review',
+      rotationOrder[(idx + 1) % rotationOrder.length],
     );
   }
 }

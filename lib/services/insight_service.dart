@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../core/constants.dart';
@@ -137,14 +138,44 @@ class InsightService {
 
   static const String _dailyContentKey = 'daily_content_cache';
   static const String _scratchBatchKey = 'scratch_batch_cache';
+  static const String _deckTodayKey = 'deck_today_cache';
+  static const String _deckNextKey = 'deck_next_cache';
   static const String revealedIdsKey = 'quran_revealed_ids';
 
   static String? lastFetchError;
 
+  // TODO(RELEASE): remove debug day-override (field, setter, dialog hook).
+  // kDebugMode-gated mock local day (YYYY-MM-DD) for queue verification.
+  // In release builds the setter no-ops, so forgetting this is harmless —
+  // but delete it anyway before shipping.
+  static String? debugDayOverride;
+
+  static void setDebugDayOverride(String? day) {
+    if (!kDebugMode) return;
+    final trimmed = day?.trim() ?? '';
+    debugDayOverride =
+        RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(trimmed) ? trimmed : null;
+    // Changing the mock day invalidates day-keyed deck caches immediately.
+    _clearDeckCaches();
+  }
+
+  static Future<void> _clearDeckCaches() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_deckTodayKey);
+      await prefs.remove(_deckNextKey);
+    } catch (_) {}
+  }
+
   static String _today() {
+    final o = debugDayOverride;
+    if (o != null && RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(o)) return o;
     final now = DateTime.now();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
+
+  /// Effective local day used for deck fetch + cache keys (exposes override).
+  static String get effectiveDay => _today();
 
   static Future<void> invalidateCache() async {
     try {
@@ -471,4 +502,236 @@ class InsightService {
     }
     return [];
   }
+
+  // ── Deck queue API (1 deck/day, server is source of truth) ──────────────
+
+  static Future<Map<String, dynamic>?> _loadCachedDeck(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(key);
+      if (raw == null) return null;
+      return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> _saveDeck(String key, Map<String, dynamic> payload) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      payload['_date'] = _today();
+      await prefs.setString(key, jsonEncode(payload));
+    } catch (_) {}
+  }
+
+  static DeckResult _deckFromPayload(Map<String, dynamic> payload) {
+    final cardsRaw = payload['insightCards'];
+    final cards = cardsRaw is List
+        ? cardsRaw
+            .map((e) => InsightCard.fromJson(Map<String, dynamic>.from(e as Map)))
+            .where((c) => c.type.isNotEmpty)
+            .toList()
+        : <InsightCard>[];
+    return DeckResult(
+      deckId: payload['deckId'] as String?,
+      journalId: payload['journalId'] as String?,
+      cards: cards,
+      queueDepth: (payload['queueDepth'] as int?) ?? 0,
+      fallback: payload['fallback'] == true,
+    );
+  }
+
+  /// Serve today's deck: instant paint from cache, callers should follow with
+  /// a background `forceRefresh: true` revalidation (see QuranPage).
+  static Future<DeckResult> fetchTodayDeck({bool forceRefresh = false}) async {
+    final user = _auth.currentUser;
+    if (user == null) return DeckResult(cards: []);
+
+    if (!forceRefresh) {
+      final cached = await _loadCachedDeck(_deckTodayKey);
+      if (cached != null && cached['_date'] == _today()) {
+        final cardsRaw = cached['insightCards'];
+        if (cardsRaw is List && cardsRaw.isNotEmpty) {
+          return _deckFromPayload(cached);
+        }
+      }
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('$_backendUrl/user/${user.uid}/decks/today?day=${_today()}'),
+        headers: await ApiClient.authHeaders(),
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final payload = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+        lastFetchError = null;
+        final deck = _deckFromPayload(payload);
+        // Never poison the cache with an empty real deck; fallback decks are
+        // deterministic per day so caching them is safe and instant tomorrow.
+        if (deck.cards.isNotEmpty) {
+          await _saveDeck(_deckTodayKey, payload);
+        }
+        return deck;
+      }
+      lastFetchError = 'HTTP ${response.statusCode}';
+    } catch (e) {
+      lastFetchError = e.toString();
+    }
+
+    final fallback = await _loadCachedDeck(_deckTodayKey);
+    if (fallback != null) return _deckFromPayload(fallback);
+    return DeckResult(cards: []);
+  }
+
+  /// Prefetch tomorrow's deck for smoothness. Read-only server-side: never
+  /// marks anything served. Fire-and-forget from callers.
+  static Future<DeckResult?> prefetchNextDeck({String? excludeDeckId}) async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    try {
+      final exclude = (excludeDeckId ?? '').isEmpty
+          ? ''
+          : '&excludeDeckId=${Uri.encodeComponent(excludeDeckId!)}';
+      final response = await http.get(
+        Uri.parse('$_backendUrl/user/${user.uid}/decks/next?day=${_today()}$exclude'),
+        headers: await ApiClient.authHeaders(),
+      ).timeout(const Duration(seconds: 30));
+      if (response.statusCode == 200) {
+        final payload = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+        final deck = _deckFromPayload(payload);
+        if (deck.cards.isNotEmpty) {
+          await _saveDeck(_deckNextKey, payload);
+          return deck;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static Future<DeckResult?> loadNextDeckCache() async {
+    final cached = await _loadCachedDeck(_deckNextKey);
+    if (cached == null) return null;
+    return _deckFromPayload(cached);
+  }
+
+  static Future<void> invalidateNextDeckCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_deckNextKey);
+    } catch (_) {}
+  }
+
+  /// Idempotent reveal ack. Skipped for fallback (`daily-`) decks which are
+  /// never stored server-side. Never throws — callers fire and forget.
+  static Future<Map<String, dynamic>?> ackDeckRevealed(
+    String? deckId,
+    List<String> cardIds,
+  ) async {
+    final user = _auth.currentUser;
+    if (user == null || deckId == null || deckId.isEmpty) return null;
+    if (!deckId.startsWith('deck_')) return null;
+    try {
+      final response = await http.post(
+        Uri.parse('$_backendUrl/user/${user.uid}/decks/${Uri.encodeComponent(deckId)}/revealed'),
+        headers: await ApiClient.postHeaders(),
+        body: jsonEncode({'cardIds': cardIds}),
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        await invalidateNextDeckCache();
+        return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Per-journal insight status for editor/history pending UI. Falls back to
+  /// the legacy cards endpoint when the new route is unavailable.
+  static Future<JournalInsightStatus> fetchJournalInsightStatus(
+    String journalId,
+  ) async {
+    final user = _auth.currentUser;
+    if (user == null || user.isAnonymous || journalId.isEmpty) {
+      return JournalInsightStatus(cards: []);
+    }
+    try {
+      final response = await http.get(
+        Uri.parse('$_backendUrl/journal/${Uri.encodeComponent(journalId)}/insight'),
+        headers: await ApiClient.authHeaders(),
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        final payload = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+        final cardsRaw = payload['insightCards'];
+        final cards = cardsRaw is List
+            ? cardsRaw
+                .map((e) => InsightCard.fromJson(Map<String, dynamic>.from(e as Map)))
+                .where((c) => c.type.isNotEmpty)
+                .toList()
+            : <InsightCard>[];
+        return JournalInsightStatus(
+          aiStatus: payload['aiStatus'] as String?,
+          deckStatus: payload['deckStatus'] as String?,
+          deckDate: payload['deckDate'] as String?,
+          queuePosition: (payload['queuePosition'] as int?) ?? 0,
+          cards: cards,
+        );
+      }
+    } catch (_) {}
+    // Legacy fallback: cards only, unknown pipeline status.
+    final cards = await fetchJournalInsightCards(journalId);
+    return JournalInsightStatus(cards: cards);
+  }
+
+  /// Re-queue failed journals for AI processing. Returns true when accepted.
+  static Future<bool> retryFailedInsights() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    try {
+      final response = await http.post(
+        Uri.parse('$_backendUrl/journals/retry-failed'),
+        headers: await ApiClient.postHeaders(),
+        body: jsonEncode({}),
+      ).timeout(const Duration(seconds: 15));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
+/// One served deck: 3-4 insight cards plus queue metadata for prefetch UI.
+class DeckResult {
+  final String? deckId;
+  final String? journalId;
+  final List<InsightCard> cards;
+  final int queueDepth;
+  final bool fallback;
+
+  DeckResult({
+    this.deckId,
+    this.journalId,
+    required this.cards,
+    this.queueDepth = 0,
+    this.fallback = false,
+  });
+}
+
+/// Per-journal pipeline status backing the editor/history pending UI.
+class JournalInsightStatus {
+  final String? aiStatus;
+  final String? deckStatus;
+  final String? deckDate;
+  final int queuePosition;
+  final List<InsightCard> cards;
+
+  JournalInsightStatus({
+    this.aiStatus,
+    this.deckStatus,
+    this.deckDate,
+    this.queuePosition = 0,
+    required this.cards,
+  });
+
+  bool get isPending => aiStatus == 'pending' || aiStatus == 'processing';
+  bool get isFailed => aiStatus == 'failed';
 }

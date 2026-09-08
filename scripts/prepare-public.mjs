@@ -143,4 +143,17 @@ const headers = [
 ].join('\n');
 writeFileSync(path.join(publicDir, '_headers'), headers);
 
+// 5. _routes.json — exclude API routes from Pages SPA catch-all.
+//    Without this, /decks/*, /poll-ai, /journal/* all return index.html
+//    instead of hitting the worker.
+writeFileSync(
+  path.join(publicDir, '_routes.json'),
+  JSON.stringify({
+    version: 1,
+    include: ['/'],
+    exclude: ['/decks/*', '/poll-ai', '/journal/*'],
+  }) + '\n',
+);
+console.log('[ok] wrote _routes.json (API route exclusions)');
+
 console.log('public/ assembled.');

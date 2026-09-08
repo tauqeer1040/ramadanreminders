@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/journal_service.dart';
@@ -26,11 +27,18 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
 
   List<InsightCard> _insightCards = [];
   bool _loadingInsights = false;
+  JournalInsightStatus? _insightStatus;
+  Timer? _saveTimer;
+  Timer? _statusTimer;
+  String _lastSavedText = '';
+  int _statusPolls = 0;
+  bool _retrying = false;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialText ?? '');
+    _lastSavedText = widget.initialText ?? '';
 
     // If no date passed, it's a completely new journal. Use precise timestamp as ID
     if (widget.initialDate == null) {
@@ -42,22 +50,36 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
   }
 
   Future<void> _loadInsights() async {
+    if (!mounted) return;
     setState(() => _loadingInsights = true);
-    final cards = await InsightService.fetchJournalInsightCards(_journalDate);
-    if (mounted) {
-      setState(() {
-        _insightCards = cards;
-        _loadingInsights = false;
+    final status = await InsightService.fetchJournalInsightStatus(_journalDate);
+    if (mounted) _applyStatus(status);
+  }
+
+  void _applyStatus(JournalInsightStatus status) {
+    if (!mounted) return;
+    _statusTimer?.cancel();
+    setState(() {
+      _insightStatus = status;
+      _insightCards = status.cards;
+      _loadingInsights = false;
+    });
+    // While Fanar is still brewing (or the fresh journal hasn't synced yet and
+    // the status came back unknown with no cards), poll gently for ~5 minutes.
+    final unknownEmpty = (status.aiStatus == null || status.aiStatus!.isEmpty) &&
+        status.cards.isEmpty;
+    if ((status.isPending || unknownEmpty) && _statusPolls < 20) {
+      _statusPolls++;
+      _statusTimer = Timer(const Duration(seconds: 15), () async {
+        if (!mounted) return;
+        final next = await InsightService.fetchJournalInsightStatus(_journalDate);
+        _applyStatus(next);
       });
     }
   }
 
-  void _onTextChanged(String text) async {
+  void _onTextChanged(String text) {
     if (mounted) setState(() => _isSaving = true);
-
-    // Save locally instantly on every keystroke (marks the dirty flag for sync) using the unique ID.
-    // Syncing to the cloud still happens in batches later (e.g., at midnight or on app launch).
-    await JournalService.saveLocalJournalWithId(_journalDate, text);
 
     // Show "write more with pro" hint when limit is first reached
     if (text.length >= _maxChars && !_showedLimitToast && mounted) {
@@ -66,11 +88,51 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
     }
     if (text.length < _maxChars) _showedLimitToast = false;
 
+    // Debounced save: typing no longer hammers sync + AI reset on every
+    // keystroke. The server also ignores identical content hashes, so only
+    // real edits regenerate insights.
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(seconds: 2), () => _saveNow(text));
+  }
+
+  Future<void> _saveNow(String text) async {
+    if (text == _lastSavedText) {
+      if (mounted) setState(() => _isSaving = false);
+      return;
+    }
+    await JournalService.saveLocalJournalWithId(_journalDate, text);
+    _lastSavedText = text;
     if (mounted) setState(() => _isSaving = false);
+    // A real edit (re)starts the brew: reset polling and watch for new cards,
+    // unless we already show cards for this exact save (they'll refresh).
+    if (mounted && _insightCards.isEmpty) {
+      _statusPolls = 0;
+      final status = await InsightService.fetchJournalInsightStatus(_journalDate);
+      _applyStatus(status);
+    }
+  }
+
+  Future<void> _retryInsights() async {
+    if (_retrying) return;
+    setState(() => _retrying = true);
+    final ok = await InsightService.retryFailedInsights();
+    if (!mounted) return;
+    setState(() => _retrying = false);
+    if (ok) {
+      _statusPolls = 0;
+      _loadInsights();
+    }
   }
 
   @override
   void dispose() {
+    // Flush any pending debounced save so no words are lost on back-nav.
+    _saveTimer?.cancel();
+    _statusTimer?.cancel();
+    final pending = _controller.text;
+    if (pending != _lastSavedText) {
+      JournalService.saveLocalJournalWithId(_journalDate, pending);
+    }
     _controller.dispose();
     super.dispose();
   }
@@ -156,8 +218,6 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
   }
 
   Widget _buildInsightsSection(ColorScheme cs) {
-    if (widget.initialDate == null) return const SizedBox.shrink();
-
     if (_loadingInsights) {
       return Padding(
         padding: const EdgeInsets.only(top: 24),
@@ -178,7 +238,62 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
       );
     }
 
-    if (_insightCards.isEmpty) return const SizedBox.shrink();
+    if (_insightCards.isEmpty) {
+      final status = _insightStatus;
+      if (status != null && status.isFailed) {
+        return Padding(
+          padding: const EdgeInsets.only(top: 24),
+          child: Row(
+            children: [
+              Icon(Icons.cloud_off_outlined, size: 16,
+                  color: cs.onSurface.withValues(alpha: 0.6)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Insights hit a snag while brewing.',
+                  style: TextStyle(
+                      fontSize: 13, color: cs.onSurface.withValues(alpha: 0.6)),
+                ),
+              ),
+              TextButton(
+                onPressed: _retrying ? null : _retryInsights,
+                child: Text(_retrying ? 'Retrying…' : 'Retry'),
+              ),
+            ],
+          ),
+        );
+      }
+      if (status == null ||
+          status.isPending ||
+          ((status.aiStatus == null || status.aiStatus!.isEmpty))) {
+        final queueNote = (status != null && status.queuePosition > 1)
+            ? ' (#${status.queuePosition} in queue)'
+            : '';
+        return Padding(
+          padding: const EdgeInsets.only(top: 24),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: cs.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Brewing your insights$queueNote — usually ready in a minute. Your deck queues behind today\u2019s cards.',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: cs.onSurface.withValues(alpha: 0.6)),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    }
 
     return Padding(
       padding: const EdgeInsets.only(top: 28, bottom: 24),

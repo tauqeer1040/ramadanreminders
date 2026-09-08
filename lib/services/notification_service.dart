@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/services.dart' show MethodChannel;
 import 'web_bridge.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
@@ -8,7 +9,29 @@ import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
   static fln.FlutterLocalNotificationsPlugin? _notificationsPlugin;
-  static bool _exactAlarmsGranted = false;
+  static const _settingsChannel =
+      MethodChannel('com.taucity.meowmin/widget');
+
+  /// Cancel every scheduled reminder (the "off" half of the toggle).
+  static Future<void> cancelAll() async {
+    try {
+      await _notificationsPlugin?.cancelAll();
+    } catch (_) {}
+  }
+
+  /// Open the app's system settings page (for users who denied permission
+  /// twice — Android stops showing the dialog and settings is the only path).
+  /// Returns true when the settings screen was launched.
+  static Future<bool> openAppSettings() async {
+    if (kIsWeb) return false;
+    try {
+      if (defaultTargetPlatform != TargetPlatform.android) return false;
+      final ok = await _settingsChannel.invokeMethod<bool>('openAppSettings');
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 
   static Future<void> init() async {
     _notificationsPlugin ??= fln.FlutterLocalNotificationsPlugin();
@@ -61,6 +84,9 @@ class NotificationService {
         return false;
       }
     }
+    // Self-ensuring init: callers (e.g. splash) may race init(). A null
+    // plugin would silently return false and burn one-shot flags.
+    if (_notificationsPlugin == null) await init();
     // v20+: generic-only API — passing the type as a positional argument
     // throws NoSuchMethodError at runtime (dynamic call, invisible to analyze).
     final androidImplementation = _notificationsPlugin
@@ -82,6 +108,7 @@ class NotificationService {
         return false;
       }
     }
+    if (_notificationsPlugin == null) await init();
     final androidImplementation = _notificationsPlugin
         ?.resolvePlatformSpecificImplementation<
           fln.AndroidFlutterLocalNotificationsPlugin
@@ -92,26 +119,8 @@ class NotificationService {
     return granted ?? false;
   }
 
-  /// Android 12+: exact alarms need runtime user consent (denied by
-  /// default on 14+). Without it, exact scheduling silently degrades, so
-  /// fall back to inexact and still deliver approximately on time.
-  static Future<void> _ensureExactAlarms() async {
-    if (kIsWeb) return;
-    try {
-      final android = _notificationsPlugin
-          ?.resolvePlatformSpecificImplementation<
-            fln.AndroidFlutterLocalNotificationsPlugin
-          >();
-      _exactAlarmsGranted =
-          await android?.requestExactAlarmsPermission() ?? false;
-    } catch (_) {
-      _exactAlarmsGranted = false;
-    }
-  }
-
   static Future<void> scheduleDailyNotifications({String username = 'you'}) async {
     if (_notificationsPlugin == null) await init();
-    await _ensureExactAlarms();
     await _notificationsPlugin?.cancelAll();
 
     final now = DateTime.now();
@@ -184,9 +193,10 @@ class NotificationService {
       body: body,
       scheduledDate: dateTime,
       notificationDetails: notificationDetails,
-      androidScheduleMode: _exactAlarmsGranted
-          ? fln.AndroidScheduleMode.exactAllowWhileIdle
-          : fln.AndroidScheduleMode.inexactAllowWhileIdle,
+      // Pure inexact by design (a minute's drift is fine for daily
+      // reminders): no exact-alarm permission, no policy declaration,
+      // no locked system toggle. See Play review notes.
+      androidScheduleMode: fln.AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: fln.DateTimeComponents.time,
     );
   }

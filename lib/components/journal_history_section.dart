@@ -36,6 +36,7 @@ class _JournalEntryRowState extends State<_JournalEntryRow> {
   bool _loaded = false;
   List<InsightCard> _insightCards = [];
   bool _loadingInsights = false;
+  JournalInsightStatus? _insightStatus;
 
   @override
   void initState() {
@@ -47,10 +48,12 @@ class _JournalEntryRowState extends State<_JournalEntryRow> {
   Future<void> _loadInsights() async {
     if (!mounted) return;
     setState(() => _loadingInsights = true);
-    final cards = await InsightService.fetchJournalInsightCards(widget.journal['date'] ?? '');
+    final status = await InsightService.fetchJournalInsightStatus(
+        widget.journal['date'] ?? '');
     if (mounted) {
       setState(() {
-        _insightCards = cards;
+        _insightStatus = status;
+        _insightCards = status.cards;
         _loadingInsights = false;
       });
     }
@@ -194,7 +197,28 @@ class _JournalEntryRowState extends State<_JournalEntryRow> {
         ),
       ];
     }
-    if (_insightCards.isEmpty) return [];
+    if (_insightCards.isEmpty) {
+      final status = _insightStatus;
+      String? note;
+      if (status != null && status.isFailed) {
+        note = 'Insights paused — open the entry to retry';
+      } else if (status == null ||
+          status.isPending ||
+          ((status.aiStatus == null || status.aiStatus!.isEmpty))) {
+        note = 'Brewing AI insights…';
+      }
+      if (note == null) return [];
+      return [
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            note,
+            style: tt.bodySmall?.copyWith(
+                color: Colors.white.withValues(alpha: 0.35), fontSize: 11),
+          ),
+        ),
+      ];
+    }
     return [
       Padding(
         padding: const EdgeInsets.only(top: 8),

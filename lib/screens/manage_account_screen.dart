@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_service.dart';
@@ -8,6 +9,7 @@ import '../services/revenuecat_provider.dart';
 import '../theme/app_theme.dart';
 import '../core/app_background.dart';
 import '../components/widgets/duo_button.dart';
+import '../components/onboarding/check_email_page.dart';
 
 class ManageAccountScreen extends ConsumerWidget {
   final User user;
@@ -142,15 +144,35 @@ class ManageAccountScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   DuoButton(
                     onPressed: () async {
-                      await RevenueCatService.instance.presentCustomerCenter();
-                      if (context.mounted) ref.read(revenueCatProvider.notifier).refresh();
+                      // Email-only membership: no store paywalls in-app.
+                      // Pro users keep the Customer Center (cancellation
+                      // must stay accessible per Play policy); everyone else
+                      // continues by email.
+                      if (isPro) {
+                        await RevenueCatService.instance.presentCustomerCenter();
+                        if (context.mounted) {
+                          ref.read(revenueCatProvider.notifier).refresh();
+                        }
+                        return;
+                      }
+                      if (!context.mounted) return;
+                      final unlocked = await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => EmailContinueRoute(
+                            email: user.email ?? '',
+                          ),
+                        ),
+                      );
+                      if (context.mounted && unlocked == true) {
+                        ref.read(revenueCatProvider.notifier).refresh();
+                      }
                     },
                     backgroundColor: AppTheme.neonPurple,
                     depthColor: const Color(0xFF6A00FF),
                     radius: 12,
                     height: 48,
                     child: Text(
-                      isPro ? 'Manage Subscription' : 'View Plans',
+                      isPro ? 'Manage Subscription' : 'Continue with Email',
                       style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800),
                     ),
                   ),
@@ -158,7 +180,9 @@ class ManageAccountScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            // ── Pause highlight ──
+            // ── Continue anywhere (email) ──
+            // All membership roads lead to email: verify once and journals,
+            // streaks and shields follow the address. No store paywalls.
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -172,26 +196,37 @@ class ManageAccountScreen extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(7),
                     decoration: BoxDecoration(color: AppTheme.starGold.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-                    child: const Icon(Icons.pause_circle_rounded, color: AppTheme.starGold, size: 18),
+                    child: const Icon(Icons.mark_email_read_rounded, color: AppTheme.starGold, size: 18),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Need a break? Pause instead of canceling', style: TextStyle(color: AppTheme.starWhite, fontSize: 13, fontWeight: FontWeight.w800)),
+                        const Text('Continue anywhere with email', style: TextStyle(color: AppTheme.starWhite, fontSize: 13, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 4),
                         Text(
-                          'Pause keeps your shields and streak intact. You can pause for up to 3 months and resume anytime — your 114 Surahs progress stays safe.',
+                          'One verification mail carries your member link — open it on any device and pick up exactly where you left off.',
                           style: TextStyle(color: AppTheme.ghostSilver.withValues(alpha: 0.85), fontSize: 11, height: 1.4),
                         ),
                         const SizedBox(height: 8),
                         GestureDetector(
                           onTap: () async {
-                            await RevenueCatService.instance.presentCustomerCenter();
-                            if (context.mounted) ref.read(revenueCatProvider.notifier).refresh();
+                            HapticFeedback.lightImpact();
+                            final email = user.email ?? '';
+                      if (!context.mounted) return;
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => EmailContinueRoute(
+                            email: user.email ?? '',
+                          ),
+                        ),
+                      );
+                            if (context.mounted) {
+                              ref.read(revenueCatProvider.notifier).refresh();
+                            }
                           },
-                          child: const Text('Pause in Manage Subscription →', style: TextStyle(color: AppTheme.starGold, fontSize: 12, fontWeight: FontWeight.w700, decoration: TextDecoration.underline, decorationColor: AppTheme.starGold)),
+                          child: const Text('Email me my link →', style: TextStyle(color: AppTheme.starGold, fontSize: 12, fontWeight: FontWeight.w700, decoration: TextDecoration.underline, decorationColor: AppTheme.starGold)),
                         ),
                       ],
                     ),
