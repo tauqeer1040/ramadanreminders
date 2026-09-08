@@ -1,0 +1,34 @@
+name: AI queue watch
+
+# Watchdog for "AI insights for every journal". Reads Turso directly, so it
+# works even when the API worker itself is down. Fails loudly when journals
+# sit without insights past grace.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Check AI queue
+        run: node scripts/ai-queue-watch.mjs
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}

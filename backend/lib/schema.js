@@ -1,4 +1,5 @@
 const db = require('./db');
+const { isWorker } = require('./runtime');
 
 const USER_CREATE_COLUMNS = ['id', 'display_name', 'email', 'journal_count', 'relevant_tags', 'created_at', 'last_active'];
 const USER_ALTER_COLUMNS = [
@@ -19,11 +20,13 @@ const USER_ALTER_COLUMNS = [
   ['shield_balance', 'INTEGER DEFAULT 0'],
 ];
 
-const JOURNAL_CREATE_COLUMNS = ['id', 'user_id', 'content', 'created_at', 'ai_status', 'ai_attempts', 'ai_last_error', 'ai_next_retry_at'];
+const JOURNAL_CREATE_COLUMNS = ['id', 'user_id', 'content', 'created_at', 'ai_status', 'ai_attempts', 'ai_last_error', 'ai_next_retry_at', 'updated_at', 'content_hash'];
 const JOURNAL_ALTER_COLUMNS = [
   ['ai_attempts', 'INTEGER DEFAULT 0'],
   ['ai_last_error', 'TEXT'],
   ['ai_next_retry_at', 'DATETIME'],
+  ['updated_at', 'DATETIME'],
+  ['content_hash', 'TEXT'],
 ];
 
 const JOURNAL_AI_CREATE_COLUMNS = ['id', 'journal_id', 'user_id', 'summary', 'tags', 'quote', 'reference', 'suggested_tasks', 'task_tags', 'updated_at'];
@@ -63,7 +66,25 @@ const CREATE_STATEMENTS = [
       ai_attempts INTEGER DEFAULT 0,
       ai_last_error TEXT,
       ai_next_retry_at DATETIME,
+      updated_at DATETIME,
+      content_hash TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS insight_decks (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      journal_id TEXT NOT NULL,
+      deck_date TEXT,
+      status TEXT NOT NULL DEFAULT 'building',
+      cards_json TEXT,
+      served_at DATETIME,
+      revealed_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (journal_id) REFERENCES journal_entries(id) ON DELETE CASCADE
     )
   `,
   `
@@ -243,6 +264,12 @@ const USER_TAG_MAP_INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_user_task_tag_maps_user_tag ON user_task_tag_maps(user_id, tag)',
 ];
 
+const DECK_INDEXES = [
+  'CREATE INDEX IF NOT EXISTS idx_decks_user_status ON insight_decks(user_id, status)',
+  'CREATE INDEX IF NOT EXISTS idx_decks_user_date ON insight_decks(user_id, deck_date)',
+  'CREATE INDEX IF NOT EXISTS idx_decks_journal ON insight_decks(journal_id, status)',
+];
+
 async function tableExists(name) {
   const result = await db.execute({
     sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
@@ -334,6 +361,7 @@ async function ensureIndexTables(names) {
   }
 
   await db.execute('CREATE INDEX IF NOT EXISTS idx_journal_entries_user ON journal_entries(user_id)');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_journal_entries_user_status ON journal_entries(user_id, ai_status)');
   await db.execute('CREATE INDEX IF NOT EXISTS idx_tag_index_user_tag ON tag_index(user_id, tag)');
   await db.execute('CREATE INDEX IF NOT EXISTS idx_task_tag_index_user_tag ON task_tag_index(user_id, tag)');
 }
@@ -384,23 +412,117 @@ async function rebuildTagMapsFromIndexes() {
   }
 }
 
-async function initDB() {
-  console.log('[DB] Ensuring Turso schema...');
-  const state = await getTablesAndColumns();
+// Workers allow ~50 subrequests per invocation; the old initDB ran 40+
+// sequential statements on EVERY cold boot, and this file's growth tipped it
+// over the edge (prod-wide 1101s on deploy). initDB is now version-gated:
+// steady-state boots cost a single probe subrequest, and deltas run chunked.
+const SCHEMA_VERSION = '3';
+// v3 = insight_decks table + deck indexes + journal_entries.updated_at/
+// content_hash + journal_entries user_status index. Bump on future DDL and
+// extend probeSchema/planMissingDdl accordingly.
 
-  const alterations = [
+// Max DDL statements applied per boot on Workers. Local/VPS runs are
+// unchunked. Remainder is applied on subsequent boots (boot retries per
+// request until the version marker sticks).
+const BOOT_DDL_CHUNK = isWorker() ? 15 : 1000000;
+
+function tableNameOf(stmt) {
+  const m = String(typeof stmt === 'string' ? stmt : stmt.sql).match(
+    /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/i
+  );
+  return m ? m[1] : null;
+}
+
+function indexNameOf(stmt) {
+  const m = String(typeof stmt === 'string' ? stmt : stmt.sql).match(
+    /CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/i
+  );
+  return m ? m[1] : null;
+}
+
+/**
+ * Single-subrequest probe: schema marker, tables, tracked columns, indexes.
+ * Throws on a fresh DB (no app_config) so callers take the full-ensure path.
+ * pragma_table_info on a missing table yields zero rows (no error).
+ */
+async function probeSchema() {
+  const probedTables = [
+    'users',
+    'journal_entries',
+    'journal_ai',
+    'user_tag_maps',
+    'user_task_tag_maps',
+  ];
+  const colSelects = probedTables
+    .map((t) => `SELECT 'col:${t}', name FROM pragma_table_info('${t}')`)
+    .join(' UNION ALL ');
+  const result = await db.execute(`
+    SELECT 'version' AS kind, value AS name FROM app_config WHERE key = 'schema_version'
+    UNION ALL SELECT 'table', name FROM sqlite_master WHERE type = 'table'
+    UNION ALL SELECT 'index', name FROM sqlite_master WHERE type = 'index'
+    UNION ALL SELECT 'fk:tag_index', "table" FROM pragma_foreign_key_list('tag_index')
+    UNION ALL SELECT 'fk:task_tag_index', "table" FROM pragma_foreign_key_list('task_tag_index')
+    UNION ALL ${colSelects}
+  `);
+  let version = null;
+  const names = new Set();
+  const columns = {};
+  const indexes = new Set();
+  const fks = {};
+  for (const row of result.rows) {
+    if (row.kind === 'version') {
+      version = row.name;
+    } else if (row.kind === 'table') {
+      names.add(row.name);
+    } else if (row.kind === 'index') {
+      indexes.add(row.name);
+    } else if (typeof row.kind === 'string' && row.kind.startsWith('fk:')) {
+      const table = row.kind.slice(3);
+      (fks[table] = fks[table] || []).push(row.name);
+    } else if (typeof row.kind === 'string' && row.kind.startsWith('col:')) {
+      const table = row.kind.slice(4);
+      (columns[table] = columns[table] || []).push(row.name);
+    }
+  }
+  return { version, names, columns, indexes, fks };
+}
+
+function syntheticState(probe) {
+  return { names: probe.names, columns: probe.columns };
+}
+
+/**
+ * Deterministic DDL delta from probe state. Every statement is idempotent
+ * (IF NOT EXISTS / conditional ALTERs), so re-running after a partial boot
+ * converges without extra bookkeeping.
+ */
+function planMissingDdl(probe) {
+  const missing = [];
+  for (const stmt of CREATE_STATEMENTS) {
+    const table = tableNameOf(stmt);
+    if (table && !probe.names.has(table)) missing.push(stmt);
+  }
+  for (const stmt of [...USER_TAG_MAP_INDEXES, ...DECK_INDEXES, ...ERROR_LOG_INDEXES]) {
+    const index = indexNameOf(stmt);
+    if (index && !probe.indexes.has(index)) missing.push(stmt);
+  }
+  const state = syntheticState(probe);
+  missing.push(
     ...missingColumnAlters(state, 'users', USER_CREATE_COLUMNS, USER_ALTER_COLUMNS),
     ...missingColumnAlters(state, 'journal_entries', JOURNAL_CREATE_COLUMNS, JOURNAL_ALTER_COLUMNS),
     ...missingColumnAlters(state, 'journal_ai', JOURNAL_AI_CREATE_COLUMNS, JOURNAL_AI_ALTER_COLUMNS),
     ...missingColumnAlters(state, 'user_tag_maps', TAG_MAP_CREATE_COLUMNS, TAG_MAP_ALTER_COLUMNS),
-    ...missingColumnAlters(state, 'user_task_tag_maps', TAG_MAP_CREATE_COLUMNS, TAG_MAP_ALTER_COLUMNS),
-  ];
+    ...missingColumnAlters(state, 'user_task_tag_maps', TAG_MAP_CREATE_COLUMNS, TAG_MAP_ALTER_COLUMNS)
+  );
+  return missing;
+}
 
+async function runStatements(stmts) {
   // Statement-by-statement (NOT one db.batch): the libsql web client has
   // silently dropped trailing CREATEs from large batches before
   // (continue_tokens, external_offer_* needed manual backfill). Per-statement
   // executes make any failure loud instead of silent.
-  for (const stmt of [...CREATE_STATEMENTS, ...USER_TAG_MAP_INDEXES, ...ERROR_LOG_INDEXES, ...alterations]) {
+  for (const stmt of stmts) {
     try {
       await db.execute(stmt);
     } catch (e) {
@@ -409,20 +531,87 @@ async function initDB() {
       throw e;
     }
   }
+}
 
-  if (state.names.has('journals')) {
-    await db.execute(`
-      INSERT OR IGNORE INTO journal_entries (id, user_id, content, created_at, ai_status)
-      SELECT id, user_id, content, created_at, COALESCE(ai_status, 'pending')
-      FROM journals
-    `);
+async function markSchemaVersion() {
+  await db.execute({
+    sql: `INSERT INTO app_config (key, value) VALUES ('schema_version', ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    args: [SCHEMA_VERSION],
+  });
+}
+
+async function initDB() {
+  console.log('[DB] Ensuring Turso schema...');
+
+  let probe = null;
+  try {
+    probe = await probeSchema();
+  } catch (_) {
+    probe = null; // fresh DB (no app_config yet): full ensure below
   }
 
-  await ensureIndexTables(state.names);
+  if (probe && probe.version === SCHEMA_VERSION) {
+    console.log(`[DB] Schema v${SCHEMA_VERSION} current, skipping.`);
+  } else {
+    const emptyProbe = {
+      version: null,
+      names: new Set(),
+      columns: {},
+      indexes: new Set(),
+      fks: {},
+    };
+    const state = probe || emptyProbe;
+    const missing = planMissingDdl(state);
+    if (missing.length > BOOT_DDL_CHUNK) {
+      // Fresh/very-stale DB on Workers: apply a slice now; the boot fails
+      // this request but the NEXT request resumes (boot retries per request)
+      // until the version marker sticks. Applied DDL is idempotent.
+      console.warn(`[DB] applying schema slice ${BOOT_DDL_CHUNK}/${missing.length}, resuming next boot`);
+      await runStatements(missing.slice(0, BOOT_DDL_CHUNK));
+      throw new Error(`[DB] schema incomplete (${missing.length - BOOT_DDL_CHUNK} statements remain), retrying next boot`);
+    }
+    await runStatements(missing);
+
+    if (state.names.has('journals')) {
+      await db.execute(`
+        INSERT OR IGNORE INTO journal_entries (id, user_id, content, created_at, ai_status)
+        SELECT id, user_id, content, created_at, COALESCE(ai_status, 'pending')
+        FROM journals
+      `);
+    }
+
+    // Index tables + FK shape: only when something is actually missing, so
+    // steady-state boots skip these extra subrequests entirely.
+    const wantIndexes = [
+      'idx_journal_entries_user',
+      'idx_journal_entries_user_status',
+      'idx_tag_index_user_tag',
+      'idx_task_tag_index_user_tag',
+    ];
+    const needIndexTables =
+      ['tag_index', 'task_tag_index'].some((t) => !state.names.has(t)) ||
+      wantIndexes.some((i) => !state.indexes.has(i)) ||
+      ['tag_index', 'task_tag_index'].some(
+        (t) => state.names.has(t) && !(state.fks[t] || []).includes('journal_entries')
+      );
+    if (needIndexTables) {
+      await ensureIndexTables(state.names);
+    }
+    try {
+      await rebuildTagMapsFromIndexes();
+    } catch (e) {
+      // Tag maps are a best-effort backfill (similar-matches only). Never take
+      // down boot for them: log loudly and continue so the API stays up.
+      console.error('[DB] tag map rebuild failed (degraded similar-matches):', e.message);
+    }
+    await markSchemaVersion();
+  }
+
   await seedAppConfig();
-  await rebuildTagMapsFromIndexes();
+  await rebuildTagMapsFromIndexes().catch(() => {});
   await db.execute("UPDATE journal_entries SET ai_status = 'pending' WHERE ai_status = 'processing'");
   console.log('[DB] Schema ready.');
 }
 
-module.exports = { initDB, tableExists, hasColumn };
+module.exports = { initDB, tableExists, hasColumn, probeSchema, SCHEMA_VERSION };

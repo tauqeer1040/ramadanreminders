@@ -12,12 +12,24 @@ const syncJournalsSchema = z.object({
   journals: z.array(z.object({
     id: z.string(),
     text: z.string(),
+    content_hash: z.string().optional(),
+    client_updated_at: z.string().optional(),
   })),
 });
 
 const createJournalSchema = z.object({
   id: z.string(),
   text: z.string(),
+  content_hash: z.string().optional(),
+  client_updated_at: z.string().optional(),
+});
+
+const deckRevealSchema = z.object({
+  cardIds: z.array(z.string()).max(4).optional(),
+});
+
+const deckDayQuerySchema = z.object({
+  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 const generateAnalogySchema = z.object({
@@ -101,6 +113,8 @@ module.exports = {
   upsertUserSchema,
   syncJournalsSchema,
   createJournalSchema,
+  deckRevealSchema,
+  deckDayQuerySchema,
   generateAnalogySchema,
   generateInsightsSchema,
   awardStarsSchema,

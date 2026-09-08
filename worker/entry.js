@@ -1,4 +1,5 @@
 import { httpServerHandler } from 'cloudflare:node';
+import { runWithContext } from '../backend/lib/request-context.js';
 
 const API_PREFIX = '/api/';
 
@@ -37,6 +38,9 @@ export default {
       return env.ASSETS.fetch(request);
     }
     const handler = await boot(env);
-    return handler.fetch(request, env, ctx);
+    // Run the request inside the ALS context so backend code can reach
+    // ctx.waitUntil() (see lib/request-context.js). Without this, background
+    // work scheduled after the response may never run on Workers.
+    return runWithContext(ctx, () => handler.fetch(request, env, ctx));
   },
 };

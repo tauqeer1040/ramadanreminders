@@ -1,4 +1,5 @@
 const { pollPendingJournals } = require('../lib/ai-engine');
+const { runAfterResponse } = require('../lib/request-context');
 const { listErrors, logError } = require('../lib/error-log');
 
 module.exports = function (app) {
@@ -11,13 +12,57 @@ module.exports = function (app) {
     if (!checkSecret(req)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    // Fire-and-forget: the worker already polls on its own interval, so this
-    // endpoint is just a nudge. Return immediately so the CI cron's `curl -m 60`
-    // never times out waiting on a long poll (which previously failed the job).
-    pollPendingJournals().catch((error) => {
+    // Return immediately so the caller's `curl -m 60` never times out on a
+    // long poll (which previously failed the job). The poll itself is kept
+    // alive past the response via ctx.waitUntil() on Workers; elsewhere it
+    // runs detached as before.
+    const onError = (error) => {
       logError({ type: 'ai_poll_cron', message: error.message, stack: error.stack, route: 'internal/poll-ai' });
+    };
+    runAfterResponse(() => pollPendingJournals(), {
+      fallback: () => pollPendingJournals().catch(onError),
+      onError,
     });
     return res.status(202).json({ ok: true, triggered: true });
+  });
+
+  // Deck pipeline diag: queue depth, stuck building rows, recent failures.
+  // Lets a cron/uptime check catch a stalled queue without Firebase auth.
+  app.get('/api/v2/internal/decks/health', async (req, res) => {
+    if (!checkSecret(req)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+      const db = require('../lib/db');
+      const [ready, served, building, stuck, failed, stale, done24, made24] = await Promise.all([
+        db.execute(`SELECT COUNT(*) AS n FROM insight_decks WHERE status = 'ready'`),
+        db.execute(`SELECT COUNT(*) AS n FROM insight_decks WHERE status = 'served'`),
+        db.execute(`SELECT COUNT(*) AS n FROM insight_decks WHERE status = 'building'`),
+        db.execute(`SELECT COUNT(*) AS n FROM insight_decks WHERE status = 'building' AND created_at < DATETIME('now', '-2 hours')`),
+        db.execute(`SELECT COUNT(*) AS n FROM journal_entries WHERE ai_status = 'failed'`),
+        db.execute(`SELECT COUNT(*) AS n,
+                MAX(CAST((strftime('%s','now') - strftime('%s', COALESCE(ai_next_retry_at, created_at))) / 60 AS INTEGER)) AS oldest_min
+              FROM journal_entries
+              WHERE ai_status = 'pending'
+                AND (ai_next_retry_at IS NULL OR ai_next_retry_at <= DATETIME('now', '-45 minutes'))`),
+        db.execute(`SELECT COUNT(*) AS n FROM journal_ai WHERE updated_at > DATETIME('now', '-24 hours')`),
+        db.execute(`SELECT COUNT(*) AS n FROM journal_entries WHERE created_at > DATETIME('now', '-24 hours')`),
+      ]);
+      res.json({
+        ok: true,
+        ready: Number(ready.rows[0]?.n || 0),
+        served: Number(served.rows[0]?.n || 0),
+        building: Number(building.rows[0]?.n || 0),
+        stuckBuilding: Number(stuck.rows[0]?.n || 0),
+        failedJournals: Number(failed.rows[0]?.n || 0),
+        pendingStale: Number(stale.rows[0]?.n || 0),
+        oldestPendingMin: stale.rows[0]?.oldest_min == null ? 0 : Number(stale.rows[0].oldest_min),
+        completed24h: Number(done24.rows[0]?.n || 0),
+        journals24h: Number(made24.rows[0]?.n || 0),
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.get('/api/v2/internal/errors', async (req, res) => {

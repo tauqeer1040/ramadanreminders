@@ -2,14 +2,18 @@ const FANAR_BASE_URL = process.env.FANAR_BASE_URL || 'https://api.fanar.qa';
 const FANAR_API_KEY = process.env.FANAR_API_KEY;
 const FANAR_MODEL = process.env.FANAR_MODEL || 'Fanar';
 
-const OPENROUTER_MODELS = [
-  'stepfun/step-3.5-flash:free',
-  'arcee-ai/trinity-large-preview:free',
-  'google/gemma-3-27b-it:free',
-  'google/gemma-3-12b-it:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'nousresearch/hermes-3-llama-3.1-405b:free',
-];
+// OpenRouter free-tier models churn constantly (all six 2025-era IDs 404 by
+// Sep 2026). Verified live against GET /models on 2026-09-08. Override without
+// a deploy via OPENROUTER_MODELS="id1,id2" env when they rotate again.
+const OPENROUTER_MODELS = (process.env.OPENROUTER_MODELS
+  ? String(process.env.OPENROUTER_MODELS).split(',').map((s) => s.trim()).filter(Boolean)
+  : [
+      'google/gemma-4-31b-it:free',
+      'google/gemma-4-26b-a4b-it:free',
+      'nvidia/nemotron-3-super-120b-a12b:free',
+      'thinkingmachines/inkling:free',
+      'inclusionai/ling-3.0-flash-fin:free',
+    ]);
 
 function parseAiJson(rawText) {
   let raw = rawText || '';
@@ -61,7 +65,7 @@ async function callOpenRouterRaw(prompt) {
     throw new Error('OPENROUTER_API_KEY is missing');
   }
 
-  let lastError = null;
+  const failures = [];
   for (const model of OPENROUTER_MODELS) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
@@ -80,20 +84,22 @@ async function callOpenRouterRaw(prompt) {
       });
 
       if (!res.ok) {
-        lastError = new Error(`OpenRouter ${model} failed with ${res.status}`);
+        failures.push(`${model}:${res.status}`);
         continue;
       }
 
       const data = await res.json();
       return data.choices?.[0]?.message?.content || '';
     } catch (error) {
-      lastError = error;
+      failures.push(`${model}:${error.message.slice(0, 60)}`);
     } finally {
       clearTimeout(timeout);
     }
   }
 
-  throw lastError || new Error('All OpenRouter models failed');
+  // Name the dead models so the next rotation is visible in error_log
+  // (ai_poll_journal rows) instead of a bare "all failed".
+  throw new Error(`All OpenRouter models failed [${failures.join(', ')}]`);
 }
 
 async function callOpenRouter(prompt) {

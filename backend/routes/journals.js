@@ -3,7 +3,8 @@ const { getCache, clearUserCache, clearJournalCache } = require('../lib/cache');
 const { decrypt } = require('../encryption');
 const { upsertUser, recalculateUserMetadata } = require('../lib/users');
 const { upsertJournal, buildInsightCardsFromRows, loadSimilarMatchesForJournal } = require('../lib/journals');
-const { scheduleProcessSoon } = require('../lib/ai-engine');
+const { scheduleProcessSoon, pollPendingJournals } = require('../lib/ai-engine');
+const { runAfterResponse } = require('../lib/request-context');
 const { buildDailyContent } = require('../lib/quran');
 const { syncJournalsSchema, createJournalSchema } = require('../lib/validation');
 
@@ -90,6 +91,7 @@ module.exports = function (app, apiLimiter) {
 
       let syncedCount = 0;
       let newCount = 0;
+      let changedCount = 0;
       const skipped = [];
       for (const journal of journals) {
         if (!journal?.id || !journal?.text || !String(journal.text).trim()) continue;
@@ -98,20 +100,25 @@ module.exports = function (app, apiLimiter) {
           skipped.push({ id: journal.id, reason: 'text_too_long', limit: FREE_CHAR_LIMIT });
           continue;
         }
-        const existing = await db.execute({ sql: 'SELECT 1 FROM journal_entries WHERE id = ?', args: [journal.id] });
-        const isNew = existing.rows.length === 0;
-        await upsertJournal(uid, { id: journal.id, text: trimmed });
+        const result = await upsertJournal(uid, { id: journal.id, text: trimmed });
         syncedCount += 1;
-        if (isNew) newCount += 1;
+        if (result.isNew) newCount += 1;
+        if (result.changed) changedCount += 1;
       }
 
       await recalculateUserMetadata(uid);
       clearUserCache(uid);
-      if (syncedCount > 0) {
+      if (changedCount > 0) {
         if (newCount > 0) {
           await db.execute({ sql: 'UPDATE users SET stars = COALESCE(stars, 0) + ? WHERE id = ?', args: [newCount * 10, uid] });
         }
+        // Wake the AI poller reliably: ctx.waitUntil() on Workers (survives
+        // the response), setTimeout-based schedule elsewhere. Single-flight
+        // guarded, so overlapping nudges are harmless.
         scheduleProcessSoon();
+        runAfterResponse(() => pollPendingJournals(), {
+          fallback: () => scheduleProcessSoon(),
+        });
       }
 
       const starResult = await db.execute({ sql: 'SELECT stars FROM users WHERE id = ?', args: [uid] });
@@ -152,16 +159,18 @@ module.exports = function (app, apiLimiter) {
         });
       }
 
-      const existing = await db.execute({ sql: 'SELECT 1 FROM journal_entries WHERE id = ?', args: [id] });
-      const isNew = existing.rows.length === 0;
-
       await upsertUser(uid);
-      await upsertJournal(uid, { id, text: trimmed });
+      const result = await upsertJournal(uid, { id, text: trimmed });
       await recalculateUserMetadata(uid);
       clearUserCache(uid);
-      scheduleProcessSoon();
+      if (result.changed) {
+        scheduleProcessSoon();
+        runAfterResponse(() => pollPendingJournals(), {
+          fallback: () => scheduleProcessSoon(),
+        });
+      }
 
-      if (isNew) {
+      if (result.isNew) {
         await db.execute({ sql: 'UPDATE users SET stars = COALESCE(stars, 0) + 10 WHERE id = ?', args: [uid] });
       }
 

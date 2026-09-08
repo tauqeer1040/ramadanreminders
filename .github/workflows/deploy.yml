@@ -40,6 +40,15 @@ jobs:
         working-directory: backend
         run: npm ci
 
+      - name: Migrate database schema
+        # Runs BEFORE the worker bundle ships, so cold boots never pay DDL
+        # subrequest costs (see the 1101 outage). Fails the deploy on error.
+        working-directory: backend
+        run: node migrate.js
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
       - name: Build landing site
         working-directory: sites/meowmin
         run: npm run build

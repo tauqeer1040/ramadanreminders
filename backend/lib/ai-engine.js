@@ -1,10 +1,11 @@
 const db = require('./db');
 const { encrypt, decrypt } = require('../encryption');
-const { clearUserCache, clearJournalCache } = require('./cache');
+const { clearUserCache, clearJournalCache, clearDeckCache, clearScratchCache } = require('./cache');
 const { upsertTagMapRow } = require('./tags');
 const { recalculateUserMetadata } = require('./users');
 const { buildInsightPrompt } = require('./prompts');
 const { sanitizeInsightCards } = require('./sanitize');
+const decks = require('./decks');
 const fanar = require('../services/ai');
 
 const AI_POLL_INTERVAL_MS = Math.max(5000, Number(process.env.AI_POLL_INTERVAL_MS || 60000));
@@ -60,11 +61,11 @@ async function pollPendingJournals() {
         WHERE
           (
             ai_status = 'pending'
-            AND COALESCE(ai_next_retry_at, CURRENT_TIMESTAMP) <= CURRENT_TIMESTAMP
+            AND COALESCE(ai_next_retry_at, created_at, CURRENT_TIMESTAMP) <= CURRENT_TIMESTAMP
           )
           OR (
             ai_status = 'failed'
-            AND COALESCE(ai_next_retry_at, CURRENT_TIMESTAMP) <= CURRENT_TIMESTAMP
+            AND COALESCE(ai_next_retry_at, created_at, CURRENT_TIMESTAMP) <= CURRENT_TIMESTAMP
             AND COALESCE(ai_attempts, 0) < 5
           )
         ORDER BY
@@ -89,6 +90,9 @@ async function pollPendingJournals() {
       });
 
       try {
+        try {
+          await decks.ensureBuildingDeck(journal.user_id, journal.id);
+        } catch (_) {}
         const prevResult = await db.execute({
           sql: `
             SELECT j.content
@@ -105,6 +109,15 @@ async function pollPendingJournals() {
         const decryptedContent = decrypt(journal.content, journal.user_id);
         const ai = await generateFullInsight(decryptedContent, previousJournalText);
         if (Array.isArray(ai?.cards)) ai.cards = sanitizeInsightCards(ai.cards);
+        if (!Array.isArray(ai?.cards) || ai.cards.length < 3 || ai.cards.length > 4) {
+          throw new Error(`AI returned ${Array.isArray(ai?.cards) ? ai.cards.length : 0} cards, expected 3-4`);
+        }
+        // Pre-enrich on the write path so reads never block on alquran.cloud.
+        // Best-effort: enrichment failure still serves the deck (audio optional).
+        try {
+          const surahCard = ai.cards.find((c) => c && c.type === 'surah_guidance');
+          await decks.enrichSurahCard(surahCard);
+        } catch (_) {}
         const fullJson = JSON.stringify(ai);
         const encryptedSummary = encrypt(fullJson, journal.user_id);
         const card1 = ai.cards?.[0] || {};
@@ -156,9 +169,18 @@ async function pollPendingJournals() {
         for (const tag of taskTags) {
           await upsertTagMapRow('user_task_tag_maps', journal.user_id, tag, journal.id, journal.created_at);
         }
+        // Publish the serve-ready deck (supersedes prior active decks for this
+        // journal; revealed history stays frozen and re-queues by journal time).
+        try {
+          await decks.completeDeck(journal.user_id, journal.id, journal.created_at, ai.cards);
+        } catch (deckError) {
+          console.error(`[POLLER DECK ERROR] ${journal.id}: ${deckError.message}`);
+        }
         await recalculateUserMetadata(journal.user_id);
         clearUserCache(journal.user_id);
         clearJournalCache(journal.id);
+        clearDeckCache(journal.user_id);
+        clearScratchCache(journal.user_id);
       } catch (error) {
         console.error(`[POLLER ERROR] ${journal.id}: ${error.message}`);
         require('./error-log').logError({

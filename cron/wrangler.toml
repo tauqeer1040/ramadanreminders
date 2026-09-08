@@ -1,0 +1,12 @@
+name = "meowmin-cron"
+main = "worker.js"
+compatibility_date = "2026-05-03"
+
+# Fires poll-ai every 5 minutes. This is the reliable heartbeat for AI
+# insight generation: Pages Workers can't rely on setInterval between
+# requests, and fire-and-forget promises need waitUntil (see backend).
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+API_BASE = "https://meowmin.taucity.xyz"

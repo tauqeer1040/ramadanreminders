@@ -3,6 +3,9 @@ const { setCache, getCache } = require('./cache');
 const { buildInsightCardsFromRows, loadSimilarMatchesForJournal } = require('./journals');
 
 const FETCH_TIMEOUT_MS = 5000;
+// Legacy scratch/daily read cache: kept short (5min) now that deck writes
+// explicitly bust scratch:* via clearScratchCache. New clients use /decks/*.
+const LEGACY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 // Daily-verse fallback pool: used when the user has no eligible journal
 // (nothing completed yet, or everything revealed). Rotates deterministically
@@ -201,7 +204,7 @@ async function buildScratchBatch(uid, { excludeIds = [], dayKeys = [] } = {}) {
     // tomorrow) instead of an empty deck.
     const fbDate = (dayKeys[0] || new Date().toISOString().slice(0, 10));
     const fb = buildDailyFallback(fbDate);
-    setCache(cacheKey, fb);
+    setCache(cacheKey, fb, LEGACY_CACHE_TTL_MS);
     return fb;
   }
 
@@ -213,7 +216,7 @@ async function buildScratchBatch(uid, { excludeIds = [], dayKeys = [] } = {}) {
       related: { journalId: rows[0].id, reflectionTags: [], taskTags: [], similarReflections: [], similarTasks: [] },
       featuredReference: null,
     };
-    setCache(cacheKey, empty);
+    setCache(cacheKey, empty, LEGACY_CACHE_TTL_MS);
     return empty;
   }
 
@@ -241,7 +244,7 @@ async function buildScratchBatch(uid, { excludeIds = [], dayKeys = [] } = {}) {
     featuredReference: surahCard?.reference || insightCards[0]?.reference || null,
   };
 
-  setCache(cacheKey, payload);
+  setCache(cacheKey, payload, LEGACY_CACHE_TTL_MS);
   return payload;
 }
 
@@ -274,7 +277,7 @@ async function buildDailyContent(uid, dayKey) {
       related: scratch.related,
       featuredReference: scratch.featuredReference,
     };
-    setCache(cacheKey, payload);
+    setCache(cacheKey, payload, LEGACY_CACHE_TTL_MS);
     return payload;
   }
 
