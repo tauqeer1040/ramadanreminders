@@ -143,20 +143,15 @@ const headers = [
 ].join('\n');
 writeFileSync(path.join(publicDir, '_headers'), headers);
 
-// 5. _routes.json — exclude API routes from Pages SPA catch-all.
-//    Without this, /decks/*, /poll-ai, /journal/* all return index.html
-//    instead of hitting the worker.
+// 5. _routes.json — route ALL requests through the _worker.js.
+//    The worker checks the /api/ prefix itself: API → backend, everything
+//    else → ASSETS.fetch. include ["/*"] is required — ["/"] would match
+//    only the root path and send /api/v2/* to the static SPA fallback,
+//    which returns HTML instead of JSON (the FormatException bug).
 writeFileSync(
   path.join(publicDir, '_routes.json'),
-  JSON.stringify({
-    version: 1,
-    include: ['/'],
-    // No excludes — the worker handles all routing internally
-    // (API → backend, everything else → ASSETS.fetch).
-    // Previous excludes (/decks/*, /poll-ai, /journal/*) sent API routes
-    // to static assets, causing SPA catch-all to return HTML.
-  }) + '\n',
+  JSON.stringify({ version: 1, include: ['/*'] }) + '\n',
 );
-console.log('[ok] wrote _routes.json (worker handles all routing)');
+console.log('[ok] wrote _routes.json (all routes -> worker)');
 
 console.log('public/ assembled.');
