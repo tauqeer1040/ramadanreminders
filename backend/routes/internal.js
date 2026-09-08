@@ -20,6 +20,34 @@ module.exports = function (app) {
     return res.status(202).json({ ok: true, triggered: true });
   });
 
+  // Deck pipeline diag: queue depth, stuck building rows, recent failures.
+  // Lets a cron/uptime check catch a stalled queue without Firebase auth.
+  app.get('/api/v2/internal/decks/health', async (req, res) => {
+    if (!checkSecret(req)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+      const db = require('../lib/db');
+      const [ready, served, building, stuck, failed] = await Promise.all([
+        db.execute(`SELECT COUNT(*) AS n FROM insight_decks WHERE status = 'ready'`),
+        db.execute(`SELECT COUNT(*) AS n FROM insight_decks WHERE status = 'served'`),
+        db.execute(`SELECT COUNT(*) AS n FROM insight_decks WHERE status = 'building'`),
+        db.execute(`SELECT COUNT(*) AS n FROM insight_decks WHERE status = 'building' AND created_at < DATETIME('now', '-2 hours')`),
+        db.execute(`SELECT COUNT(*) AS n FROM journal_entries WHERE ai_status = 'failed'`),
+      ]);
+      res.json({
+        ok: true,
+        ready: Number(ready.rows[0]?.n || 0),
+        served: Number(served.rows[0]?.n || 0),
+        building: Number(building.rows[0]?.n || 0),
+        stuckBuilding: Number(stuck.rows[0]?.n || 0),
+        failedJournals: Number(failed.rows[0]?.n || 0),
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get('/api/v2/internal/errors', async (req, res) => {
     if (!checkSecret(req)) {
       return res.status(401).json({ error: 'Unauthorized' });

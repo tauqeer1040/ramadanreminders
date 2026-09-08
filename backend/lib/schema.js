@@ -19,11 +19,13 @@ const USER_ALTER_COLUMNS = [
   ['shield_balance', 'INTEGER DEFAULT 0'],
 ];
 
-const JOURNAL_CREATE_COLUMNS = ['id', 'user_id', 'content', 'created_at', 'ai_status', 'ai_attempts', 'ai_last_error', 'ai_next_retry_at'];
+const JOURNAL_CREATE_COLUMNS = ['id', 'user_id', 'content', 'created_at', 'ai_status', 'ai_attempts', 'ai_last_error', 'ai_next_retry_at', 'updated_at', 'content_hash'];
 const JOURNAL_ALTER_COLUMNS = [
   ['ai_attempts', 'INTEGER DEFAULT 0'],
   ['ai_last_error', 'TEXT'],
   ['ai_next_retry_at', 'DATETIME'],
+  ['updated_at', 'DATETIME'],
+  ['content_hash', 'TEXT'],
 ];
 
 const JOURNAL_AI_CREATE_COLUMNS = ['id', 'journal_id', 'user_id', 'summary', 'tags', 'quote', 'reference', 'suggested_tasks', 'task_tags', 'updated_at'];
@@ -63,7 +65,25 @@ const CREATE_STATEMENTS = [
       ai_attempts INTEGER DEFAULT 0,
       ai_last_error TEXT,
       ai_next_retry_at DATETIME,
+      updated_at DATETIME,
+      content_hash TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS insight_decks (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      journal_id TEXT NOT NULL,
+      deck_date TEXT,
+      status TEXT NOT NULL DEFAULT 'building',
+      cards_json TEXT,
+      served_at DATETIME,
+      revealed_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (journal_id) REFERENCES journal_entries(id) ON DELETE CASCADE
     )
   `,
   `
@@ -243,6 +263,12 @@ const USER_TAG_MAP_INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_user_task_tag_maps_user_tag ON user_task_tag_maps(user_id, tag)',
 ];
 
+const DECK_INDEXES = [
+  'CREATE INDEX IF NOT EXISTS idx_decks_user_status ON insight_decks(user_id, status)',
+  'CREATE INDEX IF NOT EXISTS idx_decks_user_date ON insight_decks(user_id, deck_date)',
+  'CREATE INDEX IF NOT EXISTS idx_decks_journal ON insight_decks(journal_id, status)',
+];
+
 async function tableExists(name) {
   const result = await db.execute({
     sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
@@ -334,6 +360,7 @@ async function ensureIndexTables(names) {
   }
 
   await db.execute('CREATE INDEX IF NOT EXISTS idx_journal_entries_user ON journal_entries(user_id)');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_journal_entries_user_status ON journal_entries(user_id, ai_status)');
   await db.execute('CREATE INDEX IF NOT EXISTS idx_tag_index_user_tag ON tag_index(user_id, tag)');
   await db.execute('CREATE INDEX IF NOT EXISTS idx_task_tag_index_user_tag ON task_tag_index(user_id, tag)');
 }
@@ -400,7 +427,7 @@ async function initDB() {
   // silently dropped trailing CREATEs from large batches before
   // (continue_tokens, external_offer_* needed manual backfill). Per-statement
   // executes make any failure loud instead of silent.
-  for (const stmt of [...CREATE_STATEMENTS, ...USER_TAG_MAP_INDEXES, ...ERROR_LOG_INDEXES, ...alterations]) {
+  for (const stmt of [...CREATE_STATEMENTS, ...USER_TAG_MAP_INDEXES, ...DECK_INDEXES, ...ERROR_LOG_INDEXES, ...alterations]) {
     try {
       await db.execute(stmt);
     } catch (e) {
