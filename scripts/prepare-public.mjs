@@ -151,9 +151,12 @@ writeFileSync(
   JSON.stringify({
     version: 1,
     include: ['/'],
-    exclude: ['/decks/*', '/poll-ai', '/journal/*'],
+    // No excludes — the worker handles all routing internally
+    // (API → backend, everything else → ASSETS.fetch).
+    // Previous excludes (/decks/*, /poll-ai, /journal/*) sent API routes
+    // to static assets, causing SPA catch-all to return HTML.
   }) + '\n',
 );
-console.log('[ok] wrote _routes.json (API route exclusions)');
+console.log('[ok] wrote _routes.json (worker handles all routing)');
 
 console.log('public/ assembled.');
