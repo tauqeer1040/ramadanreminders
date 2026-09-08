@@ -57,7 +57,7 @@ app.use((req, res, next) => {
 
 // Auth middleware
 app.use('/api/v2', (req, res, next) => {
-  if (['/ayah', '/shop/items', '/app-version', '/internal/poll-ai', '/internal/errors', '/internal/email-status', '/internal/decks/health', '/external-offer/resolve'].includes(req.path)) return next();
+  if (['/ayah', '/shop/items', '/app-version', '/internal/poll-ai', '/internal/errors', '/internal/email-status', '/external-offer/resolve'].includes(req.path)) return next();
   return verifyAuth(req, res, next);
 });
 
@@ -94,7 +94,6 @@ app.use((req, res, next) => {
 // Mount routes
 require('./routes/users')(app);
 require('./routes/journals')(app, apiLimiter);
-require('./routes/decks')(app);
 require('./routes/ai')(app, aiLimiter);
 require('./routes/misc')(app);
 require('./routes/emailContinue')(app);

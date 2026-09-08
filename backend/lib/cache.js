@@ -59,21 +59,6 @@ function getCache(key) {
 function clearUserCache(uid) {
   instance.delete(`user:${uid}`);
   instance.deleteWhere((key) => key.startsWith(`daily:${uid}:`));
-  // Deck rebuild: scratch-batch payloads were cached under scratch: keys with
-  // a 1h TTL and never busted on AI completion, pinning users to the first
-  // deck. Bust them (and deck: keys) whenever user state changes.
-  instance.deleteWhere((key) => key.startsWith(`scratch:${uid}:`));
-  instance.deleteWhere((key) => key.startsWith(`deck:${uid}:`));
-}
-
-function clearScratchCache(uid) {
-  if (!uid) return;
-  instance.deleteWhere((key) => key.startsWith(`scratch:${uid}:`));
-}
-
-function clearDeckCache(uid) {
-  if (!uid) return;
-  instance.deleteWhere((key) => key.startsWith(`deck:${uid}:`));
 }
 
 function clearJournalCache(id) {
@@ -84,4 +69,4 @@ function deleteCache(key) {
   instance.delete(key);
 }
 
-module.exports = { setCache, getCache, clearUserCache, clearScratchCache, clearDeckCache, clearJournalCache, deleteCache };
+module.exports = { setCache, getCache, clearUserCache, clearJournalCache, deleteCache };

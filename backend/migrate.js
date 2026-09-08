@@ -56,32 +56,6 @@ async function migrate() {
   if (!(await hasColumn('journal_entries', 'ai_next_retry_at'))) {
     await db.execute('ALTER TABLE journal_entries ADD COLUMN ai_next_retry_at DATETIME');
   }
-  if (!(await hasColumn('journal_entries', 'updated_at'))) {
-    await db.execute('ALTER TABLE journal_entries ADD COLUMN updated_at DATETIME');
-  }
-  if (!(await hasColumn('journal_entries', 'content_hash'))) {
-    await db.execute('ALTER TABLE journal_entries ADD COLUMN content_hash TEXT');
-  }
-
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS insight_decks (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      journal_id TEXT NOT NULL,
-      deck_date TEXT,
-      status TEXT NOT NULL DEFAULT 'building',
-      cards_json TEXT,
-      served_at DATETIME,
-      revealed_at DATETIME,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (journal_id) REFERENCES journal_entries(id) ON DELETE CASCADE
-    )
-  `);
-  await db.execute('CREATE INDEX IF NOT EXISTS idx_decks_user_status ON insight_decks(user_id, status)');
-  await db.execute('CREATE INDEX IF NOT EXISTS idx_decks_user_date ON insight_decks(user_id, deck_date)');
-  await db.execute('CREATE INDEX IF NOT EXISTS idx_decks_journal ON insight_decks(journal_id, status)');
 
   if (await tableExists('journals')) {
     await db.execute(`

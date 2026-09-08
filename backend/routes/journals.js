@@ -90,7 +90,6 @@ module.exports = function (app, apiLimiter) {
 
       let syncedCount = 0;
       let newCount = 0;
-      let changedCount = 0;
       const skipped = [];
       for (const journal of journals) {
         if (!journal?.id || !journal?.text || !String(journal.text).trim()) continue;
@@ -99,15 +98,16 @@ module.exports = function (app, apiLimiter) {
           skipped.push({ id: journal.id, reason: 'text_too_long', limit: FREE_CHAR_LIMIT });
           continue;
         }
-        const result = await upsertJournal(uid, { id: journal.id, text: trimmed });
+        const existing = await db.execute({ sql: 'SELECT 1 FROM journal_entries WHERE id = ?', args: [journal.id] });
+        const isNew = existing.rows.length === 0;
+        await upsertJournal(uid, { id: journal.id, text: trimmed });
         syncedCount += 1;
-        if (result.isNew) newCount += 1;
-        if (result.changed) changedCount += 1;
+        if (isNew) newCount += 1;
       }
 
       await recalculateUserMetadata(uid);
       clearUserCache(uid);
-      if (changedCount > 0) {
+      if (syncedCount > 0) {
         if (newCount > 0) {
           await db.execute({ sql: 'UPDATE users SET stars = COALESCE(stars, 0) + ? WHERE id = ?', args: [newCount * 10, uid] });
         }
@@ -152,15 +152,16 @@ module.exports = function (app, apiLimiter) {
         });
       }
 
+      const existing = await db.execute({ sql: 'SELECT 1 FROM journal_entries WHERE id = ?', args: [id] });
+      const isNew = existing.rows.length === 0;
+
       await upsertUser(uid);
-      const result = await upsertJournal(uid, { id, text: trimmed });
+      await upsertJournal(uid, { id, text: trimmed });
       await recalculateUserMetadata(uid);
       clearUserCache(uid);
-      if (result.changed) {
-        scheduleProcessSoon();
-      }
+      scheduleProcessSoon();
 
-      if (result.isNew) {
+      if (isNew) {
         await db.execute({ sql: 'UPDATE users SET stars = COALESCE(stars, 0) + 10 WHERE id = ?', args: [uid] });
       }
 
