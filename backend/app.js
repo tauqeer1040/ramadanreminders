@@ -105,6 +105,7 @@ require('./routes/paddleWebhook')(app);
 require('./routes/trial')(app);
 require('./routes/subscription')(app);
 require('./routes/invites')(app);
+require('./routes/push')(app);
 require('./routes/internal')(app);
 
 // Capture 5xx responses (routes catch their own errors and return them as

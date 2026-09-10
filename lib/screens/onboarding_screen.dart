@@ -33,14 +33,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   // Star tracking
   int _totalStars = 0;
   int _oldStars = 0;
-  // 19 steps: Welcome, Music, Name, Intention, MillionDollars, Wakeup, Conclusion, PhoneHours, Bombshell1, Bombshell2, Bombshell3, Bridge, FirstJournal, AiInsight, Celebration, Summary, AppFeedback, GoogleSignIn, Email (Qualifying hidden, replaced by RevenueCat popup)
+  // 20 steps: Welcome, Music, Name, Intention, MillionDollars, Wakeup, Conclusion, PhoneHours, Bombshell1, Bombshell2, Bombshell3, Bridge, FirstJournal, AiInsight, Celebration, Summary, AppFeedback, GoogleSignIn, Email, StorePaywall (Qualifying hidden, replaced by RevenueCat popup)
   static const List<int> _stepStars = [
     5,  5,  10, // Welcome, Music, Name (action: user types name)
     5,  5,  5,  5,  30, // Intention, MillionDollars, Wakeup, Conclusion, PhoneHours (fingerprint reward)
     5,  5,  10, 10, // Bombshell1, Bombshell2, Bombshell3, Bridge
     50, 60, // FirstJournal (action: write journal), AiInsight (action: scratch cards)
     15, 15, // Celebration, Summary
-    0,  0,  5, // AppFeedback, GoogleSignIn, Email (Qualifying hidden)
+    0,  0,  5, 10, // AppFeedback, GoogleSignIn, Email, StorePaywall (Qualifying hidden)
   ];
 
   @override
@@ -122,7 +122,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   void _skipToLogin() {
     // "Skip to login" always lands on the GoogleSignIn step (index 17),
-    // even though the Email step (18) is now last.
+    // followed by Email (18) and the store paywall (19).
     const loginIndex = 17;
     _currentIndex = loginIndex;
     _currentStep = OnboardingStep.fromIndex(_currentIndex);
@@ -216,7 +216,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         await AnalyticsService.instance.logTrialStarted(trialType: '3_day_free', trialId: startMs.toString(), priceAfter: '1_usd');
       }
       final isSubscribed = await RevenueCatService.instance.isSubscribed();
-      // Trial runs free with no registration. Email (step 19) is optional:
+      // Trial runs free with no registration. Email is optional and the
+      // store paywall (last step) is dismissable during the trial:
       // head straight home; mint a continue-token in the background when an
       // address was given so later member flows already have one.
       void goMain() {

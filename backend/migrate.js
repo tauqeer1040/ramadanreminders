@@ -177,6 +177,23 @@ async function migrate() {
   await db.execute('CREATE INDEX IF NOT EXISTS idx_user_tag_maps_user_tag ON user_tag_maps(user_id, tag)');
   await db.execute('CREATE INDEX IF NOT EXISTS idx_user_task_tag_maps_user_tag ON user_task_tag_maps(user_id, tag)');
 
+  // FCM push tokens for reminder delivery (hybrid: push primary, local
+  // alarms fallback). utc_offset = minutes east of UTC (e.g. 330 = IST).
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      platform TEXT NOT NULL,
+      utc_offset INTEGER NOT NULL,
+      reminders_enabled INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id)');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_push_tokens_offset ON push_tokens(utc_offset)');
+
   console.log('Migration complete. Restart db2.js now.');
 }
 

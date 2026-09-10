@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import '../services/notification_service.dart';
@@ -8,23 +9,29 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_card_swiper/flutter_card_swiper.dart';
+import 'package:screenshot/screenshot.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/growth_prompt_service.dart';
 import 'package:scratcher/scratcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../core/app_background.dart';
 import '../services/insight_service.dart';
+import '../services/deck_rotation_service.dart';
+import '../services/moment_paywall_service.dart';
 import '../services/deck_queue_logic.dart';
 import 'widgets/deferred_lottie.dart';
 import '../services/favorites_service.dart';
 import '../services/shop_service.dart';
 import '../services/analytics_service.dart';
 import '../services/audio_service.dart';
+import '../services/story_share_service.dart';
 import './reflect_card.dart';
-import './insight_card_shimmer.dart';
 import './favorites_page.dart';
 import 'widgets/delight_action_sheet.dart';
+import 'widgets/share_insight_sheet.dart';
 import 'widgets/mascot_empty_state.dart';
 import '../utils/image_urls.dart';
 import '../theme/app_theme.dart';
@@ -37,7 +44,10 @@ class QuranPage extends StatefulWidget {
 }
 
 class _QuranPageState extends State<QuranPage>
-    with SingleTickerProviderStateMixin {
+    with
+        SingleTickerProviderStateMixin,
+        WidgetsBindingObserver,
+        AutomaticKeepAliveClientMixin {
   static const List<_CardColorTheme> _cardColorSchemes = [
     _CardColorTheme(
       bg: Color(0xFFD6DF7E),
@@ -64,12 +74,24 @@ class _QuranPageState extends State<QuranPage>
   bool _isLoading = true;
   bool _playing = false;
 
+  // Screenshot offers only fire while the app is foregrounded and this tab
+  // is the visible page (see _offerShare).
+  bool _isAppResumed = true;
+
+  // Keep state alive when the tab scrolls out of the PageView cache extent.
+  // Without this, each tab toggle disposes QuranPage and recreates it —
+  // re-running initState (deck reload, screenshot listener, audio init).
+  @override
+  bool get wantKeepAlive => true;
+
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
 
   final AudioPlayer _player = AudioPlayer();
-  final AudioPlayer _purrPlayer = AudioPlayer()..setPlayerMode(PlayerMode.lowLatency);
-  final AudioPlayer _rewardPlayer = AudioPlayer()..setPlayerMode(PlayerMode.lowLatency);
+  final AudioPlayer _purrPlayer = AudioPlayer()
+    ..setPlayerMode(PlayerMode.lowLatency);
+  final AudioPlayer _rewardPlayer = AudioPlayer()
+    ..setPlayerMode(PlayerMode.lowLatency);
   String _preparedUrl = '';
 
   List<InsightCard> _insightCards = [];
@@ -77,23 +99,40 @@ class _QuranPageState extends State<QuranPage>
   int _queueDepth = 0;
 
   bool get _fullyRevealed => isDeckFullyRevealed(
-        _insightCards.map((c) => c.id ?? '').toSet(), _revealedCards);
+    _insightCards.map((c) => c.id ?? '').toSet(),
+    _revealedCards,
+  );
 
   final CardSwiperController _swiperController = CardSwiperController();
+  final ScreenshotController _shotController = ScreenshotController();
+
+  // Top card index (tracked via onSwipe) + per-card share throttle: each
+  // card offers the share sheet at most once per page session.
+  int _topIndex = 0;
+  final Set<String> _shareOfferedCardKeys = {};
 
   // The deck of widgets dynamically built
   List<Widget> _deck = [];
   final Set<String> _revealedCards = {};
+  // Scratch overlays render only after reveal-state has loaded from prefs —
+  // text-first is the safe default. Without this, any paint before prefs
+  // resolve shows unsratched AND pre-scratched cards with faces (flash).
+  bool _revealedLoaded = false;
   List<String> _scratchCardImages = [];
   final List<_HeartBurst> _hearts = [];
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _player.setPlayerMode(PlayerMode.mediaPlayer);
 
-    _loadRevealedCards();
     _initData();
+
+    // Offer story-sharing when the OS reports a screenshot of this page.
+    // Native side: Android 14+ ScreenCaptureCallback, iOS screenshot
+    // notification. Older Android has no detector (like-trigger still works).
+    StoryShareService.listenForScreenshots(_onDeviceScreenshot);
 
     _player.onPlayerStateChanged.listen((state) {
       if (mounted) setState(() => _playing = state == PlayerState.playing);
@@ -119,8 +158,15 @@ class _QuranPageState extends State<QuranPage>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isAppResumed = state == AppLifecycleState.resumed;
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _swiperController.dispose();
+    StoryShareService.stopListeningForScreenshots();
     _player.dispose();
     _purrPlayer.dispose();
     _rewardPlayer.dispose();
@@ -128,19 +174,40 @@ class _QuranPageState extends State<QuranPage>
   }
 
   Future<void> _initData() async {
+    // Revealed IDs must load BEFORE the deck builds. If the deck paints
+    // first, already-scratched cards briefly show the scratch face and
+    // then swap to text (the launch flash).
+    await _loadRevealedCards();
     await _initScratchImages();
     await _loadInsightLocallyOnly();
 
     _buildDeck();
     if (mounted) setState(() => _isLoading = false);
 
-    _fetchFreshDataSilently();
+    _syncDecksSilently();
   }
-
 
   Future<void> _loadInsightLocallyOnly() async {
     try {
-      // Deck queue first: today's served deck is sticky all day (1 deck/day).
+      // Client-side rotation first: cached AI decks, newest-first, looping,
+      // max 3 deck changes per local day (cycles today's 3 after the cap).
+      final rotated = await DeckRotationService.currentDeckForLaunch(
+        revealedCardIds: _revealedCards,
+        currentCards: const [],
+      );
+      if (mounted && rotated != null && rotated.cards.isNotEmpty) {
+        setState(() {
+          _deckId = rotated.deckId;
+          _insightCards = rotated.cards;
+          _queueDepth = rotated.queueDepth;
+          _buildDeck();
+        });
+        _advanceScratchRotation();
+        return;
+      }
+      // Rotation cache empty (first launch before first sync): fall back to
+      // the server's sticky day-deck, then the prefetch buffer, then legacy
+      // caches. The post-boot sync (below) rotates onto the cached deck.
       final deck = await InsightService.fetchTodayDeck();
       if (mounted && deck.cards.isNotEmpty) {
         setState(() {
@@ -149,7 +216,38 @@ class _QuranPageState extends State<QuranPage>
           _queueDepth = deck.queueDepth;
           _buildDeck();
         });
+        if (deck.deckId != null) {
+          await DeckRotationService.noteCurrentDeck(deck.deckId!);
+        }
+        _advanceScratchRotation();
         return;
+      }
+      // Prefetch buffer: newest lookahead paints instantly (offline launches).
+      final buffer = await InsightService.loadDeckBuffer();
+      if (mounted && buffer.isNotEmpty) {
+        final head = DeckResult(
+          deckId: buffer.first['deckId'] as String?,
+          journalId: buffer.first['journalId'] as String?,
+          cards: (buffer.first['insightCards'] as List? ?? [])
+              .map(
+                (e) =>
+                    InsightCard.fromJson(Map<String, dynamic>.from(e as Map)),
+              )
+              .where((c) => c.type.isNotEmpty)
+              .toList(),
+        );
+        if (head.cards.isNotEmpty) {
+          setState(() {
+            _deckId = head.deckId;
+            _insightCards = head.cards;
+            _buildDeck();
+          });
+          if (head.deckId != null) {
+            await DeckRotationService.noteCurrentDeck(head.deckId!);
+          }
+          _advanceScratchRotation();
+          return;
+        }
       }
       // Legacy caches: instant paint for upgraders before the first deck fetch.
       final scratchCached = await InsightService.loadScratchCacheInternal();
@@ -163,76 +261,168 @@ class _QuranPageState extends State<QuranPage>
     } catch (_) {}
   }
 
-  Future<void> _fetchFreshDataSilently() async {
-    if (FirebaseAuth.instance.currentUser != null) {
-      try {
-        // Background revalidation: the server is the source of truth (an
-        // edited journal regenerates today's deck). Never yank cards
-        // mid-scratch — swap only when untouched or fully revealed.
-        final deck = await InsightService.fetchTodayDeck(forceRefresh: true);
-        if (mounted && deck.cards.isNotEmpty) {
-          final newIds = deck.cards.map((c) => c.id ?? '').toSet();
+  Future<void> _syncDecksSilently() async {
+    if (FirebaseAuth.instance.currentUser == null) return;
+    try {
+      // Pull the full deck list into the rotation cache. New decks land at
+      // the front (newest-first), so the next launch picks them up first.
+      final synced = await DeckRotationService.sync();
+      if (synced && mounted) {
+        // Adopt the rotation's deck if it differs from what's on screen
+        // (e.g. cache was empty at first paint, or this launch had changes
+        // left). Protected decks (mid-reveal) come back unchanged.
+        final rotated = await DeckRotationService.currentDeckForLaunch(
+          revealedCardIds: _revealedCards,
+          currentCards: _insightCards,
+          currentDeckId: _deckId,
+          fullyRevealed: _fullyRevealed,
+        );
+        if (rotated != null &&
+            rotated.cards.isNotEmpty &&
+            rotated.deckId != _deckId) {
+          final newIds = rotated.cards.map((c) => c.id ?? '').toSet();
           final curIds = _insightCards.map((c) => c.id ?? '').toSet();
           switch (deckSwapAction(
-            fetchedDeckId: deck.deckId,
+            fetchedDeckId: rotated.deckId,
             fetchedCardIds: newIds,
             currentDeckId: _deckId,
             currentCardIds: curIds,
             revealedCardIds: _revealedCards,
           )) {
             case DeckSwapAction.keep:
-              break;
             case DeckSwapAction.refreshMetadata:
-              // Same deck: just refresh queue metadata, no flicker.
-              setState(() => _queueDepth = deck.queueDepth);
               break;
             case DeckSwapAction.swap:
               setState(() {
-                _deckId = deck.deckId;
-                _insightCards = deck.cards;
-                _queueDepth = deck.queueDepth;
+                _deckId = rotated.deckId;
+                _insightCards = rotated.cards;
+                _queueDepth = rotated.queueDepth;
                 _buildDeck();
               });
+              _advanceScratchRotation();
               break;
           }
-        } else if (deck.cards.isEmpty && _insightCards.isNotEmpty) {
-          // Keep existing deck if revalidation comes back empty.
         }
-        // Warm tomorrow's deck in the background (read-only server-side).
-        InsightService.prefetchNextDeck(excludeDeckId: _deckId).then((next) {
-          if (mounted && next != null) {
-            setState(() => _queueDepth = next.queueDepth);
-          }
-        });
-      } catch (_) {
-        // Silently fail as before
       }
+    } catch (_) {
+      // Offline or server error: the rotation cache keeps working as-is.
     }
   }
+
+
+
+  // Rotation pointer into [_scratchIds]: faces shown per deck advance it,
+  // so every unlocked face appears before any repeats. Guarded by deck id
+  // so rebuilds mid-scratch never reshuffle.
+  List<String> _scratchIds = [];
+  int _scratchPos = 0;
+  String? _faceDeckId;
 
   Future<void> _initScratchImages() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final unlocked = await ShopService.getUnlockedIds();
-      final unlockedScratchIds = unlocked.where((id) {
+      // Every unlocked shop item (flowers 1–12 AND scratch cards 13–21)
+      // is an eligible face.
+      final unlockedFaces = unlocked.where((id) {
         final n = int.tryParse(id.split('_').last) ?? 0;
-        return n >= 13 && n <= 21;
+        return n >= 1 && n <= 21;
       }).toSet();
 
       const orderKey = 'quran_scratch_order';
+      const posKey = 'quran_scratch_pos';
+      const deckKey = 'quran_scratch_deck';
       final persisted = prefs.getStringList(orderKey) ?? [];
-      final validOrdered = persisted.where((id) => unlockedScratchIds.contains(id)).toList();
-      final existing = validOrdered.toSet();
-      final newItems = unlockedScratchIds.where((id) => !existing.contains(id)).toList();
+      final kept = persisted.where((id) => unlockedFaces.contains(id)).toList();
+      final keptSet = kept.toSet();
+      final fresh = unlockedFaces.where((id) => !keptSet.contains(id)).toList()
+        ..shuffle();
+      // Stable order across launches; new unlocks splice into random spots.
+      // Never reshuffles behind the user's back (no repeat-until-cycled).
+      final order = [...kept];
+      final rng = math.Random();
+      for (final id in fresh) {
+        order.insert(order.isEmpty ? 0 : rng.nextInt(order.length + 1), id);
+      }
 
-      // Random order every load: purchased faces rotate unpredictably.
-      final order = [...validOrdered, ...newItems]..shuffle();
-      final urls = order.map((id) => shopFullUrl(int.parse(id.split('_').last))).toList();
+      var pos = prefs.getInt(posKey) ?? 0;
+      if (order.isEmpty) {
+        pos = 0;
+      } else {
+        // Stable pointer across launches; clamped when the set changed.
+        pos = pos % order.length;
+      }
+      _faceDeckId = prefs.getString(deckKey);
+      _scratchPos = pos;
+
+      final urls = order
+          .map((id) => shopFullUrl(int.parse(id.split('_').last)))
+          .toList();
 
       await prefs.setStringList(orderKey, order);
+      await prefs.setInt(posKey, pos);
 
-      if (mounted) setState(() => _scratchCardImages = urls);
+      if (mounted) {
+        setState(() {
+          _scratchIds = order;
+          _scratchCardImages = urls;
+        });
+      }
+      // Cover cards ASAP (uncovered = spoiler), then decode faces in the
+      // background so swipes never flash a stale face.
+      for (final url in urls) {
+        if (!mounted) return;
+        try {
+          final provider = url.startsWith('http')
+              ? NetworkImage(url)
+              : AssetImage(url) as ImageProvider;
+          await precacheImage(provider, context);
+        } catch (_) {}
+      }
+      if (mounted) setState(() {});
     } catch (_) {}
+  }
+
+  /// Face url for card position [i]: rotation queue, no repeats until every
+  /// unlocked face has been shown. Empty when nothing is unlocked.
+  String? _scratchFaceFor(int i) {
+    if (_scratchCardImages.isEmpty) return null;
+    if (_scratchIds.isEmpty) {
+      return _scratchCardImages[i % _scratchCardImages.length];
+    }
+    return _scratchCardImages[(_scratchPos + i) % _scratchCardImages.length];
+  }
+
+  /// Advance the rotation after a new deck is adopted (fire-and-forget).
+  /// Reshuffles only on full-cycle wrap, preserving no-repeat-within-cycle.
+  void _advanceScratchRotation() {
+    final deckId = _deckId;
+    if (deckId == null || deckId == _faceDeckId || _scratchIds.isEmpty) return;
+    _faceDeckId = deckId;
+    final len = _scratchIds.length;
+    final step = _insightCards.isEmpty ? 3 : _insightCards.length;
+    var pos = (_scratchPos + step) % len;
+    if (pos < _scratchPos) {
+      // Full cycle completed: reshuffle for a fresh random rotation.
+      final order = [..._scratchIds]..shuffle();
+      _scratchIds = order;
+      _scratchCardImages = order
+          .map((id) => shopFullUrl(int.parse(id.split('_').last)))
+          .toList();
+      pos = 0;
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setStringList('quran_scratch_order', order);
+        prefs.setInt('quran_scratch_pos', pos);
+        if (deckId.isNotEmpty) prefs.setString('quran_scratch_deck', deckId);
+      });
+    } else {
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setInt('quran_scratch_pos', pos);
+        if (deckId.isNotEmpty) prefs.setString('quran_scratch_deck', deckId);
+      });
+    }
+    _scratchPos = pos;
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadRevealedCards() async {
@@ -240,9 +430,12 @@ class _QuranPageState extends State<QuranPage>
     // Migration: also load legacy per-day int indices if present and convert if needed
     // We keep ids as strings; legacy int entries are ignored after first new save.
     if (ids.isNotEmpty) {
-      setState(() {
-        _revealedCards.addAll(ids);
-      });
+      _revealedCards.addAll(ids);
+    }
+    if (mounted) {
+      setState(() => _revealedLoaded = true);
+    } else {
+      _revealedLoaded = true;
     }
   }
 
@@ -266,26 +459,30 @@ class _QuranPageState extends State<QuranPage>
     if (cardIndex < 0 || cardIndex >= _insightCards.length) return;
     final card = _insightCards[cardIndex];
     if (card.type == 'surah_guidance') {
-      await FavoritesService.addFavorite(FavoriteItem(
-        type: FavoriteType.ayah,
-        savedAt: DateTime.now(),
-        arabic: card.arabicVerse,
-        transliteration: card.transliteration,
-        english: card.english,
-        surah: card.surahName,
-        ayahNumber: card.ayahNumber,
-        audioUrl: card.audioUrl,
-      ));
+      await FavoritesService.addFavorite(
+        FavoriteItem(
+          type: FavoriteType.ayah,
+          savedAt: DateTime.now(),
+          arabic: card.arabicVerse,
+          transliteration: card.transliteration,
+          english: card.english,
+          surah: card.surahName,
+          ayahNumber: card.ayahNumber,
+          audioUrl: card.audioUrl,
+        ),
+      );
     } else {
-      await FavoritesService.addFavorite(FavoriteItem(
-        type: FavoriteType.insight,
-        savedAt: DateTime.now(),
-        date: card.date,
-        insight: card.type == 'personalized_insight'
-            ? card.insight
-            : '${card.story ?? ''}\n\n${card.lesson ?? ''}',
-        reference: card.reference ?? card.storyReference,
-      ));
+      await FavoritesService.addFavorite(
+        FavoriteItem(
+          type: FavoriteType.insight,
+          savedAt: DateTime.now(),
+          date: card.date,
+          insight: card.type == 'personalized_insight'
+              ? card.insight
+              : '${card.story ?? ''}\n\n${card.lesson ?? ''}',
+          reference: card.reference ?? card.storyReference,
+        ),
+      );
     }
   }
 
@@ -348,14 +545,9 @@ class _QuranPageState extends State<QuranPage>
   void _triggerConfetti() {
     Confetti.launch(
       context,
-      options: ConfettiOptions(
-        particleCount: 40,
-        spread: 60,
-        y: 0.5,
-      ),
+      options: ConfettiOptions(particleCount: 40, spread: 60, y: 0.5),
     );
   }
-
 
   void _buildDeck() {
     _deck = [];
@@ -370,7 +562,19 @@ class _QuranPageState extends State<QuranPage>
       Widget cardContent;
       switch (card.type) {
         case 'personalized_insight':
-          cardContent = _buildPersonalizedInsightCard(card, theme, pillBg, textTheme);
+          cardContent = _buildPersonalizedInsightCard(
+            card,
+            theme,
+            pillBg,
+            textTheme,
+          );
+          _deck.add(
+            ReflectCard(
+              backgroundColor: theme.bg,
+              borderColor: theme.text,
+              child: cardContent,
+            ),
+          );
         case 'surah_guidance':
           cardContent = _buildSurahGuidanceCard(card, theme, pillBg, textTheme);
           final audioUrl = card.audioUrl ?? '';
@@ -391,7 +595,8 @@ class _QuranPageState extends State<QuranPage>
                   await _player.pause();
                 } else {
                   try {
-                    if (_preparedUrl != audioUrl || _position == Duration.zero) {
+                    if (_preparedUrl != audioUrl ||
+                        _position == Duration.zero) {
                       await _player.play(UrlSource(audioUrl));
                       _preparedUrl = audioUrl;
                     } else {
@@ -416,7 +621,12 @@ class _QuranPageState extends State<QuranPage>
             ),
           );
         default:
-          cardContent = _buildPersonalizedInsightCard(card, theme, pillBg, textTheme);
+          cardContent = _buildPersonalizedInsightCard(
+            card,
+            theme,
+            pillBg,
+            textTheme,
+          );
           _deck.add(
             ReflectCard(
               backgroundColor: theme.bg,
@@ -428,35 +638,18 @@ class _QuranPageState extends State<QuranPage>
     }
   }
 
-  Widget _faceAvatar(_CardColorTheme theme, {double size = 32}) {
-    return ClipOval(
-      child: Image.asset(
-        'assets/photos/mascot/face.webp',
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome, color: theme.text, size: size * 0.8),
-      ),
-    );
-  }
-
-  Widget _buildPersonalizedInsightCard(InsightCard card, _CardColorTheme theme, Color pillBg, TextTheme textTheme) {
+  Widget _buildPersonalizedInsightCard(
+    InsightCard card,
+    _CardColorTheme theme,
+    Color pillBg,
+    TextTheme textTheme,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipOval(
-              child: Image.asset(
-                'assets/photos/mascot/face.webp',
-                width: 32,
-                height: 32,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome, color: theme.text, size: 26),
-              ),
-            ),
-            const SizedBox(width: 10),
             Expanded(
               child: Text(
                 card.insight ?? '',
@@ -480,7 +673,11 @@ class _QuranPageState extends State<QuranPage>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.format_quote, size: 18, color: theme.text.withValues(alpha: 0.5)),
+                Icon(
+                  Icons.format_quote,
+                  size: 18,
+                  color: theme.text.withValues(alpha: 0.5),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -536,7 +733,12 @@ class _QuranPageState extends State<QuranPage>
     );
   }
 
-  Widget _buildSurahGuidanceCard(InsightCard card, _CardColorTheme theme, Color pillBg, TextTheme textTheme) {
+  Widget _buildSurahGuidanceCard(
+    InsightCard card,
+    _CardColorTheme theme,
+    Color pillBg,
+    TextTheme textTheme,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -554,7 +756,8 @@ class _QuranPageState extends State<QuranPage>
           ),
           const SizedBox(height: 18),
         ],
-        if (card.transliteration != null && card.transliteration!.isNotEmpty) ...[
+        if (card.transliteration != null &&
+            card.transliteration!.isNotEmpty) ...[
           Text(
             card.transliteration!,
             textAlign: TextAlign.center,
@@ -606,8 +809,6 @@ class _QuranPageState extends State<QuranPage>
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _faceAvatar(theme),
-              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   card.explanation!,
@@ -624,7 +825,12 @@ class _QuranPageState extends State<QuranPage>
     );
   }
 
-  Widget _buildStoryTaskCard(InsightCard card, _CardColorTheme theme, Color pillBg, TextTheme textTheme) {
+  Widget _buildStoryTaskCard(
+    InsightCard card,
+    _CardColorTheme theme,
+    Color pillBg,
+    TextTheme textTheme,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -632,8 +838,6 @@ class _QuranPageState extends State<QuranPage>
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _faceAvatar(theme),
-              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   card.story!,
@@ -645,7 +849,8 @@ class _QuranPageState extends State<QuranPage>
               ),
             ],
           ),
-          if (card.storyReference != null && card.storyReference!.isNotEmpty) ...[
+          if (card.storyReference != null &&
+              card.storyReference!.isNotEmpty) ...[
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
@@ -672,8 +877,6 @@ class _QuranPageState extends State<QuranPage>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _faceAvatar(theme, size: 22),
-                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     card.lesson!,
@@ -703,7 +906,11 @@ class _QuranPageState extends State<QuranPage>
                     color: theme.text.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.check_circle_outline, color: theme.text, size: 20),
+                  child: Icon(
+                    Icons.check_circle_outline,
+                    color: theme.text,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -717,7 +924,8 @@ class _QuranPageState extends State<QuranPage>
                           color: theme.text,
                         ),
                       ),
-                      if (card.taskDescription != null && card.taskDescription!.isNotEmpty) ...[
+                      if (card.taskDescription != null &&
+                          card.taskDescription!.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
                           card.taskDescription!,
@@ -737,7 +945,6 @@ class _QuranPageState extends State<QuranPage>
       ],
     );
   }
-
 
   // TODO(RELEASE): remove debug day-override (counter, tap hook, sheet).
   int _debugTapCount = 0;
@@ -807,14 +1014,83 @@ class _QuranPageState extends State<QuranPage>
     CardSwiperDirection direction,
   ) async {
     HapticFeedback.lightImpact();
+    if (currentIndex != null && _insightCards.isNotEmpty) {
+      _topIndex = currentIndex % _insightCards.length;
+    }
     // If the Ayah card was swiped, optionally fetch a new one
     // We are implementing looping, so they can keep swiping it.
     // Let's just allow it completely
     return true;
   }
 
+  void _onDeviceScreenshot() {
+    if (!mounted) return;
+    // Let the OS finish writing its screenshot first.
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      unawaited(_offerShare('screenshot'));
+    });
+  }
+
+  /// Render the visible page (brand background + top bar + cards) to a temp
+  /// PNG for story sharing, at device resolution so stories stay crisp.
+  Future<String?> _captureTopCard() async {
+    try {
+      final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 3.0;
+      final bytes = await _shotController.capture(
+        pixelRatio: dpr.clamp(1.0, 3.0).toDouble(),
+      );
+      if (bytes == null) return null;
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/insight_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await file.writeAsBytes(bytes);
+      return file.path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Offer the story share sheet once per card per source. Returns true when
+  /// the sheet was shown (callers use it to suppress competing sheets).
+  Future<bool> _offerShare(String source) async {
+    if (!mounted || _insightCards.isEmpty || _isLoading) return false;
+    // OS detection is app-wide (and the MediaStore observer on Android <14
+    // even fires for other apps' images), so only react while the app is
+    // foregrounded, this tab is the visible page, and nothing is on top.
+    if (!_isAppResumed || !_isPageVisible()) return false;
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return false;
+    final topId = _insightCards[_topIndex % _insightCards.length].id ?? '';
+    final key = '$source:$topId:${_deckId ?? ''}';
+    if (_shareOfferedCardKeys.contains(key)) return false;
+    final path = await _captureTopCard();
+    if (!mounted || path == null) return false;
+    // Consume the key only when the sheet will actually show, so a
+    // suppressed attempt (other tab, failed capture) doesn't burn it.
+    _shareOfferedCardKeys.add(key);
+    await showShareInsightSheet(context, imagePath: path, source: source);
+    return true;
+  }
+
+  /// All tabs share one route, so ModalRoute.isCurrent can't tell them
+  /// apart. Hidden PageView tabs sit one full screen width to the side —
+  /// check this page's render box is (mostly) on screen.
+  bool _isPageVisible() {
+    final ro = context.findRenderObject();
+    if (ro is! RenderBox || !ro.attached || !ro.hasSize) return false;
+    final screen = MediaQuery.sizeOf(context);
+    final origin = ro.localToGlobal(Offset.zero);
+    return origin.dx > -ro.size.width * 0.5 &&
+        origin.dx < screen.width - ro.size.width * 0.5 &&
+        origin.dy > -ro.size.height * 0.5 &&
+        origin.dy < screen.height - ro.size.height * 0.5;
+  }
+
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required by AutomaticKeepAliveClientMixin.
     final cs = Theme.of(context).colorScheme;
 
     // Always rebuild deck for play progress updates (unless still loading)
@@ -828,255 +1104,400 @@ class _QuranPageState extends State<QuranPage>
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── Top Bar: Avatar · Logo · Favorites ──────────────────────────
-            SizedBox(
-              height: 128,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                child: Row(
-                  children: [
-                    InkWell(
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        BackgroundMusicService().toggleMusic();
-                        if (context.mounted) setState(() {});
-                      },
-                      borderRadius: BorderRadius.circular(20),
-                      child: Stack(
-                        children: [
-                          if (BackgroundMusicService().isMusicEnabled)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              child: IgnorePointer(
-                                child: Transform.scale(
-                                  scale: 2,
-                                  alignment: Alignment.bottomCenter,
-                                  child: DeferredLottie(asset: 'assets/photos/elements/music_fly.json', fit: BoxFit.cover),
+      // Full-bleed capture: the brand background + "meowmin" top bar + cards
+      // all live inside the Screenshot, so shared story images carry the app
+      // name (free marketing when users post them).
+      body: Screenshot(
+        controller: _shotController,
+        child: AppBackground(
+          child: SafeArea(
+            child: Column(
+              children: [
+                // ── Top Bar: Avatar · Logo · Favorites ──────────────────────────
+                SizedBox(
+                  height: 128,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                    child: Row(
+                      children: [
+                        InkWell(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            BackgroundMusicService().toggleMusic();
+                            if (context.mounted) setState(() {});
+                          },
+                          borderRadius: BorderRadius.circular(20),
+                          child: Stack(
+                            children: [
+                              if (BackgroundMusicService().isMusicEnabled)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  child: IgnorePointer(
+                                    child: Transform.scale(
+                                      scale: 2,
+                                      alignment: Alignment.bottomCenter,
+                                      child: DeferredLottie(
+                                        asset:
+                                            'assets/photos/elements/music_fly.json',
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              CircleAvatar(
+                                radius: 28,
+                                backgroundColor: cs.primaryContainer,
+                                child: ClipOval(
+                                  child: Image.asset(
+                                    'assets/photos/mascot/face.webp',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Icon(
+                                      Icons.auto_awesome_rounded,
+                                      color: cs.onSurface,
+                                      size: 28,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Center(
+                            child: GestureDetector(
+                              onTap: _onLogoTap,
+                              child:
+                                  Image.asset(
+                                    'assets/photos/elements/meowmin.webp',
+                                    width: 120,
+                                    height: 80,
+                                    fit: BoxFit.contain,
+                                  ).animate().shimmer(
+                                    duration: 2500.ms,
+                                    color: Colors.white.withValues(alpha: 0.45),
+                                  ),
+                            ),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const FavoritesPage(),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: AppTheme.starGold.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.favorite_rounded,
+                              color: AppTheme.starGold,
+                              size: 28,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                Expanded(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Center(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) => SizedBox(
+                              width: MediaQuery.of(context).size.width * 0.9,
+                              // +40% card height (620 → 868), clamped to what
+                              // fits so small screens never overflow. Card text
+                              // scrolls internally (ReflectCard), so taller type
+                              // can't clip.
+                              height: math.min(868.0, constraints.maxHeight),
+                              child: MediaQuery(
+                                data: MediaQuery.of(context).copyWith(
+                                  textScaler: const TextScaler.linear(0.98),
+                                ),
+                                // While loading there is no skeleton: the real deck
+                                // shows frozen (non-interactive) until insights
+                                // load. Empty + loading renders blank, then the
+                                // deck pops in once cached.
+                                child: IgnorePointer(
+                                  ignoring: _isLoading,
+                                  child: _deck.isNotEmpty
+                                      ? CardSwiper(
+                                          controller: _swiperController,
+                                          cardsCount: _deck.length,
+                                          numberOfCardsDisplayed:
+                                              _deck.length >= 3
+                                              ? 3
+                                              : _deck.length,
+                                          onSwipe: _onSwipe,
+                                          isLoop: true,
+                                          cardBuilder:
+                                              (
+                                                context,
+                                                index,
+                                                percentThresholdX,
+                                                percentThresholdY,
+                                              ) {
+                                                final cardId =
+                                                    _insightCards[index].id ??
+                                                    'idx_$index';
+                                                final revealed = _revealedCards
+                                                    .contains(cardId);
+                                                Widget card = _deck[index];
+
+                                                if (!revealed &&
+                                                    _revealedLoaded &&
+                                                    _scratchCardImages
+                                                        .isNotEmpty) {
+                                                  // Rotation queue: no repeats until every
+                                                  // unlocked face has been shown.
+                                                  final scratchImage =
+                                                      _scratchFaceFor(index) ??
+                                                      _scratchCardImages[index %
+                                                          _scratchCardImages
+                                                              .length];
+                                                  card = ClipRRect(
+                                                    // Keyed by card + face so the swiper
+                                                    // never reuses a stale face image
+                                                    // (the 3rd-card flash bug).
+                                                    key: ValueKey(
+                                                      'scratch_${cardId}_$scratchImage',
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          32,
+                                                        ),
+                                                    child: Stack(
+                                                      children: [
+                                                        Scratcher(
+                                                          brushSize: 30,
+                                                          threshold: 35,
+                                                          image:
+                                                              scratchImage
+                                                                  .startsWith(
+                                                                    'http',
+                                                                  )
+                                                              ? Image.network(
+                                                                  scratchImage,
+                                                                  fit: BoxFit
+                                                                      .cover,
+                                                                  errorBuilder:
+                                                                      (
+                                                                        _,
+                                                                        __,
+                                                                        ___,
+                                                                      ) =>
+                                                                          const SizedBox.shrink(),
+                                                                )
+                                                              : Image.asset(
+                                                                  scratchImage,
+                                                                  fit: BoxFit
+                                                                      .cover,
+                                                                ),
+                                                          onScratchStart: () {
+                                                            HapticFeedback.mediumImpact();
+                                                            _purrPlayer
+                                                                .setReleaseMode(
+                                                                  ReleaseMode
+                                                                      .loop,
+                                                                );
+                                                            _purrPlayer.play(
+                                                              AssetSource(
+                                                                'tunes/sfx/cat_purr.mp3',
+                                                              ),
+                                                            );
+                                                          },
+                                                          onScratchEnd: () {
+                                                            _purrPlayer.stop();
+                                                          },
+                                                          onThreshold: () {
+                                                            _purrPlayer.stop();
+                                                            final id =
+                                                                _insightCards[index]
+                                                                    .id ??
+                                                                'idx_$index';
+                                                            setState(
+                                                              () =>
+                                                                  _revealedCards
+                                                                      .add(id),
+                                                            );
+                                                            _saveRevealedCards();
+                                                            HapticFeedback.heavyImpact();
+                                                            _triggerConfetti();
+                                                            _rewardPlayer.play(
+                                                              AssetSource(
+                                                                'tunes/positive_tone_a6b6.wav',
+                                                              ),
+                                                            );
+                                                            ShopService.awardStars(
+                                                              'quran_read',
+                                                            );
+                                                            if (_revealedCards
+                                                                    .length ==
+                                                                1) {
+                                                              AnalyticsService
+                                                                  .instance
+                                                                  .logFirstTrueAction(
+                                                                    which:
+                                                                        'scratch',
+                                                                    action:
+                                                                        'reveal',
+                                                                  );
+                                                            }
+                                                            // Full reveal: ack server-side (idempotent) so
+                                                            // tomorrow's serve advances. No same-day swap:
+                                                            // 1 deck/day, revealed cards stay readable.
+                                                            if (isDeckFullyRevealed(
+                                                              _insightCards
+                                                                  .map(
+                                                                    (c) =>
+                                                                        c.id ??
+                                                                        '',
+                                                                  )
+                                                                  .toSet(),
+                                                              _revealedCards,
+                                                            )) {
+                                                              final ids = _insightCards
+                                                                  .map(
+                                                                    (c) =>
+                                                                        c.id ??
+                                                                        '',
+                                                                  )
+                                                                  .where(
+                                                                    (id) => id
+                                                                        .isNotEmpty,
+                                                                  )
+                                                                  .toList();
+                                                              InsightService.ackDeckRevealed(
+                                                                _deckId,
+                                                                ids,
+                                                              );
+                                                              // Free users: paywall after the last
+                                                              // scratch-card reveal of the deck.
+                                                              if (mounted) {
+                                                                MomentPaywallService.maybeShow(
+                                                                  context,
+                                                                  moment: 'deck_revealed',
+                                                                );
+                                                              }
+                                                            }
+                                                          },
+                                                          child: card,
+                                                        ),
+                                                        IgnorePointer(
+                                                          child: Shimmer.fromColors(
+                                                            baseColor: Colors
+                                                                .transparent,
+                                                            highlightColor:
+                                                                Colors.white
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.25,
+                                                                    ),
+                                                            period:
+                                                                const Duration(
+                                                                  milliseconds:
+                                                                      2000,
+                                                                ),
+                                                            child: Container(
+                                                              color:
+                                                                  Colors.black,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                } else {
+                                                  card = ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          32,
+                                                        ),
+                                                    child: GestureDetector(
+                                                      onDoubleTapDown: (details) async {
+                                                        _showHeart();
+                                                        _favoriteCurrentInsight(
+                                                          index,
+                                                        );
+                                                        HapticFeedback.mediumImpact();
+                                                        if (_insightCards
+                                                            .isNotEmpty) {
+                                                          _topIndex =
+                                                              index %
+                                                              _insightCards
+                                                                  .length;
+                                                        }
+                                                        // A like doubles as a share trigger;
+                                                        // skip the delight sheet when the share
+                                                        // sheet is offered so sheets never stack.
+                                                        final offered =
+                                                            await _offerShare(
+                                                              'like',
+                                                            );
+                                                        if (!offered) {
+                                                          _scheduleDelightSheet();
+                                                        }
+                                                      },
+                                                      child: Stack(
+                                                        children: [
+                                                          card,
+                                                          for (final heart
+                                                              in _hearts)
+                                                            IgnorePointer(
+                                                              child:
+                                                                  _HeartWidget(
+                                                                    heart:
+                                                                        heart,
+                                                                  ),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+
+                                                return card;
+                                              },
+                                        )
+                                      : _isLoading
+                                      ? const SizedBox.shrink()
+                                      : const MascotEmptyState(
+                                          message:
+                                              'Start journaling to unlock\nyour daily insight cards.',
+                                          actionLabel: 'Write a journal entry',
+                                        ),
                                 ),
                               ),
                             ),
-                          CircleAvatar(
-                            radius: 28,
-                            backgroundColor: cs.primaryContainer,
-                            child: ClipOval(
-                              child: Image.asset(
-                                'assets/photos/mascot/face.webp',
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome_rounded, color: cs.onSurface, size: 28),
-                              ),
-                            ),
                           ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Center(
-                        child: GestureDetector(
-                          onTap: _onLogoTap,
-                        child: Image.asset(
-                          'assets/photos/elements/meowmin.webp',
-                          width: 120,
-                          height: 80,
-                          fit: BoxFit.contain,
-                        ).animate().shimmer(
-                          duration: 2500.ms,
-                          color: Colors.white.withValues(alpha: 0.45),
-                        ),
                         ),
                       ),
-                    ),
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const FavoritesPage()),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: AppTheme.starGold.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.favorite_rounded,
-                          color: AppTheme.starGold,
-                          size: 28,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            Expanded(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) => SizedBox(
-                          width: MediaQuery.of(context).size.width * 0.9,
-                          // +40% card height (620 → 868), clamped to what
-                          // fits so small screens never overflow. Card text
-                          // scrolls internally (ReflectCard), so taller type
-                          // can't clip.
-                          height: math.min(868.0, constraints.maxHeight),
-                          child: MediaQuery(
-                            data: MediaQuery.of(context).copyWith(
-                              textScaler: const TextScaler.linear(1.4),
-                            ),
-                            child: _isLoading
-                                ? const InsightCardShimmer()
-                                : _deck.isNotEmpty
-                                    ? CardSwiper(
-                              controller: _swiperController,
-                              cardsCount: _deck.length,
-                              numberOfCardsDisplayed: _deck.length > 1 ? 2 : 1,
-                              onSwipe: _onSwipe,
-                              isLoop: true,
-                              cardBuilder: (
-                                context,
-                                index,
-                                percentThresholdX,
-                                percentThresholdY,
-                              ) {
-                                final cardId = _insightCards[index].id ?? 'idx_$index';
-                                final revealed = _revealedCards.contains(cardId);
-                                Widget card = _deck[index];
-
-                                if (!revealed && _scratchCardImages.isNotEmpty) {
-                                  final scratchImage = _scratchCardImages[index % _scratchCardImages.length];
-                                  card = ClipRRect(
-                                    borderRadius: BorderRadius.circular(32),
-                                    child: Stack(
-                                      children: [
-                                        Scratcher(
-                                          brushSize: 30,
-                                          threshold: 35,
-                                          image: scratchImage.startsWith('http')
-                                              ? Image.network(
-                                                  scratchImage,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                                                )
-                                              : Image.asset(
-                                                  scratchImage,
-                                                  fit: BoxFit.cover,
-                                                ),
-                                          onScratchStart: () {
-                                            HapticFeedback.mediumImpact();
-                                            _purrPlayer.setReleaseMode(ReleaseMode.loop);
-                                            _purrPlayer.play(AssetSource('tunes/sfx/cat_purr.mp3'));
-                                          },
-                                          onScratchEnd: () {
-                                            _purrPlayer.stop();
-                                          },
-                                          onThreshold: () {
-                                            _purrPlayer.stop();
-                                            final id = _insightCards[index].id ?? 'idx_$index';
-                                            setState(() => _revealedCards.add(id));
-                                            _saveRevealedCards();
-                                            HapticFeedback.heavyImpact();
-                                            _triggerConfetti();
-                                            _rewardPlayer.play(AssetSource('tunes/positive_tone_a6b6.wav'));
-                                            ShopService.awardStars('quran_read');
-                                            if (_revealedCards.length == 1) {
-                                              AnalyticsService.instance.logFirstTrueAction(which: 'scratch', action: 'reveal');
-                                            }
-                                            // Full reveal: ack server-side (idempotent) so
-                                            // tomorrow's serve advances. No same-day swap:
-                                            // 1 deck/day, revealed cards stay readable.
-                                            if (isDeckFullyRevealed(
-                                                _insightCards
-                                                    .map((c) => c.id ?? '')
-                                                    .toSet(),
-                                                _revealedCards)) {
-                                              final ids = _insightCards
-                                                  .map((c) => c.id ?? '')
-                                                  .where((id) => id.isNotEmpty)
-                                                  .toList();
-                                              InsightService.ackDeckRevealed(_deckId, ids);
-                                            }
-                                          },
-                                          child: card,
-                                        ),
-                                        IgnorePointer(
-                                          child: Shimmer.fromColors(
-                                            baseColor: Colors.transparent,
-                                            highlightColor: Colors.white.withValues(alpha: 0.25),
-                                            period: const Duration(milliseconds: 2000),
-                                            child: Container(color: Colors.black),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                } else {
-                                  card = ClipRRect(
-                                    borderRadius: BorderRadius.circular(32),
-                                    child: GestureDetector(
-                                      onDoubleTapDown: (details) {
-                                        _showHeart();
-                                        _favoriteCurrentInsight(index);
-                                        HapticFeedback.mediumImpact();
-                                        _scheduleDelightSheet();
-                                      },
-                                      child: Stack(
-                                        children: [
-                                          card,
-                                          for (final heart in _hearts)
-                                            IgnorePointer(
-                                              child: _HeartWidget(heart: heart),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }
-
-                                return card;
-                              },
-                            )
-                          : const MascotEmptyState(
-                              message: 'Start journaling to unlock\nyour daily insight cards.',
-                              actionLabel: 'Write a journal entry',
-                            ),
-                ),
-                    ),
-                    ),
-                ),
-                ),
-                ],
-              ),
-            ),
-            if (_fullyRevealed && _queueDepth > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  _queueDepth == 1
-                      ? '1 more deck is brewing for tomorrow'
-                      : '$_queueDepth more decks are brewing — one a day',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white.withValues(alpha: 0.55),
+                    ],
                   ),
                 ),
-              ),
-            const SizedBox(height: 32),
-          ],
+                const SizedBox(height: 32),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
-
 }
 
 class _CardColorTheme {
@@ -1115,9 +1536,10 @@ class _HeartWidgetState extends State<_HeartWidget>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
-    _scaleAnim = Tween<double>(begin: 0.0, end: 1.3).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
-    );
+    _scaleAnim = Tween<double>(
+      begin: 0.0,
+      end: 1.3,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
     _fadeAnim = Tween<double>(begin: 1.0, end: 0.0).animate(
       CurvedAnimation(
         parent: _controller,
@@ -1151,5 +1573,3 @@ class _HeartWidgetState extends State<_HeartWidget>
     );
   }
 }
-
-

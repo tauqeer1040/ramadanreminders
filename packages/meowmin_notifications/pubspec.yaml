@@ -1,0 +1,24 @@
+name: meowmin_notifications
+description: >-
+  Meowmin reminder notifications — native Android alarm chain with a
+  self-re-arming BroadcastReceiver (exact-when-allowed AlarmManager),
+  branded notification rendering (color large icon + white silhouette
+  small icon), boot re-seeding, and a debug test sequence. Reusable
+  across Meowmin-family apps.
+version: 0.1.0
+publish_to: "none"
+
+environment:
+  sdk: ^3.9.2
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.meowmin.notifications
+        pluginClass: MeowminNotificationsPlugin

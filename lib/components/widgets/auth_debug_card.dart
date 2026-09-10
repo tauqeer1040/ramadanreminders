@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_debug_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/deck_rotation_service.dart';
+import '../../services/notification_service.dart';
+import '../../services/push_reminder_service.dart';
 
 class AuthDebugCard extends StatefulWidget {
   const AuthDebugCard({super.key});
@@ -12,17 +15,47 @@ class AuthDebugCard extends StatefulWidget {
 class _AuthDebugCardState extends State<AuthDebugCard> {
   final _debug = AuthDebugService();
   bool _expanded = false;
+  bool _decksExpanded = false;
+  Map<String, dynamic>? _rotationState;
+  bool _loadingRotation = false;
 
   @override
   void initState() {
     super.initState();
     _debug.addListener(_onDebugChanged);
+    _refreshRotationState();
   }
 
   @override
   void dispose() {
     _debug.removeListener(_onDebugChanged);
     super.dispose();
+  }
+
+  Future<void> _refreshRotationState() async {
+    setState(() => _loadingRotation = true);
+    final state = await DeckRotationService.debugState();
+    if (mounted) {
+      setState(() {
+        _rotationState = state;
+        _loadingRotation = false;
+      });
+    }
+  }
+
+  Future<void> _resyncDecks() async {
+    setState(() => _loadingRotation = true);
+    await DeckRotationService.sync();
+    await _refreshRotationState();
+  }
+
+  /// Flattened list of cached decks (newest-first), one row per deck with
+  /// the first card's preview text.
+  List<Map<String, dynamic>> _cachedDecks() {
+    final list = (_rotationState?['decks'] as List? ?? []);
+    return list
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
   }
 
   void _onDebugChanged() {
@@ -179,6 +212,167 @@ class _AuthDebugCardState extends State<AuthDebugCard> {
                       ),
                     )),
                   const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton.icon(
+                          onPressed: () => NotificationService.showDayNotificationNow(),
+                          icon: const Icon(Icons.wb_sunny_outlined, size: 14),
+                          label: const Text('Fire Day Notif', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.amberAccent,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextButton.icon(
+                          onPressed: () => NotificationService.showNightNotificationNow(),
+                          icon: const Icon(Icons.dark_mode_outlined, size: 14),
+                          label: const Text('Fire Night Notif', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.lightBlueAccent,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  TextButton.icon(
+                    onPressed: () => PushReminderService.sendTestPush(),
+                    icon: const Icon(Icons.cloud_upload_outlined, size: 14),
+                    label: const Text('Test Backend Push', style: TextStyle(fontSize: 11)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.tealAccent,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // ── Deck rotation debug ──
+                  InkWell(
+                    onTap: () => setState(() => _decksExpanded = !_decksExpanded),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.style_outlined, size: 14, color: Colors.deepPurpleAccent),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Loaded Insights (${_cachedDecks().length})',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.deepPurpleAccent,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const Spacer(),
+                          Icon(
+                            _decksExpanded ? Icons.expand_less : Icons.expand_more,
+                            size: 16,
+                            color: Colors.white38,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_decksExpanded) ...[
+                    Row(
+                      children: [
+                        _rotationMeta('cursor', _rotationState?['cursor']),
+                        const SizedBox(width: 12),
+                        _rotationMeta('changesToday', _rotationState?['changesToday']),
+                        const SizedBox(width: 12),
+                        _rotationMeta('current', _rotationState?['currentDeckId']),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: _loadingRotation ? null : _resyncDecks,
+                          icon: _loadingRotation
+                              ? const SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 1.5))
+                              : const Icon(Icons.sync, size: 12),
+                          label: const Text('Re-sync', style: TextStyle(fontSize: 10)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.deepPurpleAccent,
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    if (_cachedDecks().isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          'No cached decks yet — tap Re-sync (needs backend deploy).',
+                          style: TextStyle(fontSize: 10, color: Colors.white24),
+                        ),
+                      )
+                    else
+                      ..._cachedDecks().take(12).toList().asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final deck = entry.value;
+                        final deckId = deck['deckId'] as String? ?? '?';
+                        final cards = deck['insightCards'] as List? ?? [];
+                        String preview = '';
+                        if (cards.isNotEmpty) {
+                          final c = Map<String, dynamic>.from(cards.first as Map);
+                          preview = (c['quote'] ?? c['insight'] ?? c['explanation'] ?? c['reference'] ?? '').toString();
+                          if (preview.length > 60) preview = '${preview.substring(0, 60)}…';
+                        }
+                        final isCurrent = deckId == (_rotationState?['currentDeckId'] ?? '');
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 18,
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: (isCurrent ? Colors.deepPurpleAccent : Colors.white24).withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Text(
+                                  '${i + 1}',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: isCurrent ? Colors.deepPurpleAccent : Colors.white38,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  preview.isEmpty ? deckId : preview,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: isCurrent ? Colors.white : Colors.white60,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '${cards.length}c',
+                                style: const TextStyle(fontSize: 9, color: Colors.white24),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
+                  const SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   if (_debug.events.isNotEmpty)
                     TextButton.icon(
                       onPressed: _debug.clear,
@@ -230,6 +424,22 @@ class _AuthDebugCardState extends State<AuthDebugCard> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _rotationMeta(String label, dynamic value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$label: ',
+          style: const TextStyle(fontSize: 9, color: Colors.white24, fontFamily: 'monospace'),
+        ),
+        Text(
+          '${value ?? "—"}',
+          style: const TextStyle(fontSize: 9, color: Colors.white54, fontFamily: 'monospace'),
+        ),
+      ],
     );
   }
 

@@ -9,7 +9,6 @@ import '../services/revenuecat_provider.dart';
 import '../theme/app_theme.dart';
 import '../core/app_background.dart';
 import '../components/widgets/duo_button.dart';
-import '../components/onboarding/check_email_page.dart';
 
 class ManageAccountScreen extends ConsumerWidget {
   final User user;
@@ -144,10 +143,8 @@ class ManageAccountScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   DuoButton(
                     onPressed: () async {
-                      // Email-only membership: no store paywalls in-app.
                       // Pro users keep the Customer Center (cancellation
-                      // must stay accessible per Play policy); everyone else
-                      // continues by email.
+                      // must stay accessible per Play policy).
                       if (isPro) {
                         await RevenueCatService.instance.presentCustomerCenter();
                         if (context.mounted) {
@@ -155,15 +152,12 @@ class ManageAccountScreen extends ConsumerWidget {
                         }
                         return;
                       }
+                      // Free users: straight to the paywall (was: email).
                       if (!context.mounted) return;
-                      final unlocked = await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => EmailContinueRoute(
-                            email: user.email ?? '',
-                          ),
-                        ),
+                      await RevenueCatService.instance.presentPaywall(
+                        displayCloseButton: true,
                       );
-                      if (context.mounted && unlocked == true) {
+                      if (context.mounted) {
                         ref.read(revenueCatProvider.notifier).refresh();
                       }
                     },
@@ -172,7 +166,7 @@ class ManageAccountScreen extends ConsumerWidget {
                     radius: 12,
                     height: 48,
                     child: Text(
-                      isPro ? 'Manage Subscription' : 'Continue with Email',
+                      isPro ? 'Manage Subscription' : 'Get Max',
                       style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800),
                     ),
                   ),
@@ -213,20 +207,16 @@ class ManageAccountScreen extends ConsumerWidget {
                         GestureDetector(
                           onTap: () async {
                             HapticFeedback.lightImpact();
-                            final email = user.email ?? '';
-                      if (!context.mounted) return;
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => EmailContinueRoute(
-                            email: user.email ?? '',
-                          ),
-                        ),
-                      );
+                            // Free users: paywall (was: email link screen).
+                            if (!context.mounted) return;
+                            await RevenueCatService.instance.presentPaywall(
+                              displayCloseButton: true,
+                            );
                             if (context.mounted) {
                               ref.read(revenueCatProvider.notifier).refresh();
                             }
                           },
-                          child: const Text('Email me my link →', style: TextStyle(color: AppTheme.starGold, fontSize: 12, fontWeight: FontWeight.w700, decoration: TextDecoration.underline, decorationColor: AppTheme.starGold)),
+                          child: const Text('Get Max →', style: TextStyle(color: AppTheme.starGold, fontSize: 12, fontWeight: FontWeight.w700, decoration: TextDecoration.underline, decorationColor: AppTheme.starGold)),
                         ),
                       ],
                     ),

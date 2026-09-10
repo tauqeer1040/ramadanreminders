@@ -113,7 +113,7 @@ async function seedCompleted(uid, id, text, createdAt) {
 describe('deck queue', () => {
   beforeEach(clean);
 
-  test('rotation: sticky same day, advances daily, no binge', async () => {
+  test('rotation: sticky same day, advances daily, no binge (latest-first)', async () => {
     const uid = 'u-rotate';
     await seedCompleted(uid, 'j1', 'first entry text here', '2026-09-01 10:00:00');
     await seedCompleted(uid, 'j2', 'second entry text here', '2026-09-02 10:00:00');
@@ -121,17 +121,17 @@ describe('deck queue', () => {
 
     const d1a = await decks.getTodayDeck(uid, '2026-09-08');
     const d1b = await decks.getTodayDeck(uid, '2026-09-08');
-    expect(d1a.journalId).toBe('j1');
+    expect(d1a.journalId).toBe('j3');
     expect(d1b.deckId).toBe(d1a.deckId); // sticky
 
-    // Full reveal, same day: still J1 (no binge).
-    const ack = await decks.ackRevealed(uid, d1a.deckId, ['card_j1_0', 'card_j1_1', 'card_j1_2']);
+    // Full reveal, same day: still J3 (no binge).
+    const ack = await decks.ackRevealed(uid, d1a.deckId, ['card_j3_0', 'card_j3_1', 'card_j3_2']);
     expect(ack.status).toBe('revealed');
     const d1c = await decks.getTodayDeck(uid, '2026-09-08');
     expect(d1c.deckId).toBe(d1a.deckId);
 
     expect((await decks.getTodayDeck(uid, '2026-09-09')).journalId).toBe('j2');
-    expect((await decks.getTodayDeck(uid, '2026-09-10')).journalId).toBe('j3');
+    expect((await decks.getTodayDeck(uid, '2026-09-10')).journalId).toBe('j1');
   });
 
   test('prefetch never marks served', async () => {
@@ -140,10 +140,52 @@ describe('deck queue', () => {
     await seedCompleted(uid, 'j2', 'second entry text here', '2026-09-02 10:00:00');
 
     const today = await decks.getTodayDeck(uid, '2026-09-08');
+    expect(today.journalId).toBe('j2');
     const next = await decks.getNextDeck(uid, today.deckId);
-    expect(next.journalId).toBe('j2');
+    expect(next.journalId).toBe('j1');
     const again = await decks.getTodayDeck(uid, '2026-09-08');
     expect(again.deckId).toBe(today.deckId);
+  });
+
+  test('claim: newest-ready-excluding-current becomes today sticky, empty -> null', async () => {
+    const uid = 'u-claim';
+    await seedCompleted(uid, 'j1', 'first entry text here', '2026-09-01 10:00:00');
+    await seedCompleted(uid, 'j2', 'second entry text here', '2026-09-02 10:00:00');
+    await seedCompleted(uid, 'j3', 'third entry text here', '2026-09-03 10:00:00');
+
+    const today = await decks.getTodayDeck(uid, '2026-09-08');
+    expect(today.journalId).toBe('j3');
+
+    // Claim newest backlog (j2): adopted deck becomes today's sticky.
+    const claimed = await decks.claimNextDeck(uid, today.deckId, '2026-09-08');
+    expect(claimed.journalId).toBe('j2');
+    expect((await decks.getTodayDeck(uid, '2026-09-08')).deckId).toBe(claimed.deckId);
+
+    // Drain continues newest-first: j1 next, then empty -> null.
+    const claimed2 = await decks.claimNextDeck(uid, claimed.deckId, '2026-09-08');
+    expect(claimed2.journalId).toBe('j1');
+    expect(await decks.claimNextDeck(uid, claimed2.deckId, '2026-09-08')).toBeNull();
+    // Empty backlog without exclude is also null.
+    expect(await decks.claimNextDeck(uid, null, '2026-09-08')).toBeNull();
+  });
+
+  test('concurrent claims serve exactly one deck', async () => {
+    const uid = 'u-claim-race';
+    await seedCompleted(uid, 'j1', 'first entry text here', '2026-09-01 10:00:00');
+    await seedCompleted(uid, 'j2', 'second entry text here', '2026-09-02 10:00:00');
+    const [a, b] = await Promise.all([
+      decks.claimNextDeck(uid, null, '2026-09-08'),
+      decks.claimNextDeck(uid, null, '2026-09-08'),
+    ]);
+    // Exactly one winner claims j2; the loser sees no backlog (null) or the
+    // same winner via its own claim — never two distinct decks.
+    const ids = [a?.deckId, b?.deckId].filter(Boolean);
+    expect(new Set(ids).size).toBeLessThanOrEqual(1);
+    const served = await db.execute({
+      sql: `SELECT COUNT(*) AS n FROM insight_decks WHERE user_id = ? AND deck_date = '2026-09-08' AND status IN ('served','revealed')`,
+      args: [uid],
+    });
+    expect(Number(served.rows[0].n)).toBe(1);
   });
 
   test('fallback when queue empty: stable per day, rotates daily', async () => {
@@ -389,6 +431,10 @@ describe('deck routes (HTTP, stub auth, same temp DB)', () => {
       ['h2', 'http journal two text', '2026-09-02 10:00:00'],
     ]) {
       await upsertJournal(UID, { id, text });
+      await db.execute({
+        sql: `UPDATE journal_entries SET created_at = ? WHERE id = ?`,
+        args: [at, id],
+      });
       const row = await db.execute({
         sql: `SELECT created_at FROM journal_entries WHERE id = ?`, args: [id],
       });
@@ -397,18 +443,18 @@ describe('deck routes (HTTP, stub auth, same temp DB)', () => {
 
     const t1 = await request(app).get(`/api/v2/user/${UID}/decks/today?day=2026-09-08`);
     expect(t1.status).toBe(200);
-    expect(t1.body.journalId).toBe('h1');
+    expect(t1.body.journalId).toBe('h2');
     expect(t1.body.insightCards).toHaveLength(3);
 
     const next = await request(app).get(
       `/api/v2/user/${UID}/decks/next?excludeDeckId=${t1.body.deckId}`
     );
     expect(next.status).toBe(200);
-    expect(next.body.journalId).toBe('h2');
+    expect(next.body.journalId).toBe('h1');
 
     const badReveal = await request(app)
       .post(`/api/v2/user/${UID}/decks/${t1.body.deckId}/revealed`)
-      .send({ cardIds: ['card_h1_0'] });
+      .send({ cardIds: ['card_h2_0'] });
     expect(badReveal.status).toBe(200);
     expect(badReveal.body.status).toBe('served');
 
@@ -418,10 +464,10 @@ describe('deck routes (HTTP, stub auth, same temp DB)', () => {
     expect(goodReveal.body.status).toBe('revealed');
 
     const t2 = await request(app).get(`/api/v2/user/${UID}/decks/today?day=2026-09-09`);
-    expect(t2.body.journalId).toBe('h2');
+    expect(t2.body.journalId).toBe('h1');
     expect(t2.body.deckId).not.toBe(t1.body.deckId);
 
-    const status = await request(app).get('/api/v2/journal/h2/insight');
+    const status = await request(app).get('/api/v2/journal/h1/insight');
     expect(status.status).toBe(200);
     expect(status.body.deckStatus).toBe('served');
 

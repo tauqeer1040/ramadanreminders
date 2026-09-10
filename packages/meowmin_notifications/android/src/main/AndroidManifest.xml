@@ -1,0 +1,18 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Alarm target: must be manifest-declared to fire with a dead process. -->
+        <receiver
+            android:name="com.meowmin.notifications.ReminderReceiver"
+            android:exported="false"/>
+
+        <!-- Re-seed the alarm chain after device reboot / app update. -->
+        <receiver
+            android:name="com.meowmin.notifications.ReminderBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

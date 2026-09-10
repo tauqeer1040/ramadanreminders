@@ -2,7 +2,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/revenuecat_service.dart';
+import 'duo_button.dart';
 
 /// Twitter-style circular character counter with a "Write more with Max" upsell.
 ///
@@ -27,20 +29,31 @@ class TweetCounter extends StatefulWidget {
 
 class _TweetCounterState extends State<TweetCounter> {
   String? _userName;
+  bool _isMax = false;
 
   @override
   void initState() {
     super.initState();
     _loadName();
+    _loadMax();
+  }
+
+  Future<void> _loadMax() async {
+    try {
+      final isMax = await RevenueCatService.instance.isSubscribed();
+      if (mounted) setState(() => _isMax = isMax);
+    } catch (_) {}
   }
 
   Future<void> _loadName() async {
     final prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString('onboarding_displayName');
+    final name = prefs.getString('onboarding_displayName') ??
+        FirebaseAuth.instance.currentUser?.displayName;
     if (mounted) setState(() => _userName = name);
   }
 
-  double get _progress => (widget.currentLength / widget.maxLength).clamp(0.0, 1.0);
+  double get _progress =>
+      (widget.currentLength / widget.maxLength).clamp(0.0, 1.0);
   bool get _isAtLimit => widget.currentLength >= widget.maxLength;
   bool get _isNearLimit => _progress >= 0.9;
 
@@ -88,7 +101,7 @@ class _TweetCounterState extends State<TweetCounter> {
             ),
           ],
         ),
-        if (_isAtLimit && widget.showProUpsell) ...[
+        if (_isAtLimit && widget.showProUpsell && !_isMax) ...[
           const SizedBox(height: 8),
           _ProUpsellBanner(cs: cs, userName: _userName),
         ],
@@ -104,15 +117,9 @@ class _ProUpsellBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Paid upsell hidden: email-only membership for now (companion mode).
-    // Ring + count above stay live. Restore by deleting this line.
-    return const SizedBox.shrink();
-  }
-
-  Widget _legacyBuild(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    return GestureDetector(
-      onTap: () async {
+    return DuoButton(
+      onPressed: () async {
         HapticFeedback.lightImpact();
         try {
           await RevenueCatService.instance.presentPaywall(
@@ -120,42 +127,31 @@ class _ProUpsellBanner extends StatelessWidget {
           );
         } catch (_) {}
       },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              const Color(0xFFD4AF37).withValues(alpha: 0.12),
-              const Color(0xFFD4AF37).withValues(alpha: 0.06),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: const Color(0xFFD4AF37).withValues(alpha: 0.3),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: Image.asset(
-                'assets/photos/mascot/face.webp',
-                width: 18,
-                height: 18,
-              ),
+      backgroundColor: Colors.white,
+      depthColor: Colors.black,
+      borderGradientColors: kRainbowBorderColors,
+      animateBorder: true,
+      radius: 10,
+      height: 40,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: Image.asset(
+              'assets/photos/mascot/face.webp',
+              width: 18,
+              height: 18,
             ),
-            const SizedBox(width: 4),
-            Text(
-              userName != null ? '$userName, write more with Max' : 'Write more with Max',
-              style: tt.labelMedium?.copyWith(
-                color: const Color(0xFFD4AF37),
-                fontWeight: FontWeight.w700,
-              ),
+          ),
+          Text(
+            'Write more with Max, ${userName ?? 'friend'}',
+            style: tt.labelMedium?.copyWith(
+              color: Colors.black,
+              fontWeight: FontWeight.w700,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

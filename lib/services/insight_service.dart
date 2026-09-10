@@ -584,9 +584,102 @@ class InsightService {
     return DeckResult(cards: []);
   }
 
-  /// Prefetch tomorrow's deck for smoothness. Read-only server-side: never
-  /// marks anything served. Fire-and-forget from callers.
-  static Future<DeckResult?> prefetchNextDeck({String? excludeDeckId}) async {
+  // ── Launch-drain buffer: up to 3 newest ready decks, newest-first ────
+
+  static const String _deckBufferKey = 'deck_buffer_cache';
+  static const int deckBufferSize = 3;
+
+  /// Buffered lookahead payloads, newest-first. Day-keyed: yesterday's
+  /// lookahead never paints today (a fresh top-up replaces it).
+  static Future<List<Map<String, dynamic>>> loadDeckBuffer() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_deckBufferKey);
+      if (raw == null) return [];
+      final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      if (map['_date'] != _today()) return [];
+      final list = map['decks'];
+      if (list is! List) return [];
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> _saveDeckBuffer(List<Map<String, dynamic>> payloads) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _deckBufferKey,
+        jsonEncode({
+          '_date': _today(),
+          'decks': payloads.take(deckBufferSize).toList(),
+        }),
+      );
+    } catch (_) {}
+  }
+
+  /// Single read-only lookahead. Never marks served.
+  static Future<Map<String, dynamic>?> _fetchNextRaw(String excludeDeckId) async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    try {
+      final exclude = excludeDeckId.isEmpty
+          ? ''
+          : '&excludeDeckId=${Uri.encodeComponent(excludeDeckId)}';
+      final response = await http.get(
+        Uri.parse('$_backendUrl/user/${user.uid}/decks/next?day=${_today()}$exclude'),
+        headers: await ApiClient.authHeaders(),
+      ).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) return null;
+      final payload = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+      if (payload['deckId'] == null) return null;
+      final cards = payload['insightCards'];
+      if (cards is! List || cards.isEmpty) return null;
+      return payload;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Top up the buffer to [deckBufferSize], newest-first. Chained excludes
+  /// walk the backlog past the current deck and already-buffered ids.
+  /// Pure lookahead (read-only) — call [claimNextDeck] to adopt.
+  static Future<List<Map<String, dynamic>>> refreshDeckBuffer({
+    String? currentDeckId,
+  }) async {
+    final seen = <String>{};
+    if (currentDeckId != null && currentDeckId.isNotEmpty) {
+      seen.add(currentDeckId);
+    }
+    final merged = <Map<String, dynamic>>[];
+    for (final p in await loadDeckBuffer()) {
+      final id = p['deckId'] as String?;
+      if (id == null || id.isEmpty || seen.contains(id)) continue;
+      seen.add(id);
+      merged.add(p);
+    }
+    var exclude = currentDeckId ?? '';
+    // Bounded: each iteration either grows the buffer or walks past a known
+    // deck, so this always terminates.
+    for (var i = 0; i < deckBufferSize + 2 && merged.length < deckBufferSize; i++) {
+      final raw = await _fetchNextRaw(exclude);
+      if (raw == null) break;
+      final id = raw['deckId'] as String? ?? '';
+      exclude = id;
+      if (id.isEmpty || seen.contains(id)) continue;
+      seen.add(id);
+      merged.add(raw);
+    }
+    await _saveDeckBuffer(merged);
+    return merged;
+  }
+
+  /// Claim the newest ready deck (excluding [excludeDeckId]) as served for
+  /// today — the launch drain. Returns null when the backlog is empty.
+  /// The claimed deck becomes today's sticky serve; adopting it can never
+  /// flip-flop back on later launches.
+  static Future<DeckResult?> claimNextDeck({String? excludeDeckId}) async {
     final user = _auth.currentUser;
     if (user == null) return null;
     try {
@@ -594,25 +687,23 @@ class InsightService {
           ? ''
           : '&excludeDeckId=${Uri.encodeComponent(excludeDeckId!)}';
       final response = await http.get(
-        Uri.parse('$_backendUrl/user/${user.uid}/decks/next?day=${_today()}$exclude'),
+        Uri.parse(
+            '$_backendUrl/user/${user.uid}/decks/next?day=${_today()}$exclude&claim=1'),
         headers: await ApiClient.authHeaders(),
       ).timeout(const Duration(seconds: 30));
-      if (response.statusCode == 200) {
-        final payload = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
-        final deck = _deckFromPayload(payload);
-        if (deck.cards.isNotEmpty) {
-          await _saveDeck(_deckNextKey, payload);
-          return deck;
-        }
+      if (response.statusCode != 200) return null;
+      final payload = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+      final deck = _deckFromPayload(payload);
+      if (deck.cards.isEmpty || deck.deckId == null || deck.deckId!.isEmpty) {
+        return null;
       }
-    } catch (_) {}
-    return null;
-  }
-
-  static Future<DeckResult?> loadNextDeckCache() async {
-    final cached = await _loadCachedDeck(_deckNextKey);
-    if (cached == null) return null;
-    return _deckFromPayload(cached);
+      lastFetchError = null;
+      await _saveDeck(_deckTodayKey, payload);
+      await invalidateNextDeckCache();
+      return deck;
+    } catch (_) {
+      return null;
+    }
   }
 
   static Future<void> invalidateNextDeckCache() async {

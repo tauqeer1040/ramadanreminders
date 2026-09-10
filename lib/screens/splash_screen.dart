@@ -10,7 +10,6 @@ import '../services/app_bootstrap.dart';
 import '../services/analytics_service.dart';
 import '../screens/onboarding_screen.dart';
 import '../screens/main_screen.dart';
-import '../screens/email_gate_screen.dart';
 import '../screens/paywall_gate_screen.dart';
 import '../services/local_trial_service.dart';
 import '../services/revenuecat_service.dart';
@@ -156,10 +155,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         final trialActive = await LocalTrialService.isActive();
         final trialStarted = await LocalTrialService.hasStarted();
         if (trialStarted && trialActive) {
-          // 3-day trial active — email gate every launch until Max.
-          // Soft: Skip for now → home. Resend fires instantly (Resend).
+          // 3-day trial active — IAP-first: straight home, no email gate.
+          // The paywall surfaces via StorePaywall onboarding step, Get Max
+          // buttons, and the 280-char banner.
           setState(() {
-            _targetScreen = const EmailGateScreen();
+            _targetScreen = MainScreen(onReady: _onTargetReady);
           });
         } else if (trialStarted && !trialActive) {
           // Trial expired — show hard paywall

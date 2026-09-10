@@ -8,11 +8,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/growth_prompt_service.dart';
 import '../services/revenuecat_service.dart';
-import 'google_signin_page.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import '../theme/app_theme.dart';
 import 'onboarding_screen.dart';
 import '../components/widgets/duo_button.dart';
-import '../components/widgets/complete_registration_sheet.dart';
 import '../services/invite_service.dart';
 
 class AboutScreen extends StatelessWidget {
@@ -270,35 +269,48 @@ class _SubscribeButtonState extends State<_SubscribeButton> {
     }
   }
 
-  /// No email (or anonymous) → step-18 Google sign-in first, then chain
-  /// into step 19. Email present → straight to step 19.
-  Future<void> _openRegistration(BuildContext context) async {
+  /// IAP-first: open the RevenueCat paywall directly (no email gating).
+  Future<void> _openMaxPaywall(BuildContext context) async {
     try {
       if (await RevenueCatService.instance.isSubscribed()) {
-        if (mounted) setState(() {});
+        if (context.mounted) setState(() {});
         return;
       }
     } catch (_) {}
-    final user = FirebaseAuth.instance.currentUser;
-    final email = user?.email ?? '';
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null && uid.isNotEmpty) {
+        await RevenueCatService.instance.identify(uid);
+      }
+    } catch (_) {}
     if (!context.mounted) return;
-    if (user == null || user.isAnonymous || email.isEmpty) {
-      final signedIn = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => GoogleSignInPage(
-            onFinish: () => Navigator.of(context).pop(true),
-            onBack: () => Navigator.of(context).pop(false),
-          ),
-        ),
+    HapticFeedback.lightImpact();
+    try {
+      final result = await RevenueCatService.instance.presentPaywall(
+        displayCloseButton: true,
       );
-      if (!context.mounted) return;
-      if (signedIn != true) return;
-    }
-    await openConfirmRegistration(context);
-    if (mounted) {
-      setState(() {
-        _subscribed = _loadSubscribed();
-      });
+      if ((result == PaywallResult.purchased ||
+              result == PaywallResult.restored) &&
+          context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Welcome to Max!'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        setState(() {
+          _subscribed = _loadSubscribed();
+        });
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open subscription page'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
@@ -310,7 +322,7 @@ class _SubscribeButtonState extends State<_SubscribeButton> {
       builder: (context, snap) {
         if (snap.data == true) return const SizedBox.shrink();
         return DuoButton(
-          onPressed: () => _openRegistration(context),
+          onPressed: () => _openMaxPaywall(context),
           backgroundColor: Colors.white,
           depthColor: Colors.black,
           borderGradientColors: kRainbowBorderColors,
@@ -320,10 +332,10 @@ class _SubscribeButtonState extends State<_SubscribeButton> {
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.person_add_rounded, color: Colors.black, size: 22),
+              Icon(Icons.workspace_premium, color: Colors.black, size: 22),
               SizedBox(width: 10),
               Text(
-                'Confirm registration',
+                'Get Max',
                 style: TextStyle(
                   color: Colors.black,
                   fontSize: 16,

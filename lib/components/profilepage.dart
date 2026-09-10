@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
 import 'widgets/deferred_lottie.dart';
 import '../services/notification_service.dart';
+import '../services/push_reminder_service.dart';
 import '../services/audio_service.dart';
 import '../services/sfx_service.dart';
 import '../services/trial_service.dart';
@@ -22,8 +23,7 @@ import '../services/user_service.dart';
 import '../services/streak_service.dart';
 import '../services/invite_service.dart';
 import '../services/revenuecat_service.dart';
-import '../screens/google_signin_page.dart';
-import 'widgets/complete_registration_sheet.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import '../theme/app_theme.dart';
 import 'stats_card.dart';
 import 'widgets/duo_button.dart';
@@ -241,6 +241,7 @@ class _ProfilePage1State extends State<ProfilePage1>
     // ON → mute everything. OFF → permission flow, then schedule.
     if (_notificationsGranted) {
       await NotificationService.cancelAll();
+      await PushReminderService.setRemindersEnabled(false);
       if (mounted) {
         setState(() => _notificationsGranted = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -256,6 +257,7 @@ class _ProfilePage1State extends State<ProfilePage1>
     if (mounted) setState(() => _notificationsGranted = granted);
     if (granted && mounted) {
       if (!kIsWeb) await NotificationService.scheduleDailyNotifications();
+      await PushReminderService.setRemindersEnabled(true);
       await _incrementStars(100);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -400,7 +402,7 @@ class _ProfilePage1State extends State<ProfilePage1>
                       ),
                     ),
                 InkWell(
-                  onTap: _openRegistration,
+                  onTap: _openMaxPaywall,
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
                     width: 56,
@@ -410,7 +412,7 @@ class _ProfilePage1State extends State<ProfilePage1>
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
-                      Icons.person_add_rounded,
+                      Icons.workspace_premium,
                       color: AppTheme.starGold,
                       size: 28,
                     ),
@@ -846,7 +848,7 @@ class _ProfilePage1State extends State<ProfilePage1>
         return Column(
           children: [
             DuoButton(
-              onPressed: _openRegistration,
+              onPressed: _openMaxPaywall,
               backgroundColor: Colors.white,
               depthColor: Colors.black,
               borderGradientColors: kRainbowBorderColors,
@@ -856,10 +858,10 @@ class _ProfilePage1State extends State<ProfilePage1>
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.person_add_rounded, color: Colors.black, size: 20),
+                  Icon(Icons.workspace_premium, color: Colors.black, size: 20),
                   SizedBox(width: 10),
                   Text(
-                    'Confirm registration',
+                    'Get Max',
                     style: TextStyle(
                       color: Colors.black,
                       fontSize: 16,
@@ -876,34 +878,50 @@ class _ProfilePage1State extends State<ProfilePage1>
     );
   }
 
-  /// No email (or anonymous) → step-18 Google sign-in first, then chain
-  /// into step 19. Email present → straight to step 19. Members never
-  /// reach here (button hidden + live re-check below).
-  Future<void> _openRegistration() async {
+  /// IAP-first: open the RevenueCat paywall directly. No email gating —
+  /// anon uid is fine for Play billing; RC identifies the Firebase uid
+  /// when present so web + mobile resolve to the same customer.
+  Future<void> _openMaxPaywall() async {
     if (!mounted) return;
+    HapticFeedback.lightImpact();
     try {
       if (await RevenueCatService.instance.isSubscribed()) {
         if (mounted) setState(() {});
         return;
       }
     } catch (_) {}
-    final user = FirebaseAuth.instance.currentUser;
-    final email = user?.email ?? '';
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null && uid.isNotEmpty) {
+        await RevenueCatService.instance.identify(uid);
+      }
+    } catch (_) {}
     if (!mounted) return;
-    if (user == null || user.isAnonymous || email.isEmpty) {
-      final signedIn = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => GoogleSignInPage(
-            onFinish: () => Navigator.of(context).pop(true),
-            onBack: () => Navigator.of(context).pop(false),
-          ),
-        ),
+    try {
+      final result = await RevenueCatService.instance.presentPaywall(
+        displayCloseButton: true,
       );
-      if (!mounted) return;
-      if (signedIn != true) return;
+      if ((result == PaywallResult.purchased ||
+              result == PaywallResult.restored) &&
+          mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Welcome to Max!'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        setState(() {});
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open subscription page'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
-    await openConfirmRegistration(context);
-    if (mounted) setState(() {});
   }
 
   // ── DEBUG ───────────────────────────────────────────────────────────────────

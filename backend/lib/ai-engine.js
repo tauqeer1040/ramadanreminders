@@ -170,7 +170,7 @@ async function pollPendingJournals() {
           await upsertTagMapRow('user_task_tag_maps', journal.user_id, tag, journal.id, journal.created_at);
         }
         // Publish the serve-ready deck (supersedes prior active decks for this
-        // journal; revealed history stays frozen and re-queues by journal time).
+        // journal; revealed history stays frozen and re-queues by recency).
         try {
           await decks.completeDeck(journal.user_id, journal.id, journal.created_at, ai.cards);
         } catch (deckError) {

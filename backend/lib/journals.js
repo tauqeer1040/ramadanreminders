@@ -60,8 +60,8 @@ async function upsertJournal(uid, journal) {
     await removeJournalFromTagMap('user_task_tag_maps', uid, row.tag, journal.id);
   }
   // Real edit → supersede active (unrevealed) decks so the queue rebuilds;
-  // revealed history stays frozen and the new deck re-queues by original
-  // journal time (FIFO). Lazy-require avoids any load-cycle risk.
+  // revealed history stays frozen and the new deck re-queues by recency
+  // (latest-first). Lazy-require avoids any load-cycle risk.
   try {
     const decks = require('./decks');
     await decks.supersedeActiveDecks(journal.id);

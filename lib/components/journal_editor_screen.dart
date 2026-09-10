@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/journal_service.dart';
 import '../services/insight_service.dart';
+import '../services/revenuecat_service.dart';
+import '../services/moment_paywall_service.dart';
 import '../core/app_background.dart';
 import 'widgets/tweet_counter.dart';
 
@@ -22,6 +24,8 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
   late TextEditingController _controller;
   bool _isSaving = false;
   bool _showedLimitToast = false;
+  // Max members write unlimited; everyone else is hard-capped at 280 chars.
+  bool _isMax = false;
   // Generate a totally unique ID for new journals so users can create multiple per day
   late String _journalDate;
 
@@ -39,6 +43,9 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
     super.initState();
     _controller = TextEditingController(text: widget.initialText ?? '');
     _lastSavedText = widget.initialText ?? '';
+    RevenueCatService.instance.isSubscribed().then((v) {
+      if (mounted) setState(() => _isMax = v);
+    }).catchError((_) {});
 
     // If no date passed, it's a completely new journal. Use precise timestamp as ID
     if (widget.initialDate == null) {
@@ -146,7 +153,23 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: cs.onSurface),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () async {
+            // Flush the save first (same as dispose would), then leave.
+            _saveTimer?.cancel();
+            final pending = _controller.text;
+            if (pending != _lastSavedText) {
+              await JournalService.saveLocalJournalWithId(_journalDate, pending);
+              _lastSavedText = pending;
+            }
+            if (!mounted) return;
+            // Capture the ROOT navigator before pop — the editor's context
+            // dies on pop, the navigator doesn't.
+            final rootNav = Navigator.of(context, rootNavigator: true);
+            Navigator.of(context).pop();
+            // Free users: paywall surfaces after writing (dismissable during
+            // the 3-day trial, hard gate afterwards).
+            MomentPaywallService.maybeShowOnNavigator(rootNav, moment: 'journal_saved');
+          },
         ),
         actions: [
           if (_isSaving)
@@ -185,8 +208,10 @@ class _JournalEditorScreenState extends State<JournalEditorScreen> {
                   autofocus: widget.initialDate == null, // Auto-focus if writing a new one
                   maxLines: null,
                   minLines: 6,
-                  maxLength: _maxChars,
-                  maxLengthEnforcement: MaxLengthEnforcement.none,
+                  maxLength: _isMax ? null : _maxChars,
+                  maxLengthEnforcement: _isMax
+                      ? MaxLengthEnforcement.none
+                      : MaxLengthEnforcement.enforced,
                   buildCounter: (context, {currentLength = 0, isFocused = false, maxLength = 280}) => null,
                   textCapitalization: TextCapitalization.sentences,
                   style: TextStyle(

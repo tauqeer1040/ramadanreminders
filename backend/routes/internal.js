@@ -26,6 +26,65 @@ module.exports = function (app) {
     return res.status(202).json({ ok: true, triggered: true });
   });
 
+  // Reminder push cron: POST /api/v2/internal/send-reminders?kind=morning|night
+  // Sends FCM data messages to every registered device whose LOCAL wall-clock
+  // hour matches the requested kind's hour. Per-user local time via the
+  // utc_offset (minutes east of UTC) each device registered.
+  // Cron guidance: run hourly (or every 15 min for drift tolerance).
+  //   morning → 08:00 local, night → 22:00 local.
+  app.post('/api/v2/internal/send-reminders', async (req, res) => {
+    if (!checkSecret(req)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const kind = req.query.kind === 'night' ? 'night' : 'morning';
+    const targetHour = kind === 'night' ? 22 : 8;
+    const onError = (error) => {
+      logError({ type: 'reminder_push', message: error.message, stack: error.stack, route: 'internal/send-reminders' });
+    };
+    try {
+      const db = require('../lib/db');
+      const { sendReminderPush } = require('../lib/fcm');
+
+      // Current UTC hour in "minutes east of UTC" space: offset qualifies when
+      // its local hour equals targetHour. Local minutes vary within the hour,
+      // so match on the hour bucket; hourly cron gives ≤1h drift, 15-min cron
+      // tightens it. Devices are matched by: (targetHour*60 - utcOffsetMinutes)
+      // mod 1440 ≈ current UTC minutes-of-day.
+      const nowUtcMin = (() => {
+        const d = new Date();
+        return d.getUTCHours() * 60 + d.getUTCMinutes();
+      })();
+      // An offset qualifies if local-min-of-day (utc + offset) falls in
+      // [target, target+60) — covers one hourly cron pass.
+      const rows = await db.execute(
+        'SELECT token, utc_offset FROM push_tokens WHERE reminders_enabled = 1'
+      );
+      let sent = 0;
+      const dead = [];
+      for (const row of rows.rows) {
+        const localMin = ((nowUtcMin + Number(row.utc_offset)) % 1440 + 1440) % 1440;
+        const localHour = Math.floor(localMin / 60);
+        if (localHour !== targetHour) continue;
+        // Send only on the first matching pass within the hour (nearest
+        // quarter mark keeps repeat crons from double-sending).
+        if (localMin % 60 >= 15 && req.query.dedupeWindow !== 'off') continue;
+        const r = await sendReminderPush(row.token, kind);
+        if (r === true) sent++;
+        else if (r && r.dead) dead.push(row.token);
+      }
+      if (dead.length) {
+        await db.execute({
+          sql: 'DELETE FROM push_tokens WHERE token IN ' + `(${dead.map(() => '?').join(',')})`,
+          args: dead,
+        });
+      }
+      return res.json({ ok: true, kind, sent, removed: dead.length, candidates: rows.rows.length });
+    } catch (error) {
+      onError(error);
+      return res.status(500).json({ error: 'send-reminders failed' });
+    }
+  });
+
   // Deck pipeline diag: queue depth, stuck building rows, recent failures.
   // Lets a cron/uptime check catch a stalled queue without Firebase auth.
   app.get('/api/v2/internal/decks/health', async (req, res) => {

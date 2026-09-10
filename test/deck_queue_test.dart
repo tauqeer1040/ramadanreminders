@@ -101,4 +101,60 @@ void main() {
       );
     });
   });
+
+  group('launch drain adoption (claimed backlog deck)', () {
+    // Drain rule: adopt the claimed deck iff the displayed deck is empty,
+    // untouched, or fully revealed. Partial scratch always keeps.
+    test('empty display adopts claimed deck', () {
+      expect(
+        deckSwapAction(
+          fetchedDeckId: 'deck_claimed',
+          fetchedCardIds: {'x', 'y', 'z'},
+          currentDeckId: null,
+          currentCardIds: {},
+          revealedCardIds: {},
+        ),
+        DeckSwapAction.swap,
+      );
+    });
+
+    test('untouched display adopts claimed deck', () {
+      expect(
+        deckSwapAction(
+          fetchedDeckId: 'deck_claimed',
+          fetchedCardIds: {'x', 'y', 'z'},
+          currentDeckId: 'deck_old',
+          currentCardIds: {'a', 'b', 'c'},
+          revealedCardIds: {},
+        ),
+        DeckSwapAction.swap,
+      );
+    });
+
+    test('partially scratched display ignores claimed deck', () {
+      expect(
+        deckSwapAction(
+          fetchedDeckId: 'deck_claimed',
+          fetchedCardIds: {'x', 'y', 'z'},
+          currentDeckId: 'deck_old',
+          currentCardIds: {'a', 'b', 'c'},
+          revealedCardIds: {'a', 'b'},
+        ),
+        DeckSwapAction.keep,
+      );
+    });
+
+    test('fully revealed display adopts claimed deck', () {
+      expect(
+        deckSwapAction(
+          fetchedDeckId: 'deck_claimed',
+          fetchedCardIds: {'x', 'y', 'z'},
+          currentDeckId: 'deck_old',
+          currentCardIds: {'a', 'b', 'c'},
+          revealedCardIds: {'a', 'b', 'c'},
+        ),
+        DeckSwapAction.swap,
+      );
+    });
+  });
 }

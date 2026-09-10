@@ -8,6 +8,8 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
     private val CHANNEL = "com.taucity.meowmin/widget"
+    private val SHARE_CHANNEL = "com.taucity.meowmin/share"
+    private var shareChannel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -63,6 +65,81 @@ class MainActivity : FlutterFragmentActivity() {
             } else {
                 result.notImplemented()
             }
+        }
+        shareChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARE_CHANNEL)
+        shareChannel?.setMethodCallHandler { call, result ->
+            val imagePath = call.argument<String>("imagePath")
+            if (imagePath.isNullOrEmpty()) {
+                result.success(false)
+                return@setMethodCallHandler
+            }
+            try {
+                val file = java.io.File(imagePath)
+                // FileProvider roots are configured for cacheDir and
+                // externalCacheDir (filepaths.xml). getTemporaryDirectory()
+                // is app-internal cache — an external path would crash the
+                // provider lookup, so fall back if it's not under a root.
+                val uri = try {
+                    androidx.core.content.FileProvider.getUriForFile(
+                        this, "$packageName.fileprovider", file
+                    )
+                } catch (e: Exception) {
+                    val extCache = java.io.File(externalCacheDir, "shares")
+                    extCache.mkdirs()
+                    val shared = java.io.File(extCache, file.name)
+                    file.copyTo(shared, overwrite = true)
+                    androidx.core.content.FileProvider.getUriForFile(
+                        this, "$packageName.fileprovider", shared
+                    )
+                }
+                when (call.method) {
+                    "shareInstagramStory" -> {
+                        // Direct Story composer; falls back to a targeted
+                        // send if Instagram has no story handler.
+                        // No resolveActivity gate: it lies on some OEMs and
+                        // needs nothing beyond the manifest <queries>.
+                        try {
+                            val story = android.content.Intent("com.instagram.share.ADD_TO_STORY")
+                            story.setDataAndType(uri, "image/*")
+                            story.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            story.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(story)
+                            android.util.Log.d("MeowminShare", "instagram story opened")
+                            result.success(true)
+                        } catch (e: Exception) {
+                            android.util.Log.w("MeowminShare", "story composer failed, trying send: ${e.message}")
+                            result.success(sendToPackage(uri, "image/*", "com.instagram.android"))
+                        }
+                    }
+                    "shareWhatsappStatus" -> {
+                        // WhatsApp's internal picker includes My Status.
+                        result.success(sendToPackage(uri, "image/*", "com.whatsapp"))
+                    }
+                    else -> result.notImplemented()
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("MeowminShare", "share failed: ${e.message}")
+                result.success(false)
+            }
+        }
+    }
+
+    private fun sendToPackage(uri: android.net.Uri, mime: String, pkg: String): Boolean {
+        // Direct start, no resolveActivity gate (lies on some OEMs even
+        // with <queries>). Failure means genuinely missing app.
+        return try {
+            val intent = android.content.Intent(android.content.Intent.ACTION_SEND)
+            intent.type = mime
+            intent.putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            intent.setPackage(pkg)
+            intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+            android.util.Log.d("MeowminShare", "send to $pkg opened")
+            true
+        } catch (e: Exception) {
+            android.util.Log.w("MeowminShare", "send to $pkg failed: ${e.message}")
+            false
         }
     }
 }

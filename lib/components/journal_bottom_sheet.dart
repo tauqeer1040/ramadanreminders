@@ -6,6 +6,7 @@ import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:intl/intl.dart';
 import '../services/journal_service.dart';
 import '../services/analytics_service.dart';
+import '../services/revenuecat_service.dart';
 import '../features/mood/emotion_screen.dart';
 import 'widgets/glass_container.dart';
 import 'widgets/tweet_counter.dart';
@@ -33,6 +34,8 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
   late String _journalId;
   bool _hasWrittenContent = false;
   bool _showedLimitToast = false;
+  // Max members write unlimited; everyone else is hard-capped at 280 chars.
+  bool _isMax = false;
 
   List<String> _suggestions = [];
   bool _showSuggestions = true;
@@ -100,6 +103,9 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
         setState(() => _blurReady = true);
       }
     });
+    RevenueCatService.instance.isSubscribed().then((v) {
+      if (mounted) setState(() => _isMax = v);
+    }).catchError((_) {});
   }
 
   List<String> _generateSuggestions() {
@@ -349,8 +355,10 @@ class _JournalBottomSheetState extends State<JournalBottomSheet>
             onChanged: _onTextChanged,
             autofocus: false,
             maxLines: null,
-            maxLength: _maxChars,
-            maxLengthEnforcement: MaxLengthEnforcement.none,
+            maxLength: _isMax ? null : _maxChars,
+            maxLengthEnforcement: _isMax
+                ? MaxLengthEnforcement.none
+                : MaxLengthEnforcement.enforced,
             buildCounter: (context, {currentLength = 0, isFocused = false, maxLength = 280}) => null,
             textCapitalization: TextCapitalization.sentences,
             style: TextStyle(fontSize: 18, color: cs.onSurface, height: 1.6),

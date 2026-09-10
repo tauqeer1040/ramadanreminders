@@ -13,6 +13,9 @@ import dev.fluttercommunity.workmanager.BackgroundWorker.Companion.DART_TASK_KEY
 class BootReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+      // (Native reminder chain re-seed now handled by the
+      // meowmin_notifications package's ReminderBootReceiver.)
+
       val inputData =
           Data.Builder()
               .putString(DART_TASK_KEY, "rescheduleNotifications")

@@ -3,14 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import 'package:ramadan_reflections/services/revenuecat_service.dart';
 import 'package:ramadan_reflections/services/revenuecat_provider.dart';
 import '../theme/app_theme.dart';
 import '../components/widgets/duo_button.dart';
-import '../components/onboarding/check_email_page.dart';
 import '../services/trial_service.dart';
 
+/// Trial gate. IAP-first: the expired-trial hard gate presents the
+/// RevenueCat paywall non-dismissable (no close button, no back). The
+/// dismissable variant offers "continue trial" during the 3-day window.
+/// Email plays no role here (see EmailGateScreen / onboarding step 19).
 class PaywallGateScreen extends ConsumerStatefulWidget {
   final bool isDismissable;
   final VoidCallback onSubscribe;
@@ -30,13 +33,17 @@ class PaywallGateScreen extends ConsumerStatefulWidget {
 class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
   int _remainingSeconds = 0;
   Timer? _timer;
-  bool _emailPromptDone = true;
+  bool _subscribing = false;
 
   @override
   void initState() {
     super.initState();
     _loadRemaining();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _loadRemaining());
+    if (!widget.isDismissable) {
+      // Non-dismissable post-trial gate: open the paywall immediately.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _subscribe());
+    }
   }
 
   @override
@@ -50,25 +57,7 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
     if (!mounted) return;
     setState(() {
       _remainingSeconds = (status.graceMs / 1000).ceil().clamp(0, 99999);
-      // Trial is email-free: never surface the email check while the gate
-      // is dismissable. The post-expiry hard gate carries its own
-      // mandatory email check.
-      if (widget.isDismissable) {
-        _emailPromptDone = true;
-      } else {
-        _emailPromptDone = false;
-      }
     });
-  }
-
-  String get _gateEmail => FirebaseAuth.instance.currentUser?.email ?? '';
-
-  Future<void> _dismissPrompt() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('lastEmailPromptDay', DateTime.now().toIso8601String().substring(0, 10));
-    } catch (_) {}
-    if (mounted) setState(() => _emailPromptDone = true);
   }
 
   String _formatTime(int totalSeconds) {
@@ -77,17 +66,58 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
     return '${min}m ${sec}s';
   }
 
+  Future<void> _subscribe() async {
+    if (!mounted || _subscribing) return;
+    HapticFeedback.mediumImpact();
+    setState(() => _subscribing = true);
+    try {
+      try {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null && uid.isNotEmpty) {
+          await RevenueCatService.instance.identify(uid);
+        }
+      } catch (_) {}
+      final result = await RevenueCatService.instance.presentPaywall(
+        // Hard gate: no close button — the only exits are purchase,
+        // restore, or (dismissable variant) continuing the trial.
+        displayCloseButton: widget.isDismissable,
+      );
+      if (!mounted) return;
+      ref.read(revenueCatProvider.notifier).refresh();
+      if (result == PaywallResult.purchased ||
+          result == PaywallResult.restored) {
+        widget.onSubscribe();
+      } else if (result == PaywallResult.error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Plans are unavailable — check your connection and try again',
+              ),
+            ),
+          );
+        }
+      }
+      // Cancelled on the hard gate: stay put (button below retries).
+    } finally {
+      if (mounted) setState(() => _subscribing = false);
+    }
+  }
+
   Future<void> _restorePurchases() async {
     HapticFeedback.lightImpact();
     try {
-      await RevenueCatService.instance.restorePurchases();
-      if (mounted) {
-        ref.read(revenueCatProvider.notifier).refresh();
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Purchases restored successfully')),
-          );
-        }
+      final info = await RevenueCatService.instance.restorePurchases();
+      if (!mounted) return;
+      ref.read(revenueCatProvider.notifier).refresh();
+      if (RevenueCatService.instance.hasActiveEntitlement(info)) {
+        widget.onSubscribe();
+        return;
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No purchases found to restore')),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -125,13 +155,6 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Column(
                 children: [
-                  if (widget.isDismissable && !_emailPromptDone)
-                    CheckEmailScreen(
-                      email: _gateEmail,
-                      onSkip: _dismissPrompt,
-                      onUnlocked: widget.onSubscribe,
-                    )
-                  else ...[
                   const SizedBox(height: 60),
                   Container(
                     width: 120,
@@ -152,7 +175,11 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
                           color: AppTheme.neonPurple.withValues(alpha: 0.2),
-                          child: const Icon(Icons.auto_awesome_rounded, color: AppTheme.neonPurple, size: 48),
+                          child: const Icon(
+                            Icons.auto_awesome_rounded,
+                            color: AppTheme.neonPurple,
+                            size: 48,
+                          ),
                         ),
                       ),
                     ),
@@ -168,7 +195,9 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'For less than the price of a coffee, support a small team that keeps your spiritual journey private, ad-free, and beautiful.',
+                    widget.isDismissable
+                        ? 'Your 3-day trial is running. Go Max anytime to keep unlimited journaling after it ends.'
+                        : 'Your 3-day trial has ended. Go Max to keep unlimited journaling, AI insights, and your streak alive.',
                     style: tt.bodyLarge?.copyWith(
                       color: cs.onSurface.withValues(alpha: 0.7),
                     ),
@@ -176,16 +205,38 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
                   ),
                   const SizedBox(height: 32),
                   const SizedBox(height: 24),
-                  if (!widget.isDismissable)
-                    // Trial expired: mandatory email check. No purchase UI,
-                    // prices, or checkout links on Android (companion model).
-                    // Exits: purchase detected, sign-in/restore, resend/edit.
-                    CheckEmailScreen(
-                      email: _gateEmail,
-                      hard: true,
-                      onUnlocked: widget.onSubscribe,
-                    )
-                  else
+                  if (!widget.isDismissable) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: DuoButton(
+                        onPressed: _subscribing ? null : _subscribe,
+                        backgroundColor: Colors.white,
+                        depthColor: Colors.black,
+                        borderGradientColors: kRainbowBorderColors,
+                        animateBorder: true,
+                        radius: 16,
+                        height: 56,
+                        child: _subscribing
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.black,
+                                ),
+                              )
+                            : const Text(
+                                'Get Max',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ] else
                     SizedBox(
                       width: double.infinity,
                       child: DuoButton(
@@ -225,7 +276,9 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
                           Text(
                             'Try for ${_formatTime(_remainingSeconds)}',
                             style: TextStyle(
-                              color: AppTheme.ghostSilver.withValues(alpha: 0.9),
+                              color: AppTheme.ghostSilver.withValues(
+                                alpha: 0.9,
+                              ),
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                             ),
@@ -234,7 +287,9 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
                           Text(
                             'This launch costs 1 minute of your trial',
                             style: TextStyle(
-                              color: AppTheme.ghostSilver.withValues(alpha: 0.4),
+                              color: AppTheme.ghostSilver.withValues(
+                                alpha: 0.4,
+                              ),
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
                             ),
@@ -246,7 +301,7 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Text(
-                        'Your free trial has ended. Check your email above to continue using Meowmin.',
+                        'One subscription unlocks everything on all your devices.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: AppTheme.ghostSilver.withValues(alpha: 0.6),
@@ -257,7 +312,6 @@ class _PaywallGateScreenState extends ConsumerState<PaywallGateScreen> {
                     ),
                   ],
                   const SizedBox(height: 48),
-                  ],
                 ],
               ),
             ),

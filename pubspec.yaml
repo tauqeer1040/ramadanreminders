@@ -51,6 +51,14 @@ dependencies:
   flutter_inapp_purchase: ^10.6.0
   web: ^1.1.0
   flutter_timezone: ^5.1.0
+  screenshot: ^3.0.0
+  path_provider: ^2.1.6
+  flutter_screenshot_detect: ^0.1.7
+  device_info_plus: ^12.4.0
+  # Reusable native reminder chain (self-re-arming Kotlin receiver).
+  meowmin_notifications:
+    path: packages/meowmin_notifications
+  firebase_messaging: ^16.6.0
 
 dev_dependencies:
   flutter_test:

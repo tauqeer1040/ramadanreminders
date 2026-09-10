@@ -150,7 +150,7 @@ writeFileSync(path.join(publicDir, '_headers'), headers);
 //    which returns HTML instead of JSON (the FormatException bug).
 writeFileSync(
   path.join(publicDir, '_routes.json'),
-  JSON.stringify({ version: 1, include: ['/*'] }) + '\n',
+  JSON.stringify({ version: 1, include: ['/*'], exclude: [] }) + '\n',
 );
 console.log('[ok] wrote _routes.json (all routes -> worker)');
 

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import '../firebase_options.dart';
 import 'notification_service.dart';
+import 'push_reminder_service.dart';
 import 'journal_service.dart';
 import 'journal_sync_service.dart';
 import 'audio_service.dart';
@@ -28,8 +29,7 @@ void callbackDispatcher() {
       // timezone) before scheduling, otherwise this is a silent no-op
       // and boot-time alarms are never restored.
       await NotificationService.init();
-      final username = inputData?['username'] as String? ?? 'you';
-      await NotificationService.scheduleDailyNotifications(username: username);
+      await NotificationService.scheduleDailyNotifications();
     }
     return Future.value(true);
   });
@@ -184,19 +184,22 @@ class AppBootstrap {
       await NotificationService.init();
       await Workmanager().initialize(callbackDispatcher);
 
-      final prefs = await SharedPreferences.getInstance();
-      final username = prefs.getString('onboarding_displayName') ??
-          FirebaseAuth.instance.currentUser?.displayName ?? 'you';
-
       await Workmanager().registerPeriodicTask(
         'notification-rescheduler',
         'rescheduleNotifications',
         frequency: const Duration(hours: 12),
         constraints: Constraints(networkType: NetworkType.notRequired),
         existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
-        inputData: {'username': username},
       );
-      await NotificationService.scheduleDailyNotifications(username: username);
+      // Name (cat heading + personal name) resolved inside the service from
+      // onboarding/email — no more 'friend'/'you' defaults leaking through.
+      await NotificationService.scheduleDailyNotifications();
+      // Push leg of the hybrid delivery: register the FCM token (server
+      // cron targets this device at its local 8:00/22:00). Dedupe in the
+      // package prevents double posts vs the alarm chain.
+      unawaited(PushReminderService.init(remindersEnabled: true));
+      // Debug test sequence (immediate + 3 alarms) no longer auto-fires on
+      // launch — manual only via the debug card.
     }
 
     JournalSyncService.initAutoSync();

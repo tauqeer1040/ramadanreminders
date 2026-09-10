@@ -12,7 +12,7 @@ function dayParam(req) {
 }
 
 module.exports = function (app) {
-  // Serve today's deck: sticky served -> oldest unread ready -> suggested fallback.
+  // Serve today's deck: sticky served -> latest unread ready -> suggested fallback.
   // Exactly 1 deck per local day; prefetch never marks served (see /next).
   app.get('/api/v2/user/:uid/decks/today', async (req, res) => {
     if (req.params.uid !== req.uid) return res.status(403).json({ error: 'Forbidden' });
@@ -24,14 +24,31 @@ module.exports = function (app) {
     }
   });
 
-  // Prefetch helper: oldest ready deck excluding the current one. Read-only.
+  // Prefetch helper: latest ready deck excluding the current one. Read-only
+  // by default; ?claim=1 atomically claims it as served for ?day (launch
+  // drain; lib busts the deck cache so /today serves the winner).
   app.get('/api/v2/user/:uid/decks/next', async (req, res) => {
     if (req.params.uid !== req.uid) return res.status(403).json({ error: 'Forbidden' });
     try {
       const exclude = String(req.query.excludeDeckId || req.query.exclude || '').trim() || null;
-      const payload = await decks.getNextDeck(req.uid, exclude);
+      const claim = req.query.claim === '1' || req.query.claim === 'true';
+      const payload = claim
+        ? await decks.claimNextDeck(req.uid, exclude, dayParam(req))
+        : await decks.getNextDeck(req.uid, exclude);
       if (!payload) return res.json({ deckId: null, insightCards: [], queueDepth: 0, fallback: false });
       res.json(payload);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // All stored decks, newest journal first. Client caches this list once
+  // and rotates locally (3 deck changes/day, loops when exhausted).
+  app.get('/api/v2/user/:uid/decks/all', async (req, res) => {
+    if (req.params.uid !== req.uid) return res.status(403).json({ error: 'Forbidden' });
+    try {
+      const decksList = await decks.getAllDecks(req.uid);
+      res.json({ decks: decksList, count: decksList.length });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
