@@ -49,13 +49,35 @@ class _AuthDebugCardState extends State<AuthDebugCard> {
     await _refreshRotationState();
   }
 
-  /// Flattened list of cached decks (newest-first), one row per deck with
-  /// the first card's preview text.
-  List<Map<String, dynamic>> _cachedDecks() {
-    final list = (_rotationState?['decks'] as List? ?? []);
-    return list
+  /// Flattened list of cached insight CARDS (newest deck first), one row per
+  /// insight — 3 decks × 3 cards = 9 rows when the cache is fully loaded.
+  List<Map<String, dynamic>> _cachedInsights() {
+    final decks = (_rotationState?['decks'] as List? ?? [])
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
+    final rows = <Map<String, dynamic>>[];
+    for (final deck in decks) {
+      final deckId = deck['deckId'] as String? ?? '?';
+      final cards = deck['insightCards'] as List? ?? [];
+      for (var i = 0; i < cards.length; i++) {
+        final c = Map<String, dynamic>.from(cards[i] as Map);
+        final preview = (c['quote'] ??
+                c['insight'] ??
+                c['explanation'] ??
+                c['lesson'] ??
+                c['reference'] ??
+                '')
+            .toString();
+        rows.add({
+          'deckId': deckId,
+          'cardIndex': i + 1,
+          'cardCount': cards.length,
+          'preview': preview,
+          'reference': (c['reference'] ?? c['storyReference'] ?? '').toString(),
+        });
+      }
+    }
+    return rows;
   }
 
   void _onDebugChanged() {
@@ -265,7 +287,7 @@ class _AuthDebugCardState extends State<AuthDebugCard> {
                           const Icon(Icons.style_outlined, size: 14, color: Colors.deepPurpleAccent),
                           const SizedBox(width: 6),
                           Text(
-                            'Loaded Insights (${_cachedDecks().length})',
+                            'Loaded Insights (${_cachedInsights().length})',
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -308,26 +330,22 @@ class _AuthDebugCardState extends State<AuthDebugCard> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    if (_cachedDecks().isEmpty)
+                    if (_cachedInsights().isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 6),
                         child: Text(
-                          'No cached decks yet — tap Re-sync (needs backend deploy).',
+                          'No cached insights yet — tap Re-sync (needs backend deploy).',
                           style: TextStyle(fontSize: 10, color: Colors.white24),
                         ),
                       )
                     else
-                      ..._cachedDecks().take(12).toList().asMap().entries.map((entry) {
+                      ..._cachedInsights().take(30).toList().asMap().entries.map((entry) {
                         final i = entry.key;
-                        final deck = entry.value;
-                        final deckId = deck['deckId'] as String? ?? '?';
-                        final cards = deck['insightCards'] as List? ?? [];
-                        String preview = '';
-                        if (cards.isNotEmpty) {
-                          final c = Map<String, dynamic>.from(cards.first as Map);
-                          preview = (c['quote'] ?? c['insight'] ?? c['explanation'] ?? c['reference'] ?? '').toString();
-                          if (preview.length > 60) preview = '${preview.substring(0, 60)}…';
-                        }
+                        final row = entry.value;
+                        final deckId = row['deckId'] as String? ?? '?';
+                        var preview = (row['preview'] as String? ?? '').trim();
+                        if (preview.length > 58) preview = '${preview.substring(0, 58)}…';
+                        final ref = (row['reference'] as String? ?? '').trim();
                         final isCurrent = deckId == (_rotationState?['currentDeckId'] ?? '');
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 2),
@@ -335,7 +353,7 @@ class _AuthDebugCardState extends State<AuthDebugCard> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                width: 18,
+                                width: 20,
                                 alignment: Alignment.center,
                                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                 decoration: BoxDecoration(
@@ -354,7 +372,7 @@ class _AuthDebugCardState extends State<AuthDebugCard> {
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  preview.isEmpty ? deckId : preview,
+                                  ref.isEmpty ? preview : '$preview — $ref',
                                   style: TextStyle(
                                     fontSize: 10,
                                     color: isCurrent ? Colors.white : Colors.white60,
@@ -363,7 +381,7 @@ class _AuthDebugCardState extends State<AuthDebugCard> {
                                 ),
                               ),
                               Text(
-                                '${cards.length}c',
+                                '${row['cardIndex']}/${row['cardCount']}',
                                 style: const TextStyle(fontSize: 9, color: Colors.white24),
                               ),
                             ],
