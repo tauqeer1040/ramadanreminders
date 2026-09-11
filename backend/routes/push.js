@@ -74,7 +74,11 @@ module.exports = function (app) {
   });
 
   // Debug: fire one reminder push to the caller's own device(s).
+  // TEMP-DISABLED on Workers (approved): firebase-admin cannot run on workerd.
   app.post('/api/v2/push/test', verifyAuth, async (req, res) => {
+    if (require('../lib/runtime').isWorker()) {
+      return res.status(503).json({ error: 'push test temporarily disabled' });
+    }
     try {
       const kind = req.body?.kind === 'night' ? 'night' : 'morning';
       const result = await db.execute({

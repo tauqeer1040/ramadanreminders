@@ -84,3 +84,11 @@ get_path.dart
 c:*out.txt
 open-vm-browser.ps1
 logs/
+
+# Local test screenshots / scratch files (never commit)
+screen*.png
+prefs_after_tab.xml
+tmp_manifest.bin
+tmp_check_run.py
+scripts/app_flow_test.mjs
+scripts/parse_anon.py

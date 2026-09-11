@@ -36,6 +36,12 @@ module.exports = function (app) {
     if (!checkSecret(req)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
+    // TEMP-DISABLED on Workers (approved): firebase-admin cannot run on
+    // workerd, and the reminder cron is paused until the VPS/cron sender
+    // path is restored. Token registration is unaffected.
+    if (require('../lib/runtime').isWorker()) {
+      return res.status(503).json({ error: 'send-reminders temporarily disabled' });
+    }
     const kind = req.query.kind === 'night' ? 'night' : 'morning';
     const targetHour = kind === 'night' ? 22 : 8;
     const onError = (error) => {

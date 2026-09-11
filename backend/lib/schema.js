@@ -215,6 +215,18 @@ const CREATE_STATEMENTS = [
     )
   `,
   `
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      platform TEXT NOT NULL,
+      utc_offset INTEGER NOT NULL,
+      reminders_enabled INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `,
+  `
     CREATE TABLE IF NOT EXISTS error_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -252,6 +264,11 @@ const CREATE_STATEMENTS = [
       FOREIGN KEY (owner_uid) REFERENCES users(id) ON DELETE CASCADE
     )
   `,
+];
+
+const PUSH_TOKEN_INDEXES = [
+  'CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_push_tokens_offset ON push_tokens(utc_offset)',
 ];
 
 const ERROR_LOG_INDEXES = [
@@ -416,7 +433,9 @@ async function rebuildTagMapsFromIndexes() {
 // sequential statements on EVERY cold boot, and this file's growth tipped it
 // over the edge (prod-wide 1101s on deploy). initDB is now version-gated:
 // steady-state boots cost a single probe subrequest, and deltas run chunked.
-const SCHEMA_VERSION = '3';
+const SCHEMA_VERSION = '4';
+// v4 = push_tokens table + indexes (FCM reminder tokens; previously only in
+// migrate.js, so worker-boot initDB never converged on it).
 // v3 = insight_decks table + deck indexes + journal_entries.updated_at/
 // content_hash + journal_entries user_status index. Bump on future DDL and
 // extend probeSchema/planMissingDdl accordingly.
@@ -502,7 +521,7 @@ function planMissingDdl(probe) {
     const table = tableNameOf(stmt);
     if (table && !probe.names.has(table)) missing.push(stmt);
   }
-  for (const stmt of [...USER_TAG_MAP_INDEXES, ...DECK_INDEXES, ...ERROR_LOG_INDEXES]) {
+  for (const stmt of [...USER_TAG_MAP_INDEXES, ...DECK_INDEXES, ...ERROR_LOG_INDEXES, ...PUSH_TOKEN_INDEXES]) {
     const index = indexNameOf(stmt);
     if (index && !probe.indexes.has(index)) missing.push(stmt);
   }
