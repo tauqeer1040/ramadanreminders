@@ -8,7 +8,10 @@ import 'package:flutter_confetti/flutter_confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../models/shop_item.dart';
 import 'widgets/deferred_lottie.dart';
+import 'widgets/glass_container.dart';
 import '../services/shop_service.dart';
+import '../services/streak_service.dart';
+import '../services/shield_billing_service.dart';
 import '../services/widget_service.dart';
 import '../services/analytics_service.dart';
 import '../services/audio_service.dart';
@@ -28,6 +31,8 @@ class _ShopScreenState extends State<ShopScreen> {
   Set<String> _unlocked = {};
   bool _loaded = false;
   bool _loadError = false;
+  int _shieldCount = 0;
+  int _streak = 1;
 
   @override
   void initState() {
@@ -40,12 +45,18 @@ class _ShopScreenState extends State<ShopScreen> {
       ShopService.fetchItems(),
       ShopService.getUnlockedIds(),
       ShopService.getStarBalance(),
+      StreakService.getArmedShieldCount(),
+      // Friend-boosted display streak (max of local + friend), whichever
+      // is highest — same value the home/stats sheets show.
+      StreakService.getDisplayStreak(),
     ]);
     if (mounted) {
       final items = results[0] as List<ShopItem>;
       final unlocked = results[1] as Set<String>;
       final sorted = List<ShopItem>.from(items);
       sorted.sort((a, b) {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
         final aOwned = unlocked.contains(a.id);
         final bOwned = unlocked.contains(b.id);
         if (aOwned && !bOwned) return -1;
@@ -56,7 +67,22 @@ class _ShopScreenState extends State<ShopScreen> {
         _items = sorted;
         _unlocked = unlocked;
         _stars = results[2] as int;
+        _shieldCount = results[3] as int;
+        _streak = results[4] as int;
         _loaded = true;
+      });
+    }
+  }
+
+  Future<void> _reloadShieldState() async {
+    final results = await Future.wait([
+      StreakService.getArmedShieldCount(),
+      StreakService.getDisplayStreak(),
+    ]);
+    if (mounted) {
+      setState(() {
+        _shieldCount = results[0];
+        _streak = results[1];
       });
     }
   }
@@ -68,7 +94,11 @@ class _ShopScreenState extends State<ShopScreen> {
 
   int _randomFlowerId() => Random().nextInt(12) + 1;
 
-  Future<void> _purchase(ShopItem item) async {
+  Future<void> _purchase(ShopItem item, [int qty = 1]) async {
+    if (item.isShield) {
+      await _purchaseShields(qty, restoreIfBroken: true);
+      return;
+    }
     if (_unlocked.contains(item.id)) return;
     if (_stars < item.cost) {
       if (mounted) {
@@ -133,6 +163,341 @@ class _ShopScreenState extends State<ShopScreen> {
       }
       unawaited(WidgetService.refreshWidgetBackground());
     }
+  }
+
+  /// Buys [qty] Streak Shields ($0.99 each, one Play Billing sheet per
+  /// shield — the store sells them singly). Cancelling stops the loop and
+  /// keeps whatever already succeeded. Every unit arms immediately and
+  /// fires automatically on a future missed day.
+  /// Healthy streak (> 1) → arms (auto-protects for 2 days each).
+  /// Broken streak (== 1) → first shield restores to the longest run, the
+  /// rest stay armed for next time.
+  Future<void> _purchaseShields(int qty, {required bool restoreIfBroken}) async {
+    final streak = await StreakService.getDisplayStreak();
+    final longest = await StreakService.longestRun();
+    if (streak <= 1 && longest <= 1) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Journal a few days first — there is no streak to protect yet.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    var bought = 0;
+    for (var i = 0; i < qty; i++) {
+      try {
+        await ShieldBillingService.purchaseShield();
+        bought++;
+        AnalyticsService.instance.logShopPurchase('shield');
+      } on ShieldPurchaseCancelled {
+        break;
+      } on ShieldPurchaseException catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.message), behavior: SnackBarBehavior.floating),
+          );
+        }
+        break;
+      }
+    }
+    if (bought <= 0) return;
+
+    HapticFeedback.heavyImpact();
+
+    if (streak > 1) {
+      for (var i = 0; i < bought; i++) {
+        await StreakService.armShield(streak);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              bought == 1
+                  ? 'Streak Shield armed! Your $streak-day streak is protected for 2 days. 🛡️'
+                  : '$bought shields armed! They fire automatically if you miss a day. 🛡️',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else if (restoreIfBroken) {
+      for (var i = 0; i < bought; i++) {
+        await StreakService.armShield(longest);
+      }
+      final restored = await StreakService.restoreToLongest();
+      if (mounted && restored != null) {
+        Confetti.launch(
+          context,
+          options: const ConfettiOptions(
+            particleCount: 80,
+            spread: 360,
+            startVelocity: 25,
+            gravity: 0.3,
+            colors: [Colors.amber, Colors.pink, Colors.cyan],
+          ),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              bought == 1
+                  ? 'Streak restored to $restored days! 🔥'
+                  : 'Streak restored to $restored days + ${bought - 1} shield${bought - 1 == 1 ? '' : 's'} armed! 🔥',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+    await _reloadShieldState();
+  }
+
+  /// Manual restore using an already-held shield (purple button path).
+  Future<void> _restoreWithHeldShield() async {
+    final restored = await StreakService.restoreToLongest();
+    if (!mounted) return;
+    if (restored != null) {
+      HapticFeedback.heavyImpact();
+      Confetti.launch(
+        context,
+        options: const ConfettiOptions(
+          particleCount: 80,
+          spread: 360,
+          startVelocity: 25,
+          gravity: 0.3,
+          colors: [Colors.amber, Colors.pink, Colors.cyan],
+        ),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Streak restored to $restored days! 🔥'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nothing to restore — your streak is already healthy.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    await _reloadShieldState();
+  }
+
+  /// Full-view dialog for the Streak Shield, mirroring the item preview
+  /// pattern but with a state-aware purple action button.
+  Future<void> _showShieldDialog(ShopItem item) async {
+    AnalyticsService.instance.logShopItemViewed(item.id);
+    final longest = await StreakService.longestRun();
+    if (!mounted) return;
+    final broken = _streak <= 1 && longest > 1;
+    final hasShield = _shieldCount > 0;
+
+    // One universal explanation: what shields are for, how auto-protection
+    // works, and how to repair an already-broken streak.
+    const subtitle = 'Get streak shields to protect your streak. '
+        'If you ever miss a day, a streak shield preserves your streak '
+        'automatically for one extra day. If your streak broke, use it to '
+        'repair it.';
+
+    var qty = 1;
+    String priceFor(int n) => '\$${(0.99 * n).toStringAsFixed(2)}';
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(ctx),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: GlassContainer(
+                  sigmaX: 18,
+                  sigmaY: 18,
+                  tint: Colors.white.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.12),
+                  ),
+                  padding: EdgeInsets.zero,
+                  child: _buildImage(item.imageUrl, fit: BoxFit.contain),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A2E),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.name,
+                    style: const TextStyle(
+                      color: AppTheme.starWhite,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppTheme.ghostSilver,
+                      fontSize: 13,
+                    ),
+                  ),
+                  if (hasShield) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'You have $_shieldCount shield${_shieldCount == 1 ? '' : 's'} — they activate automatically.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppTheme.neonPurple,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  if (broken && hasShield)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: MaterialButton(
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await _restoreWithHeldShield();
+                        },
+                        color: AppTheme.neonPurple,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'RESTORE STREAK',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.starWhite,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: MaterialButton(
+                                onPressed: qty > 1
+                                    ? () => setDialogState(() => qty--)
+                                    : null,
+                                padding: EdgeInsets.zero,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  '−',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.starWhite,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 44,
+                              child: Text(
+                                '$qty',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: AppTheme.starWhite,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: MaterialButton(
+                                onPressed: () =>
+                                    setDialogState(() => qty++),
+                                padding: EdgeInsets.zero,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  '+',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.starWhite,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 44,
+                          child: MaterialButton(
+                            onPressed: () async {
+                              Navigator.pop(ctx);
+                              await _purchaseShields(
+                                qty,
+                                restoreIfBroken: true,
+                              );
+                            },
+                            color: AppTheme.neonPurple,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              broken
+                                  ? 'BUY $qty · ${priceFor(qty)}'
+                                  : qty == 1
+                                      ? 'BUY SHIELD · ${priceFor(1)}'
+                                      : 'BUY $qty · ${priceFor(qty)}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.starWhite,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        ),
+      ),
+    );
   }
 
   Future<void> _showScratchReveal(ShopItem item) async {
@@ -455,30 +820,36 @@ class _ShopScreenState extends State<ShopScreen> {
           mainAxisSpacing: 12,
         ),
         itemCount: _items.length,
-        itemBuilder: (context, i) => _ShopCard(
-          item: _items[i],
-          owned: _unlocked.contains(_items[i].id),
-          canAfford: _stars >= _items[i].cost,
-          onPurchase: () => _purchase(_items[i]),
-          onPreview: () => _showPreview(_items[i]),
-          buildImage: _buildImage,
-        ),
+        itemBuilder: (context, i) {
+          final item = _items[i];
+          return _ShopCard(
+            item: item,
+            owned: _unlocked.contains(item.id),
+            shieldCount: item.isShield ? _shieldCount : 0,
+            canAfford: _stars >= item.cost,
+            onPurchase: (qty) => _purchase(item, qty),
+            onPreview: () => item.isShield ? _showShieldDialog(item) : _showPreview(item),
+            buildImage: _buildImage,
+          );
+        },
       ),
     );
   }
 }
 
-class _ShopCard extends StatelessWidget {
+class _ShopCard extends StatefulWidget {
   final ShopItem item;
   final bool owned;
+  final int shieldCount;
   final bool canAfford;
-  final VoidCallback onPurchase;
+  final Future<void> Function(int qty) onPurchase;
   final VoidCallback onPreview;
   final Widget Function(String url, {BoxFit fit}) buildImage;
 
   const _ShopCard({
     required this.item,
     required this.owned,
+    this.shieldCount = 0,
     required this.canAfford,
     required this.onPurchase,
     required this.onPreview,
@@ -486,35 +857,71 @@ class _ShopCard extends StatelessWidget {
   });
 
   @override
+  State<_ShopCard> createState() => _ShopCardState();
+}
+
+class _ShopCardState extends State<_ShopCard> {
+  int _qty = 1;
+
+  @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
+    final item = widget.item;
+    final owned = widget.owned;
+    final shieldCount = widget.shieldCount;
+    final canAfford = widget.canAfford;
+    final isShield = item.isShield;
+    final showBanner = isShield ? shieldCount > 0 : owned;
+    final bannerText = isShield ? 'USE X$shieldCount' : 'OWNED';
+    String priceFor(int n) => '\$${(0.99 * n).toStringAsFixed(2)}';
 
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.055),
+        color: isShield
+            ? const Color(0xFF12121A)
+            : Colors.white.withValues(alpha: 0.055),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: owned
-              ? AppTheme.starGold.withValues(alpha: 0.4)
-              : Colors.white.withValues(alpha: 0.08),
+          color: isShield
+              ? Colors.white.withValues(alpha: 0.12)
+              : owned
+                  ? AppTheme.starGold.withValues(alpha: 0.4)
+                  : Colors.white.withValues(alpha: 0.08),
         ),
       ),
       child: Column(
         children: [
           Expanded(
             child: GestureDetector(
-              onTap: owned ? onPreview : null,
+              onTap: (owned || isShield) ? widget.onPreview : null,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  buildImage(item.thumbnailUrl.isNotEmpty ? item.thumbnailUrl : item.imageUrl),
-                  if (!owned)
+                  if (isShield)
+                    // Frosted glass under the cutout orb: the thumbnail bg
+                    // is transparent, so the blur tint shows through.
+                    Positioned.fill(
+                      child: GlassContainer(
+                        sigmaX: 18,
+                        sigmaY: 18,
+                        tint: Colors.white.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.zero,
+                        border: Border.all(color: Colors.transparent),
+                        padding: EdgeInsets.zero,
+                        child: widget.buildImage(item.thumbnailUrl.isNotEmpty
+                            ? item.thumbnailUrl
+                            : item.imageUrl),
+                      ),
+                    )
+                  else
+                    widget.buildImage(item.thumbnailUrl.isNotEmpty ? item.thumbnailUrl : item.imageUrl),
+                  if (!owned && !isShield)
                     Container(
                       color: Colors.black.withValues(alpha: 0.55),
                       child: const Icon(Icons.lock_rounded, color: Colors.white38, size: 36),
                     ),
-                  if (owned)
+                  if (showBanner)
                     Positioned(
                       top: 8,
                       right: 8,
@@ -524,9 +931,9 @@ class _ShopCard extends StatelessWidget {
                           color: AppTheme.starGold.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Text(
-                          'OWNED',
-                          style: TextStyle(
+                        child: Text(
+                          bannerText,
+                          style: const TextStyle(
                             color: Colors.black,
                             fontSize: 9,
                             fontWeight: FontWeight.w800,
@@ -558,9 +965,88 @@ class _ShopCard extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   height: 32,
-                  child: owned
+                  child: isShield
+                      ? Row(
+                          children: [
+                            SizedBox(
+                              width: 28,
+                              height: 32,
+                              child: MaterialButton(
+                                onPressed: _qty > 1
+                                    ? () => setState(() => _qty--)
+                                    : null,
+                                padding: EdgeInsets.zero,
+                                minWidth: 0,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                                child: const Text(
+                                  '−',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.starWhite,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: MaterialButton(
+                                onPressed: () async {
+                                  final n = _qty;
+                                  setState(() => _qty = 1);
+                                  await widget.onPurchase(n);
+                                },
+                                color: AppTheme.neonPurple,
+                                height: 32,
+                                padding: EdgeInsets.zero,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.shield_rounded,
+                                        size: 14, color: AppTheme.starWhite),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      _qty == 1
+                                          ? (item.priceLabel.isNotEmpty
+                                              ? item.priceLabel
+                                              : '\$0.99')
+                                          : '$_qty · ${priceFor(_qty)}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppTheme.starWhite,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 28,
+                              height: 32,
+                              child: MaterialButton(
+                                onPressed: () => setState(() => _qty++),
+                                padding: EdgeInsets.zero,
+                                minWidth: 0,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                                child: const Text(
+                                  '+',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.starWhite,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : owned
                       ? OutlinedButton(
-                          onPressed: onPreview,
+                          onPressed: widget.onPreview,
                           style: OutlinedButton.styleFrom(
                             side: BorderSide(color: AppTheme.starGold.withValues(alpha: 0.4)),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -569,7 +1055,7 @@ class _ShopCard extends StatelessWidget {
                           child: const Text('VIEW', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.starGold)),
                         )
                       : MaterialButton(
-                          onPressed: onPurchase,
+                          onPressed: () => widget.onPurchase(1),
                           color: canAfford ? AppTheme.neonPurple : Colors.grey[800],
                           height: 32,
                           minWidth: double.infinity,

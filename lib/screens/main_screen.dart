@@ -7,9 +7,14 @@ import '../components/shop_screen.dart' deferred as shop_screen_lib;
 import '../components/quranpage.dart' deferred as quranpage_lib;
 import '../components/profilepage.dart' deferred as profilepage_lib;
 import '../core/app_background.dart';
+import '../components/widgets/max_welcome_sheet.dart';
 import '../services/analytics_service.dart';
 import '../services/auth_service.dart';
+import '../services/local_trial_service.dart';
+import '../services/revenuecat_service.dart';
+import '../services/streak_gate.dart';
 import '../theme/app_theme.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 
 class MainScreen extends StatefulWidget {
   final VoidCallback? onReady;
@@ -30,6 +35,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   final _homepageKey = GlobalKey<HomepageState>();
   late final PageController _pageController;
   StreamSubscription? _authSubscription;
+  bool _paywallInFlight = false;
+  bool _expiredLockOpen = false;
+  DateTime? _pausedAt;
 
   final List<bool> _pageLoaded = [true, false, false, false];
   final List<bool> _pageLoading = [false, false, false, false];
@@ -61,8 +69,26 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _authSubscription = AuthService.userChanges.listen((user) {
       if (mounted) setState(() {});
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       widget.onReady?.call();
+      // Catches purchases completed outside the app's paywall sheets
+      // (web checkout, restores) plus store renewals staged behind our
+      // back: shows the Max thank-you sheet once per purchase key.
+      if (mounted) {
+        try {
+          await RevenueCatService.stageRenewalIfNeeded().timeout(
+            const Duration(seconds: 4),
+            onTimeout: () => false,
+          );
+        } catch (_) {}
+        if (!mounted) return;
+        try {
+          await MaxWelcomeSheet.showIfPending(context).timeout(
+            const Duration(seconds: 4),
+            onTimeout: () => false,
+          );
+        } catch (_) {}
+      }
     });
   }
 
@@ -72,6 +98,209 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _authSubscription?.cancel();
     _pageController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Track real backgrounding: the native paywall sheet dismissing also
+    // delivers `resumed`, which must NOT count as bg->fg (relaunch loop).
+    if (state == AppLifecycleState.resumed) {
+      final pausedAt = _pausedAt;
+      _pausedAt = null;
+      final away = pausedAt == null
+          ? Duration.zero
+          : DateTime.now().difference(pausedAt);
+      debugPrint('[PaywallResume] resumed after ${away.inSeconds}s away');
+      unawaited(_showPaywallOnResume(away));
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      _pausedAt ??= DateTime.now();
+    }
+  }
+
+  /// Resume gate: subscribed -> nothing (plus welcome catch-up);
+  /// trial/grace active -> dismissable paywall ONLY after a real background
+  /// stay + dismiss cooldown (a paywall dismiss itself resumes the activity,
+  /// so uncapped-every-resume relaunches the sheet the instant it closes);
+  /// past grace -> non-dismissable thank-you re-lock (can't loop).
+  Future<void> _showPaywallOnResume(Duration away) async {
+    if (!mounted || _paywallInFlight) return;
+    _paywallInFlight = true;
+    try {
+      bool subscribed = false;
+      try {
+        subscribed = await RevenueCatService.instance.isSubscribed();
+      } catch (_) {}
+      try {
+        await LocalTrialService.syncSubscriptionState(subscribed);
+      } catch (_) {}
+      if (!mounted) return;
+      if (subscribed) {
+        if (mounted) {
+          try {
+            await RevenueCatService.stageRenewalIfNeeded().timeout(
+              const Duration(seconds: 4),
+              onTimeout: () => false,
+            );
+          } catch (_) {}
+          if (!mounted) return;
+          try {
+            await MaxWelcomeSheet.showIfPending(context).timeout(
+              const Duration(seconds: 4),
+              onTimeout: () => false,
+            );
+          } catch (_) {}
+        }
+        return;
+      }
+      // Never-subscribed + friend-boosted streak>3 → skip soft paywall
+      // and fall through to the expired hard lock below.
+      bool streakGate = false;
+      try {
+        streakGate = await StreakGate.shouldShowStreakGate();
+      } catch (_) {}
+      if (!mounted) return;
+      final started = await LocalTrialService.hasStarted();
+      // Streak gate fires even when no trial started yet (high streak,
+      // never paid) — don't early-return on !started in that case.
+      if (!started && !streakGate) return;
+      final soft = await LocalTrialService.isSoftWindow();
+      if (!mounted) return;
+      if (soft && !streakGate) {
+        // Anti-loop: the sheet's own dismiss resumes the activity. Skip
+        // while a sheet is open or just closed; otherwise every real
+        // bg->fg relaunch presents (no cooldown — cold boot already covers
+        // first paint, relaunches cover the rest).
+        if (LocalTrialService.sheetOpen) {
+          debugPrint('[PaywallResume] skip soft paywall: sheet open');
+          return;
+        }
+        final closedAt = LocalTrialService.lastSheetClosed;
+        if (closedAt != null &&
+            DateTime.now().difference(closedAt) <
+                LocalTrialService.resumePostSheetGrace) {
+          debugPrint('[PaywallResume] skip soft paywall: sheet just closed');
+          return;
+        }
+        if (away < LocalTrialService.resumeMinBackground) {
+          debugPrint(
+            '[PaywallResume] skip soft paywall: away ${away.inSeconds}s '
+            '< ${LocalTrialService.resumeMinBackground.inSeconds}s',
+          );
+          return;
+        }
+        // Don't pave over an open sheet (journal editor, share, etc.).
+        if (mounted && ModalRoute.of(context)?.isCurrent != true) {
+          debugPrint('[PaywallResume] skip soft paywall: modal open');
+          return;
+        }
+        try {
+          final uid = FirebaseAuth.instance.currentUser?.uid;
+          if (uid != null && uid.isNotEmpty) {
+            await RevenueCatService.instance.identify(uid);
+          }
+        } catch (_) {}
+        PaywallResult result;
+        try {
+          await LocalTrialService.notePaywallShown();
+          debugPrint('[PaywallResume] presenting soft paywall');
+          LocalTrialService.sheetOpen = true;
+          try {
+            result = await RevenueCatService.instance.presentPaywall(
+              displayCloseButton: true,
+            );
+          } finally {
+            LocalTrialService.sheetOpen = false;
+            LocalTrialService.lastSheetClosed = DateTime.now();
+          }
+          debugPrint('[PaywallResume] soft paywall closed: $result');
+        } catch (_) {
+          return;
+        }
+        if ((result == PaywallResult.purchased ||
+                result == PaywallResult.restored) &&
+            mounted) {
+          try {
+            await RevenueCatService.instance.getCustomerInfo();
+          } catch (_) {}
+          await RevenueCatService.flagWelcomePending(
+            forceShow: result == PaywallResult.restored,
+          );
+          if (!mounted) return;
+          try {
+            await MaxWelcomeSheet.showIfPending(context);
+          } catch (_) {}
+          if (mounted) setState(() {});
+        }
+        return;
+      }
+      // Past grace — hard lock with the thank-you wall, same chain as
+      // splash. Non-dismissable so it can't loop; skip if already open.
+      if (!mounted) return;
+      if (_expiredLockOpen) {
+        debugPrint('[PaywallResume] skip re-lock: already open');
+        return;
+      }
+      _expiredLockOpen = true;
+      debugPrint('[PaywallResume] presenting expired re-lock');
+      LocalTrialService.sheetOpen = true;
+      bool unlocked = false;
+      try {
+        unlocked = await MaxWelcomeSheet.showExpired(
+          context,
+          onGetMax: _launchResumeOfferChain,
+        );
+      } finally {
+        LocalTrialService.sheetOpen = false;
+        LocalTrialService.lastSheetClosed = DateTime.now();
+      }
+      _expiredLockOpen = false;
+      debugPrint('[PaywallResume] expired lock closed: $unlocked');
+      if (unlocked && mounted) {
+        try {
+          await MaxWelcomeSheet.showIfPending(context);
+        } catch (_) {}
+        if (mounted) setState(() {});
+      }
+    } catch (_) {
+    } finally {
+      _paywallInFlight = false;
+    }
+  }
+
+  /// Resume copy of the splash expired chain: default paywall first, then
+  /// the $1 exit offer. Returns true when Max unlocks.
+  Future<bool> _launchResumeOfferChain() async {
+    try {
+      try {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null && uid.isNotEmpty) {
+          await RevenueCatService.instance.identify(uid);
+        }
+      } catch (_) {}
+      var result = await RevenueCatService.instance.presentPaywall(
+        displayCloseButton: true,
+      );
+      if (result != PaywallResult.purchased &&
+          result != PaywallResult.restored) {
+        try {
+          result = await RevenueCatService.instance.presentExitOffer(
+            displayCloseButton: true,
+          );
+        } catch (_) {}
+      }
+      if (!mounted) return false;
+      if (result == PaywallResult.purchased ||
+          result == PaywallResult.restored) {
+        await RevenueCatService.instance.getCustomerInfo();
+        await RevenueCatService.flagWelcomePending();
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 
   void navigateToTab(int index) {

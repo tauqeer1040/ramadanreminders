@@ -24,6 +24,8 @@ class BackgroundMusicService with WidgetsBindingObserver {
   dynamic _player;
   bool _libsLoaded = false;
   bool _isInitialized = false;
+  bool _initializing = false;
+  bool _starting = false;
   bool _musicEnabled = true;
   String? _currentTrackPath;
 
@@ -49,7 +51,28 @@ class BackgroundMusicService with WidgetsBindingObserver {
   bool get isMusicEnabled => _musicEnabled;
   String? get currentTrackPath => _currentTrackPath;
 
+  // Foreground-only audio: set false the moment the app backgrounds so a
+  // play() that is mid-start (async gap in _playTrack) cannot complete
+  // behind the user's back. Re-checked after every await in _playTrack.
+  bool _isForeground = true;
+
   Future<void> init() async {
+    if (_isInitialized) return;
+    if (_initializing) {
+      while (_initializing && !_isInitialized) {
+        await Future.delayed(const Duration(milliseconds: 25));
+      }
+      return;
+    }
+    _initializing = true;
+    try {
+      await _initInternal();
+    } finally {
+      _initializing = false;
+    }
+  }
+
+  Future<void> _initInternal() async {
     if (_isInitialized) return;
     if (!_libsLoaded) {
       await ap.loadLibrary();
@@ -109,23 +132,49 @@ class BackgroundMusicService with WidgetsBindingObserver {
 
   Future<void> _playTrack(String assetPath) async {
     _cancelDeferredWebPlay();
-    final devicePlaying = await _isDevicePlayingAudio();
-    if (devicePlaying) {
-      debugPrint("Device is already playing audio. Skipping background music.");
-      await _player?.stop();
-      return;
-    }
+    if (_starting) return; // another start in flight — it wins.
+    _starting = true;
     try {
-      await _player?.stop();
-      await _player?.play(ap.AssetSource(assetPath));
-    } catch (e) {
-      debugPrint("Error playing background music: $e");
+      // isMusicActive hears EVERYTHING, including our own player. If we are
+      // already playing, the "device audio" is us — proceed to switch tracks.
+      final ownPlaying = _player?.state == ap.PlayerState.playing;
+      if (!ownPlaying && await _isDevicePlayingAudio()) {
+        debugPrint("Device is already playing audio. Skipping background music.");
+        await _player?.stop();
+        return;
+      }
+      if (!_isForeground || !_musicEnabled) {
+        // App backgrounded (or music disabled) while starting — stay silent.
+        await _player?.stop();
+        return;
+      }
+      try {
+        await _player?.stop();
+        if (!_isForeground || !_musicEnabled) {
+          return;
+        }
+        await _player?.play(ap.AssetSource(assetPath));
+        if (!_isForeground || !_musicEnabled) {
+          // Backgrounded mid-start: the pending play() won the race — silence it.
+          await _player?.pause();
+        }
+      } catch (e) {
+        debugPrint("Error playing background music: $e");
+      }
+    } finally {
+      _starting = false;
     }
   }
 
   Future<void> play([String? assetPath]) async {
     if (assetPath == null) return;
     if (!_isInitialized) await init();
+    // Same track already playing (e.g. onboarding music page re-entering
+    // while bootstrap autoplay is running) — don't restart it.
+    if (assetPath == _currentTrackPath &&
+        _player?.state == ap.PlayerState.playing) {
+      return;
+    }
     _currentTrackPath = assetPath;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefKeyTrack, assetPath);
@@ -184,9 +233,12 @@ class BackgroundMusicService with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.detached) {
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      _isForeground = false;
       pause();
     } else if (state == AppLifecycleState.resumed) {
+      _isForeground = true;
       resume();
     }
   }

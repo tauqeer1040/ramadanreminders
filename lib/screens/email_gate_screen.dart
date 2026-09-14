@@ -9,7 +9,8 @@ import 'main_screen.dart';
 
 /// Shown on every launch until the user subscribes to Max: the same
 /// check-email screen as onboarding step 19. Soft while the trial runs
-/// (Skip → home), hard after expiry (no skip — use PaywallGateScreen).
+/// (Skip → home), hard after expiry (no skip — splash presents the
+/// RevenueCat sheet directly).
 class EmailGateScreen extends StatefulWidget {
   const EmailGateScreen({super.key});
 

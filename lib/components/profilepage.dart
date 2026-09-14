@@ -28,6 +28,10 @@ import '../theme/app_theme.dart';
 import 'stats_card.dart';
 import 'widgets/duo_button.dart';
 import 'widgets/auth_debug_card.dart';
+import 'widgets/star_trail_widget.dart';
+import 'widgets/max_expiry_banner.dart';
+import 'widgets/max_welcome_sheet.dart';
+import '../services/max_status.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:home_widget/home_widget.dart' deferred as hw;
 import 'package:share_plus/share_plus.dart' deferred as share_plus;
@@ -44,7 +48,7 @@ class ProfilePage1 extends StatefulWidget {
 }
 
 class _ProfilePage1State extends State<ProfilePage1>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   User? _currentUser;
   bool _isLoading = false;
   bool _notificationsGranted = false;
@@ -57,6 +61,13 @@ class _ProfilePage1State extends State<ProfilePage1>
   String _serverStatus = 'yellow';
   String _dbStatus = 'yellow';
   bool _debugExpanded = false;
+
+  // Debug star-trail rig: overlay-rendered in global coords (never inside a
+  // local Stack — that was the homepage teleport glitch).
+  final GlobalKey _trailButtonKey = GlobalKey();
+  final GlobalKey _premiumIconKey = GlobalKey();
+  late final AnimationController _trailController;
+  OverlayEntry? _trailEntry;
 
   final List<Uint8List?> _covers = [null];
   bool _loadingCovers = true;
@@ -99,6 +110,15 @@ class _ProfilePage1State extends State<ProfilePage1>
       const Duration(seconds: 15),
       (_) => _wobbleCtrl.forward(from: 0),
     );
+    _trailController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          _trailEntry?.remove();
+          _trailEntry = null;
+        }
+      });
     _startHealthPolling();
     _loadInsights();
   }
@@ -118,10 +138,68 @@ class _ProfilePage1State extends State<ProfilePage1>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _trailEntry?.remove();
+    _trailController.dispose();
     _wobbleCtrl.dispose();
     _wobbleTimer?.cancel();
     _healthTimer?.cancel();
     super.dispose();
+  }
+
+  /// Debug rig: flies 5 stars from the debug-card button to the premium
+  /// icon, rendered in an overlay (global coords). Pure visual — no star
+  /// writes, no counter changes.
+  void _fireDebugTrail() {
+    HapticFeedback.mediumImpact();
+    final startCtx = _trailButtonKey.currentContext;
+    final endCtx = _premiumIconKey.currentContext;
+    if (startCtx == null || endCtx == null || !mounted) return;
+    final startBox = startCtx.findRenderObject() as RenderBox;
+    final endBox = endCtx.findRenderObject() as RenderBox;
+    final start = startBox.localToGlobal(startBox.size.center(Offset.zero));
+    final end = endBox.localToGlobal(endBox.size.center(Offset.zero));
+    _trailEntry?.remove();
+    _trailEntry = OverlayEntry(
+      builder: (_) => IgnorePointer(
+        child: StarTrailWidget(
+          start: start,
+          end: end,
+          controller: _trailController,
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_trailEntry!);
+    _trailController.forward(from: 0);
+  }
+
+  /// Debug hook: previews the expired-trial wall with the real production
+  /// wiring — Get Max launches the actual exit offer, Restore hits the
+  /// store. Shows every tap (no dedupe on this path).
+  Future<void> _debugPreviewExpiredWall() async {
+    if (!mounted) return;
+    final unlocked = await MaxWelcomeSheet.showExpired(
+      context,
+      onGetMax: () async {
+        try {
+          // Same default paywall as the rest of the app.
+          final result = await RevenueCatService.instance.presentPaywall(
+            displayCloseButton: true,
+          );
+          if (result == PaywallResult.purchased ||
+              result == PaywallResult.restored) {
+            await RevenueCatService.instance.getCustomerInfo();
+            await RevenueCatService.flagWelcomePending();
+            return true;
+          }
+          return false;
+        } catch (_) {
+          return false;
+        }
+      },
+    );
+    if (unlocked && mounted) {
+      await MaxWelcomeSheet.showIfPending(context);
+    }
   }
 
   Future<void> _loadStats() async {
@@ -401,22 +479,33 @@ class _ProfilePage1State extends State<ProfilePage1>
                         ),
                       ),
                     ),
-                InkWell(
-                  onTap: _openMaxPaywall,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: AppTheme.starGold.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.workspace_premium,
-                      color: AppTheme.starGold,
-                      size: 28,
-                    ),
-                  ),
+                FutureBuilder<MaxStatus>(
+                  future: MaxStatusService.current(),
+                  builder: (context, snap) {
+                    // Active members (incl. expiry window) don't get the
+                    // premium upsell icon; expiring members see the banner.
+                    if (snap.data != null && !snap.data!.showUpsells) {
+                      return const SizedBox(width: 56, height: 56);
+                    }
+                    return InkWell(
+                      key: _premiumIconKey,
+                      onTap: _openMaxPaywall,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: AppTheme.starGold.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.workspace_premium,
+                          color: AppTheme.starGold,
+                          size: 28,
+                        ),
+                      ),
+                    );
+                  },
                 ),
                   ],
                 ),
@@ -538,9 +627,12 @@ class _ProfilePage1State extends State<ProfilePage1>
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            _debugCard(),
-            const SizedBox(height: 16),
+            // Debug-only: the whole DEBUG card (and its test hooks) never
+            // ships to production.
+            if (kDebugMode) ...[
+              _debugCard(),
+              const SizedBox(height: 16),
+            ],
           ],
         ),
       ),
@@ -672,6 +764,11 @@ class _ProfilePage1State extends State<ProfilePage1>
                 onPressed: () async {
                   setState(() => _isLoading = true);
                   await AuthService.signInWithGoogle();
+                  // Sign-in now pushes then pulls progress (stars, unlocks,
+                  // streak, revealed): reload so the new values paint.
+                  try {
+                    await _loadStats();
+                  } catch (_) {}
                   if (mounted) setState(() => _isLoading = false);
                 },
                 backgroundColor: Colors.white,
@@ -839,12 +936,21 @@ class _ProfilePage1State extends State<ProfilePage1>
   // ── SUBSCRIPTION CARD ──────────────────────────────────────────────────────
 
   Widget _subscribeCard() {
-    // Visible to everyone WITHOUT an active membership (trial included).
-    // Spacing lives inside so no gap remains when hidden.
-    return FutureBuilder<bool>(
-      future: RevenueCatService.instance.isSubscribed(),
+    // Visible only WITHOUT an active membership. Active members (including
+    // the 3-day expiry window) see nothing here — expiring members get the
+    // countdown banner instead. Spacing lives inside so no gap remains.
+    return FutureBuilder<MaxStatus>(
+      future: MaxStatusService.current(),
       builder: (context, snap) {
-        if (snap.data == true) return const SizedBox.shrink();
+        final status = snap.data;
+        if (status == null) return const SizedBox.shrink();
+        if (status.showExpiryBanner) {
+          return MaxExpiryBanner(
+            status: status,
+            onRenew: _openMaxPaywall,
+          );
+        }
+        if (!status.showUpsells) return const SizedBox.shrink();
         return Column(
           children: [
             DuoButton(
@@ -904,13 +1010,16 @@ class _ProfilePage1State extends State<ProfilePage1>
       if ((result == PaywallResult.purchased ||
               result == PaywallResult.restored) &&
           mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Welcome to Max!'),
-            duration: Duration(seconds: 2),
-          ),
+        try {
+          await RevenueCatService.instance.getCustomerInfo();
+        } catch (_) {}
+        await RevenueCatService.flagWelcomePending(
+          forceShow: result == PaywallResult.restored,
         );
-        setState(() {});
+        if (mounted) {
+          await MaxWelcomeSheet.showIfPending(context);
+          setState(() {});
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -994,7 +1103,50 @@ class _ProfilePage1State extends State<ProfilePage1>
                 _buildProfileRow('Last Sync', _lastSync),
                 if (_debugLastError.isNotEmpty)
                   _buildProfileRow('Last Error', _debugLastError, valueColor: Colors.redAccent),
-                const AuthDebugCard(),
+                AuthDebugCard(
+                  trailButtonKey: _trailButtonKey,
+                  onTrailTest: _fireDebugTrail,
+                ),
+                // Test hook (debug builds): preview the post-purchase Max
+                // welcome sheet + confetti with the device's live stats.
+                // Fresh key every tap so it always shows; submitting the
+                // email field performs a real save.
+                Row(
+                  children: [
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () => MaxWelcomeSheet.showOnce(
+                        context,
+                        purchaseKey: 'debug-preview-${DateTime.now().millisecondsSinceEpoch}',
+                        onEmailSaved: UserService.updateEmail,
+                      ),
+                      icon: const Icon(Icons.celebration_outlined, size: 14),
+                      label: const Text('Max welcome', style: TextStyle(fontSize: 12)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.amberAccent,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    // Test hook (debug builds): preview the non-dismissable
+                    // expired-trial wall with live stats + blurred teaser.
+                    // Get Max launches the real exit offer; dismissing it
+                    // drops back to the wall, exactly like production.
+                    TextButton.icon(
+                      onPressed: () => _debugPreviewExpiredWall(),
+                      icon: const Icon(Icons.lock_outline_rounded, size: 14),
+                      label: const Text('Expired wall', style: TextStyle(fontSize: 12)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.deepPurpleAccent,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
+                ),
                 _buildDebugInsightsSection(),
               ],
             ],
@@ -1184,6 +1336,11 @@ class _ProfilePage1State extends State<ProfilePage1>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _loadStats();
+      // Stats (incl. the Quran gauge) go stale while scratching in the
+      // Quran tab — this tab stays cached, so force a reload on return.
+      try {
+        StatsCard.refresh(context);
+      } catch (_) {}
       // Permissions may have changed in system settings while away.
       _checkNotificationStatus();
     }

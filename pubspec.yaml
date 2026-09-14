@@ -2,7 +2,7 @@ name: ramadan_reflections
 description: "Meowmin AI Diary — write your daily diary, get Quran stories and verses that match your day."
 publish_to: "none"
 
-version: 1.0.0+3
+version: 1.0.3+8
 
 environment:
   sdk: ^3.9.2
@@ -87,6 +87,12 @@ flutter:
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter-latin.woff2
+    - family: PlayfairDisplay
+      fonts:
+        - asset: assets/fonts/PlayfairDisplay-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/PlayfairDisplay-Black.ttf
+          weight: 900
 
 flutter_launcher_icons:
   android: true

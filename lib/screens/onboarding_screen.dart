@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,6 +10,7 @@ import '../services/analytics_service.dart';
 import '../services/version_check_service.dart';
 import '../services/local_trial_service.dart';
 import '../services/revenuecat_service.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import 'main_screen.dart';
 import '../services/email_continue_service.dart';
 import '../components/onboarding/onboarding_data.dart';
@@ -33,14 +37,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   // Star tracking
   int _totalStars = 0;
   int _oldStars = 0;
-  // 20 steps: Welcome, Music, Name, Intention, MillionDollars, Wakeup, Conclusion, PhoneHours, Bombshell1, Bombshell2, Bombshell3, Bridge, FirstJournal, AiInsight, Celebration, Summary, AppFeedback, GoogleSignIn, Email, StorePaywall (Qualifying hidden, replaced by RevenueCat popup)
+  // 18 steps: Welcome, Music, Name, Intention, MillionDollars, Wakeup, Conclusion, PhoneHours, Bombshell1, Bombshell2, Bombshell3, Bridge, FirstJournal, AiInsight, Celebration, Summary, AppFeedback, GoogleSignIn (Email removed — welcome email fires at Google sign-in. StorePaywall removed — Google Continue launches the paywall sheet directly. Qualifying hidden.)
   static const List<int> _stepStars = [
     5,  5,  10, // Welcome, Music, Name (action: user types name)
     5,  5,  5,  5,  30, // Intention, MillionDollars, Wakeup, Conclusion, PhoneHours (fingerprint reward)
     5,  5,  10, 10, // Bombshell1, Bombshell2, Bombshell3, Bridge
     50, 60, // FirstJournal (action: write journal), AiInsight (action: scratch cards)
     15, 15, // Celebration, Summary
-    0,  0,  5, 10, // AppFeedback, GoogleSignIn, Email, StorePaywall (Qualifying hidden)
+    0,  0, // AppFeedback, GoogleSignIn (Qualifying hidden)
   ];
 
   @override
@@ -77,7 +81,17 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     });
   }
 
+  bool _paywallShown = false;
+
   void _goToNext() {
+    // Last step (Google sign-in): Continue launches the paywall sheet
+    // directly, then finishes onboarding. No separate loading-plans step.
+    if (_currentStep.name == 'google_signin') {
+      if (_paywallShown) return;
+      _paywallShown = true;
+      unawaited(_presentPaywallThenFinish());
+      return;
+    }
     if (_currentIndex < OnboardingStep.all.length - 1) {
       _currentIndex++;
       _currentStep = OnboardingStep.fromIndex(_currentIndex);
@@ -122,16 +136,54 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   void _skipToLogin() {
     // "Skip to login" always lands on the GoogleSignIn step (index 17),
-    // followed by Email (18) and the store paywall (19).
+    // the last step — Continue launches the paywall sheet directly.
+    // Unfocus + jump (not animate): animating across 17 pages mounts the
+    // Name/FirstJournal fields mid-flight and their autofocus pops the
+    // keyboard on arrival. Jump only builds the destination vicinity.
     const loginIndex = 17;
+    FocusManager.instance.primaryFocus?.unfocus();
     _currentIndex = loginIndex;
     _currentStep = OnboardingStep.fromIndex(_currentIndex);
     _logPageView();
-    _pageController.animateToPage(
-      loginIndex,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOutCubicEmphasized,
-    );
+    _pageController.jumpToPage(loginIndex);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    });
+  }
+
+  /// Google Continue: identify, present the RevenueCat sheet, then finish
+  /// onboarding whatever the outcome (trial covers dismissals; the strict
+  /// hard-paywall posture lives in its own brief). Never traps the user.
+  Future<void> _presentPaywallThenFinish() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null && uid.isNotEmpty) {
+        try {
+          await RevenueCatService.instance.identify(uid);
+        } catch (_) {}
+      }
+      try {
+        AnalyticsService.instance.logEvent('paywall_presented', params: {'source': 'onboarding'});
+      } catch (_) {}
+      final result = await RevenueCatService.instance.presentPaywall();
+      if (!mounted) return;
+      try {
+        AnalyticsService.instance.logEvent(
+          (result == PaywallResult.purchased || result == PaywallResult.restored)
+              ? 'paywall_purchased'
+              : 'paywall_dismissed',
+          params: {'source': 'onboarding'},
+        );
+      } catch (_) {}
+    } catch (_) {
+      if (!mounted) return;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Plans unavailable — continuing on your free trial.')),
+        );
+      }
+    }
+    await _finishOnboarding();
   }
 
   Future<void> _finishOnboarding() async {
@@ -215,9 +267,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         final startMs = DateTime.now().millisecondsSinceEpoch;
         await AnalyticsService.instance.logTrialStarted(trialType: '3_day_free', trialId: startMs.toString(), priceAfter: '1_usd');
       }
+      // Record the trial server-side (fire-and-forget): a reinstall on the
+      // same device is denied a fresh clock instead of minting a new one.
+      unawaited(LocalTrialService.ensureServerTrial());
       final isSubscribed = await RevenueCatService.instance.isSubscribed();
-      // Trial runs free with no registration. Email is optional and the
-      // store paywall (last step) is dismissable during the trial:
+      // Trial runs free with no registration. Google sign-in is optional and
+      // the store paywall (last step) is dismissable during the trial:
       // head straight home; mint a continue-token in the background when an
       // address was given so later member flows already have one.
       void goMain() {
@@ -367,53 +422,38 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              // Bare score: no container. Emphasized bounce (scale only,
+              // no rotation) on every star increment via the ValueKey.
               TweenAnimationBuilder<double>(
                 key: ValueKey(_totalStars),
-                tween: Tween(begin: 1.0, end: 1.3),
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOutBack,
-                builder: (context, scale, child) {
-                  return TweenAnimationBuilder<double>(
-                    tween: Tween(begin: scale, end: 1.0),
-                    duration: const Duration(milliseconds: 800),
-                    curve: Curves.elasticOut,
-                    builder: (context, finalScale, child) {
-                      return Transform.scale(scale: finalScale, child: child);
-                    },
-                    child: child,
-                  );
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 1000),
+                builder: (context, t, child) {
+                  final decay = math.exp(-2.8 * t);
+                  final scale = 1.0 + 0.45 * decay * math.sin(t * 2 * math.pi * 3.0).abs();
+                  return Transform.scale(scale: scale, child: child);
                 },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.starGold.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppTheme.starGold.withValues(alpha: 0.3),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.star_rounded, color: AppTheme.starGold, size: 21),
+                    const SizedBox(width: 6),
+                    TweenAnimationBuilder<int>(
+                      tween: IntTween(begin: _oldStars, end: _totalStars),
+                      duration: const Duration(milliseconds: 600),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) {
+                        return Text(
+                          '$value',
+                          style: TextStyle(
+                            color: AppTheme.starGold,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        );
+                      },
                     ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.star_rounded, color: AppTheme.starGold, size: 16),
-                      const SizedBox(width: 6),
-                      TweenAnimationBuilder<int>(
-                        tween: IntTween(begin: _oldStars, end: _totalStars),
-                        duration: const Duration(milliseconds: 600),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, value, child) {
-                          return Text(
-                            '$value',
-                            style: TextStyle(
-                              color: AppTheme.starGold,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
               ),
             ],

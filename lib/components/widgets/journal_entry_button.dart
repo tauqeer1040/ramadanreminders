@@ -2,78 +2,85 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import '../../theme/app_theme.dart';
 import 'duo_button.dart';
 import '../journal_bottom_sheet.dart';
-import 'star_trail_widget.dart';
+import 'max_welcome_sheet.dart';
 import '../../services/star_service.dart';
+import '../../services/local_trial_service.dart';
+import '../../services/revenuecat_service.dart';
 
 class JournalEntryButton extends StatefulWidget {
   final String displayName;
   final GlobalKey starBadgeKey;
   final ValueChanged<String?>? onJournalSaved;
+  final ValueChanged<int>? onStarsTicked;
 
   const JournalEntryButton({
     super.key,
     required this.displayName,
     required this.starBadgeKey,
     this.onJournalSaved,
+    this.onStarsTicked,
   });
 
   @override
   State<JournalEntryButton> createState() => JournalEntryButtonState();
 }
 
-class JournalEntryButtonState extends State<JournalEntryButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _trailController;
-  bool _showStarTrail = false;
-  Offset? _trailStart, _trailEnd;
-  final _writeBtnKey = GlobalKey();
+class JournalEntryButtonState extends State<JournalEntryButton> {
   final _confettiController = ConfettiController(duration: const Duration(seconds: 3));
   String? _mascotMessage;
 
   @override
-  void initState() {
-    super.initState();
-    _trailController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..addStatusListener((status) {
-        if (status == AnimationStatus.completed && mounted) {
-          setState(() => _showStarTrail = false);
-        }
-      });
-  }
-
-  @override
   void dispose() {
-    _trailController.dispose();
     _confettiController.dispose();
     super.dispose();
   }
 
   String? get lastMascotMessage => _mascotMessage;
 
+  /// Waits for the sheet-pop + keyboard-dismiss transition to settle so
+  /// the celebration setStates never fight a mid-transition reflow (the
+  /// "button teleports" glitch). Bounded: proceeds after 650ms regardless.
+  Future<void> _waitForLayoutSettled() async {
+    var waited = 0;
+    while (mounted && waited < 500) {
+      double bottom = 0;
+      try {
+        bottom = MediaQuery.of(context).viewInsets.bottom;
+      } catch (_) {}
+      if (bottom <= 0) break;
+      await Future.delayed(const Duration(milliseconds: 50));
+      waited += 50;
+    }
+    await Future.delayed(const Duration(milliseconds: 150));
+  }
+
   Future<void> _onJournalSaved(double moodValue) async {
     HapticFeedback.mediumImpact();
+    await _waitForLayoutSettled();
+    if (!mounted) return;
 
-    final startCtx = _writeBtnKey.currentContext;
-    final endCtx = widget.starBadgeKey.currentContext;
-    if (startCtx != null && endCtx != null && mounted) {
-      final startBox = startCtx.findRenderObject() as RenderBox;
-      final endBox = endCtx.findRenderObject() as RenderBox;
-      _trailStart = startBox.localToGlobal(startBox.size.center(Offset.zero));
-      _trailEnd = endBox.localToGlobal(endBox.size.center(Offset.zero));
-      setState(() => _showStarTrail = true);
-      _trailController.forward(from: 0);
+    // Awards (no trail): first finish of the day pays +10, plus a one-time
+    // +50 on the very first journal ever. Later saves pay nothing.
+    final awardToday = await StarService.claimDailyJournalAward();
+    final firstEver = await StarService.claimFirstJournalBonus();
+    if (firstEver) {
+      // Record server-side (idempotent one-timer). Response ignored on
+      // purpose: server doesn't track the local-only awards, so its total
+      // must never overwrite the local balance here.
+      StarService.notifyFirstJournalBonus();
+    }
+    if (awardToday || firstEver) {
+      final amount = (awardToday ? 10 : 0) + (firstEver ? 50 : 0);
+      await StarService.addStars(amount);
+      if (mounted) widget.onStarsTicked?.call(amount);
     }
 
-    await StarService.tryIncrement(10, 'last_journal_star_time');
-
-    if (moodValue >= 0.60) {
-      _confettiController.play();
-    }
+    // Celebration on every save.
+    _confettiController.play();
 
     if (mounted) {
       const templates = [
@@ -92,6 +99,43 @@ class JournalEntryButtonState extends State<JournalEntryButton>
   Future<void> showEditor(BuildContext context) async {
     if (!context.mounted) return;
 
+    // Hard paywall: past-grace non-subscribers must go through Max before
+    // the editor opens. Uses the soft window (trial active OR lapsed-subscriber
+    // grace) so paid users who churned keep their dismissable 3 days, and
+    // server-denied devices are honoured. Fail-open on errors (never trap
+    // the editor on a bug — splash/resume gates still cover the app).
+    try {
+      final subscribed =
+          await RevenueCatService.instance.isSubscribed();
+      final pastGrace =
+          await LocalTrialService.isPastGrace();
+      if (!subscribed && pastGrace && context.mounted) {
+        final result = await RevenueCatService.instance.presentPaywall(
+          displayCloseButton: false,
+        );
+        if (result == PaywallResult.purchased ||
+            result == PaywallResult.restored) {
+          try {
+            await RevenueCatService.instance.getCustomerInfo();
+          } catch (_) {}
+          await RevenueCatService.flagWelcomePending(
+            forceShow: result == PaywallResult.restored,
+          );
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Max is needed to keep journaling ✍️'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
+        }
+      }
+    } catch (_) {}
+
+    if (!context.mounted) return;
     final wroteResult = await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
@@ -111,6 +155,12 @@ class JournalEntryButtonState extends State<JournalEntryButton>
     if (wroteResult is double) {
       await _onJournalSaved(wroteResult);
     }
+    // Thank-you sheet for purchases completed through the Write gate.
+    try {
+      if (context.mounted) {
+        await MaxWelcomeSheet.showIfPending(context);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -118,7 +168,6 @@ class JournalEntryButtonState extends State<JournalEntryButton>
     return Stack(
       children: [
         DuoButton(
-          key: _writeBtnKey,
           onPressed: () => showEditor(context),
           backgroundColor: AppTheme.neonPurple,
           depthColor: AppTheme.neonPurple.withValues(alpha: 0.7),
@@ -154,14 +203,6 @@ class JournalEntryButtonState extends State<JournalEntryButton>
             ],
           ),
         ),
-        if (_showStarTrail && _trailStart != null && _trailEnd != null)
-          IgnorePointer(
-            child: StarTrailWidget(
-              start: _trailStart!,
-              end: _trailEnd!,
-              controller: _trailController,
-            ),
-          ),
       ],
     );
   }

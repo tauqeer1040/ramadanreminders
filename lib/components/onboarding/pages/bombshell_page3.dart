@@ -49,23 +49,21 @@ class BombshellPage3 extends StatelessWidget {
                         ),
                         children: [
                           const TextSpan(
-                            text: "With Meowmin, You will be reading\n",
+                            text: "Meowmin users read\n",
                           ),
                           const TextSpan(
-                            text: '300% more Quran\n',
-                            style: TextStyle(color: AppTheme.starGold),
-                          ),
-                          const TextSpan(text: "in just \n"),
-                          const TextSpan(
-                            text: '2 minutes a day.',
+                            text: '3x more Quran',
                             style: TextStyle(color: AppTheme.starGold),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 16),
+                    // TODO(reviews): plug scrolling review images in here —
+                    // horizontal auto-scroll carousel of store-review cards
+                    // under the subcopy (assets + Play review snippets).
                     Text(
-                      "You'll be spending just 1 minute a day writing your thoughts, and 1 minute reading verses from the Quran that relate to what you write about.",
+                      "One minute of journaling unlocks 3 exciting scratch cards filled with the wisdom of the Holy Quran, picked only for you.",
                       style: tt.bodyLarge?.copyWith(
                         color: cs.onSurface.withValues(alpha: 0.7),
                       ),

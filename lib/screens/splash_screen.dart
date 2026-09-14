@@ -2,17 +2,20 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../services/web_bridge.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../components/widgets/max_welcome_sheet.dart';
 import '../services/notification_service.dart';
 import '../services/version_check_service.dart';
 import '../services/app_bootstrap.dart';
 import '../services/analytics_service.dart';
 import '../screens/onboarding_screen.dart';
 import '../screens/main_screen.dart';
-import '../screens/paywall_gate_screen.dart';
 import '../services/local_trial_service.dart';
 import '../services/revenuecat_service.dart';
+import '../services/streak_gate.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -149,38 +152,133 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
       if (!mounted) return;
 
-      // Check if user needs to see paywall (trial active/expired, no subscription)
+      // Check if user needs to see paywall (trial/grace active/expired).
       final isSubscribed = await RevenueCatService.instance.isSubscribed();
+      // Track ever-subscribed so the first active->inactive flip arms the
+      // one-shot 3-day post-expiry grace (dismissable, like the trial).
+      try {
+        await LocalTrialService.syncSubscriptionState(isSubscribed);
+      } catch (_) {}
       if (!isSubscribed && mounted) {
-        final trialActive = await LocalTrialService.isActive();
+        // Enforce any pending server trial verdict (offline grace ends here).
+        // Bounded so a slow network never stalls the splash.
+        try {
+          await LocalTrialService.ensureServerTrial()
+              .timeout(const Duration(seconds: 4));
+        } catch (_) {}
+        if (!mounted) return;
+        // Never-subscribed + friend-boosted streak>3 → expired hard lock,
+        // even inside the soft window (or before trial start).
+        bool streakGate = false;
+        try {
+          streakGate = await StreakGate.shouldShowStreakGate();
+        } catch (_) {}
+        if (streakGate) {
+          try {
+            AnalyticsService.instance.logEvent(
+              'max_expired_shown',
+              params: const {'reason': 'streak_gate'},
+            );
+          } catch (_) {}
+          if (mounted) {
+            setState(() {
+              _targetScreen = _ExpiredGateHost(
+                onUnlocked: () => setState(() {
+                  _targetScreen = MainScreen(onReady: _onTargetReady);
+                }),
+              );
+            });
+          }
+        } else {
+        if (!mounted) return;
+        final softWindow = await LocalTrialService.isSoftWindow();
         final trialStarted = await LocalTrialService.hasStarted();
-        if (trialStarted && trialActive) {
-          // 3-day trial active — IAP-first: straight home, no email gate.
-          // The paywall surfaces via StorePaywall onboarding step, Get Max
-          // buttons, and the 280-char banner.
+        if (trialStarted && softWindow) {
+          // Trial active OR 3-day post-expiry grace — dismissable paywall
+          // on every cold launch.
           setState(() {
             _targetScreen = MainScreen(onReady: _onTargetReady);
           });
-        } else if (trialStarted && !trialActive) {
-          // Trial expired — show hard paywall
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            try {
+              final uid = FirebaseAuth.instance.currentUser?.uid;
+              if (uid != null && uid.isNotEmpty) {
+                await RevenueCatService.instance.identify(uid);
+              }
+              await LocalTrialService.notePaywallShown();
+              LocalTrialService.sheetOpen = true;
+              PaywallResult splashResult;
+              try {
+                splashResult =
+                    await RevenueCatService.instance.presentPaywall(
+                  displayCloseButton: true,
+                );
+              } finally {
+                LocalTrialService.sheetOpen = false;
+                LocalTrialService.lastSheetClosed = DateTime.now();
+              }
+              if (splashResult == PaywallResult.purchased ||
+                  splashResult == PaywallResult.restored) {
+                // Refresh first so the thank-you key carries the NEW
+                // purchase date (renewals/re-subs show again).
+                try {
+                  await RevenueCatService.instance.getCustomerInfo();
+                } catch (_) {}
+                await RevenueCatService.flagWelcomePending(
+                  forceShow: splashResult == PaywallResult.restored,
+                );
+              }
+            } catch (_) {}
+          });
+        } else if (trialStarted && !softWindow) {
+          // Trial expired and grace over — the rich expired sheet
+          // (thank-you + stats + teaser) IS the wall. Non-dismissable;
+          // unlocking routes home. No path into MainScreen without unlock.
           setState(() {
-            _targetScreen = PaywallGateScreen(
-              isDismissable: false,
-              onSubscribe: () => setState(() {
+            _targetScreen = _ExpiredGateHost(
+              onUnlocked: () => setState(() {
                 _targetScreen = MainScreen(onReady: _onTargetReady);
               }),
-              onDismiss: () {},
             );
           });
         } else {
           // No trial started yet (e.g. onboarding bypassed) — start it now
-          // so the 3-day clock is never silently absent. Idempotent: the
-          // onboarding finale calls startTrial() again as a no-op.
+          // and show the dismissable paywall so the user sees it immediately.
           await LocalTrialService.startTrial();
           setState(() {
             _targetScreen = MainScreen(onReady: _onTargetReady);
           });
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            try {
+              final uid = FirebaseAuth.instance.currentUser?.uid;
+              if (uid != null && uid.isNotEmpty) {
+                await RevenueCatService.instance.identify(uid);
+              }
+              await LocalTrialService.notePaywallShown();
+              LocalTrialService.sheetOpen = true;
+              PaywallResult firstLaunchResult;
+              try {
+                firstLaunchResult =
+                    await RevenueCatService.instance.presentPaywall(
+                  displayCloseButton: true,
+                );
+              } finally {
+                LocalTrialService.sheetOpen = false;
+                LocalTrialService.lastSheetClosed = DateTime.now();
+              }
+              if (firstLaunchResult == PaywallResult.purchased ||
+                  firstLaunchResult == PaywallResult.restored) {
+                try {
+                  await RevenueCatService.instance.getCustomerInfo();
+                } catch (_) {}
+                await RevenueCatService.flagWelcomePending(
+                  forceShow: firstLaunchResult == PaywallResult.restored,
+                );
+              }
+            } catch (_) {}
+          });
         }
+        } // end streakGate else
       } else {
         setState(() {
           _targetScreen = MainScreen(onReady: _onTargetReady);
@@ -219,6 +317,43 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         _isTargetReady = true;
         _checkTransition();
       });
+    }
+  }
+
+  /// Expired-trial host: presents the rich non-dismissable expired sheet
+  /// (thank-you + stats + teaser). Unlocking routes into the app.
+  ///
+  /// Sheet's Get Max runs the chain: default paywall first (dismissable);
+  /// the $1 exit offer follows on dismiss as the final offer.
+  Future<bool> _launchExpiredOfferChain() async {
+    try {
+      try {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null && uid.isNotEmpty) {
+          await RevenueCatService.instance.identify(uid);
+        }
+      } catch (_) {}
+      var result = await RevenueCatService.instance.presentPaywall(
+        displayCloseButton: true,
+      );
+      if (result != PaywallResult.purchased &&
+          result != PaywallResult.restored) {
+        try {
+          result = await RevenueCatService.instance.presentExitOffer(
+            displayCloseButton: true,
+          );
+        } catch (_) {}
+      }
+      if (!mounted) return false;
+      if (result == PaywallResult.purchased ||
+          result == PaywallResult.restored) {
+        await RevenueCatService.instance.getCustomerInfo();
+        await RevenueCatService.flagWelcomePending();
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -315,6 +450,52 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Minimal host behind the expired sheet: dark backdrop while the rich
+/// non-dismissable wall (thank-you + stats + teaser) is up.
+class _ExpiredGateHost extends StatefulWidget {
+  final VoidCallback onUnlocked;
+
+  const _ExpiredGateHost({required this.onUnlocked});
+
+  @override
+  State<_ExpiredGateHost> createState() => _ExpiredGateHostState();
+}
+
+class _ExpiredGateHostState extends State<_ExpiredGateHost> {
+  bool _shown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _show());
+  }
+
+  Future<void> _show() async {
+    if (_shown || !mounted) return;
+    _shown = true;
+    final splashState =
+        context.findAncestorStateOfType<_SplashScreenState>();
+    final unlocked = await MaxWelcomeSheet.showExpired(
+      context,
+      onGetMax: splashState?._launchExpiredOfferChain,
+    );
+    if (!mounted) return;
+    // Production: only a real unlock leaves the wall. Debug: a dismissed
+    // sheet also drops into the app for fast iteration.
+    if (unlocked || kDebugMode) widget.onUnlocked();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: ColoredBox(
+        color: Color(0xFF0D0D1A),
+        child: SizedBox.expand(),
       ),
     );
   }

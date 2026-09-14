@@ -2,46 +2,80 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 
-class StarTrailWidget extends StatelessWidget {
+/// Gamey star trail: exactly 5 stars arc from [start] to [end] along a
+/// half-parabola, staggered. [onStarArrived] fires once per star as it
+/// lands so the score can tick up live with each arrival.
+class StarTrailWidget extends StatefulWidget {
   final Offset start;
   final Offset end;
   final AnimationController controller;
+  final void Function(int index)? onStarArrived;
 
   const StarTrailWidget({
     required this.start,
     required this.end,
     required this.controller,
+    this.onStarArrived,
+    super.key,
   });
 
   @override
-  Widget build(BuildContext context) {
+  State<StarTrailWidget> createState() => _StarTrailWidgetState();
+}
+
+class _StarTrailWidgetState extends State<StarTrailWidget> {
+  static const int starCount = 5;
+  static const double _flight = 0.6;
+  static const double _launchGap = 0.08;
+
+  final Set<int> _arrived = {};
+  late final List<_StarParticle> _stars;
+
+  @override
+  void initState() {
+    super.initState();
     final rng = Random();
-    final stars = List.generate(18, (i) {
-      final t = i / 18;
-      final delay = t * 0.25;
-      final lateral = Offset(
-        (rng.nextDouble() - 0.5) * 24,
-        (rng.nextDouble() - 0.5) * 24,
-      );
+    _stars = List.generate(starCount, (i) {
       return _StarParticle(
-        delay: delay,
-        lateral: lateral,
+        launchAt: i * _launchGap,
+        lateral: Offset(
+          (rng.nextDouble() - 0.5) * 28,
+          (rng.nextDouble() - 0.5) * 28,
+        ),
+        size: 22.0 - i * 1.5,
       );
     });
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: controller,
+      animation: widget.controller,
       builder: (context, _) {
-        final progress = controller.value;
-        return Stack(
-          children: stars.map((p) {
-            final p0 = start;
-            final p3 = end;
-            final cp1 = Offset(p0.dx + 40, p0.dy + 100);
-            final cp2 = Offset(p3.dx - 80, p3.dy + 160);
+        final progress = widget.controller.value;
+        if (progress <= 0.0 && _arrived.isNotEmpty) {
+          _arrived.clear();
+        }
+        final p0 = widget.start;
+        final p3 = widget.end;
+        // Half-parabola: bow out sideways, land from below-ish.
+        final bow = Offset(-(p3.dx - p0.dx) * 0.15 - 50, 60);
+        final cp1 = Offset.lerp(p0, p3, 0.25)! + bow;
+        final cp2 = Offset.lerp(p0, p3, 0.75)! + bow;
 
-            final raw = (progress - p.delay).clamp(0.0, 1.0) / (1 - p.delay);
-            final tCurve = Curves.easeInOut.transform(raw.clamp(0.0, 1.0));
+        return Stack(
+          clipBehavior: Clip.none,
+          children: _stars.asMap().entries.map((entry) {
+            final i = entry.key;
+            final p = entry.value;
+            final raw = ((progress - p.launchAt) / _flight).clamp(0.0, 1.0);
+            final tCurve = Curves.easeInOut.transform(raw);
+            if (progress >= p.launchAt + _flight &&
+                _arrived.add(i)) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                widget.onStarArrived?.call(i);
+              });
+            }
 
             final pos = _cubicBezier(p0, cp1, cp2, p3, tCurve) + p.lateral;
 
@@ -55,11 +89,11 @@ class StarTrailWidget extends StatelessWidget {
               left: pos.dx - 10,
               top: pos.dy - 10,
               child: Opacity(
-                opacity: opacity * (raw < 0 ? 0 : 1),
+                opacity: opacity * (raw <= 0 ? 0 : 1),
                 child: Icon(
                   Icons.star_rounded,
                   color: AppTheme.starGold,
-                  size: 20,
+                  size: p.size,
                 ),
               ),
             );
@@ -79,8 +113,13 @@ class StarTrailWidget extends StatelessWidget {
 }
 
 class _StarParticle {
-  final double delay;
+  final double launchAt;
   final Offset lateral;
+  final double size;
 
-  const _StarParticle({required this.delay, required this.lateral});
+  const _StarParticle({
+    required this.launchAt,
+    required this.lateral,
+    required this.size,
+  });
 }

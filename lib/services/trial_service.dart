@@ -38,21 +38,47 @@ class TrialStatus {
 }
 
 class TrialService {
+  static const String _statusCacheKey = 'trial_status_cache_json';
   TrialStatus? _cached;
 
   Future<TrialStatus> fetchStatus() async {
-    final headers = await ApiClient.authHeaders();
-    final response = await http.get(
-      Uri.parse('${AppConstants.backendUrl}/trial-status'),
-      headers: headers,
-    );
-    if (response.statusCode != 200) {
-      debugPrint('[TrialService] Server returned ${response.statusCode}, using fallback');
-      return TrialStatus.fallback();
+    try {
+      final headers = await ApiClient.authHeaders();
+      final response = await http.get(
+        Uri.parse('${AppConstants.backendUrl}/trial-status'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) {
+        debugPrint('[TrialService] Server returned ${response.statusCode}, using cache');
+        return _cachedOrFallback();
+      }
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      _cached = TrialStatus.fromJson(json);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_statusCacheKey, jsonEncode(json));
+      } catch (_) {}
+      return _cached!;
+    } catch (_) {
+      // Offline: last-known server status (short grace), never a fresh grant.
+      return _cachedOrFallback();
     }
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
-    _cached = TrialStatus.fromJson(json);
-    return _cached!;
+  }
+
+  /// Offline grace: last-known server verdict. Only when nothing was ever
+  /// synced (genuine first-run offline) do we allow the local onboarding
+  /// trial — the pending server sync enforces the device claim next online.
+  Future<TrialStatus> _cachedOrFallback() async {
+    if (_cached != null) return _cached!;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_statusCacheKey);
+      if (raw != null) {
+        _cached = TrialStatus.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        return _cached!;
+      }
+    } catch (_) {}
+    return TrialStatus.fallback();
   }
 
   static Future<TrialStatus> getStatus() async {

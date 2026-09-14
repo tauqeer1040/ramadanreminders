@@ -10,6 +10,7 @@ const USER_ALTER_COLUMNS = [
   ['subscription_product_id', 'TEXT'],
   ['subscription_expires_at', 'INTEGER'],
   ['subscription_trial_started_at', 'INTEGER'],
+  ['trial_device_id', 'TEXT'],
   ['app_version', 'TEXT'],
   ['grace_ms', 'INTEGER DEFAULT 1800000'],
   ['daily_award_date', 'TEXT'],
@@ -37,6 +38,8 @@ const JOURNAL_AI_ALTER_COLUMNS = [
 
 const TAG_MAP_CREATE_COLUMNS = ['id', 'user_id', 'tag', 'journal_ids', 'journal_refs', 'updated_at'];
 const TAG_MAP_ALTER_COLUMNS = [['journal_refs', "TEXT DEFAULT '[]'"]];
+const DECK_CREATE_COLUMNS = ['id', 'user_id', 'journal_id', 'deck_date', 'status', 'cards_json', 'revealed_cards', 'served_at', 'revealed_at', 'created_at', 'updated_at'];
+const DECK_ALTER_COLUMNS = [['revealed_cards', "TEXT DEFAULT '[]'"]];
 
 const CREATE_STATEMENTS = [
   `
@@ -79,6 +82,7 @@ const CREATE_STATEMENTS = [
       deck_date TEXT,
       status TEXT NOT NULL DEFAULT 'building',
       cards_json TEXT,
+      revealed_cards TEXT DEFAULT '[]',
       served_at DATETIME,
       revealed_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -531,7 +535,8 @@ function planMissingDdl(probe) {
     ...missingColumnAlters(state, 'journal_entries', JOURNAL_CREATE_COLUMNS, JOURNAL_ALTER_COLUMNS),
     ...missingColumnAlters(state, 'journal_ai', JOURNAL_AI_CREATE_COLUMNS, JOURNAL_AI_ALTER_COLUMNS),
     ...missingColumnAlters(state, 'user_tag_maps', TAG_MAP_CREATE_COLUMNS, TAG_MAP_ALTER_COLUMNS),
-    ...missingColumnAlters(state, 'user_task_tag_maps', TAG_MAP_CREATE_COLUMNS, TAG_MAP_ALTER_COLUMNS)
+    ...missingColumnAlters(state, 'user_task_tag_maps', TAG_MAP_CREATE_COLUMNS, TAG_MAP_ALTER_COLUMNS),
+    ...missingColumnAlters(state, 'insight_decks', DECK_CREATE_COLUMNS, DECK_ALTER_COLUMNS)
   );
   return missing;
 }

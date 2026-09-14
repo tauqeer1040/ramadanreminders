@@ -6,11 +6,13 @@ import 'deferred_lottie.dart';
 class StreakGraph extends StatefulWidget {
   final int streak;
   final double size;
+  final bool shieldActive;
 
   const StreakGraph({
     super.key,
     required this.streak,
     this.size = 280,
+    this.shieldActive = false,
   });
 
   @override
@@ -95,6 +97,28 @@ class _StreakGraphState extends State<StreakGraph> with SingleTickerProviderStat
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              if (widget.shieldActive) ...[
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(
+                      Icons.shield_rounded,
+                      size: 12,
+                      color: AppTheme.neonPurple,
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      'streak shield active',
+                      style: TextStyle(
+                        color: AppTheme.neonPurple,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

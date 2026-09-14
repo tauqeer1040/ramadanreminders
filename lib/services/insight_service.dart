@@ -213,6 +213,60 @@ class InsightService {
     } catch (_) {}
   }
 
+  /// Pulls server-held reveal acks (every reveal POSTs one) into the local
+  /// revealed set, so Quran progress in stats survives reinstalls, new
+  /// devices and Google sign-ins. Union-only: local ids are never dropped.
+  /// Returns the number of ids merged. Never throws.
+  static Future<int> pullRevealedFromServer() async {
+    final user = _auth.currentUser;
+    if (user == null || user.isAnonymous) return 0;
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$_backendUrl/user/${user.uid}/decks/all'),
+            headers: await ApiClient.authHeaders(),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) return 0;
+      final body = jsonDecode(response.body);
+      final decks = body is Map<String, dynamic>
+          ? body['decks']
+          : (body is List ? body : null);
+      if (decks is! List) return 0;
+      final remote = <String>{};
+      for (final d in decks) {
+        if (d is! Map) continue;
+        // Partial progress recorded on every ack, any deck status.
+        final progress = d['revealedCards'];
+        if (progress is List) {
+          for (final id in progress) {
+            final s = (id as Object?)?.toString().trim() ?? '';
+            if (s.isNotEmpty) remote.add(s);
+          }
+        }
+        if ((d['status'] as String?) != 'revealed') continue;
+        final cards = d['insightCards'];
+        if (cards is! List) continue;
+        for (final c in cards) {
+          if (c is! Map) continue;
+          final id = (c['id'] as String?)?.trim() ?? '';
+          if (id.isNotEmpty) remote.add(id);
+        }
+      }
+      if (remote.isEmpty) return 0;
+      final prefs = await SharedPreferences.getInstance();
+      final local = await loadRevealedIds();
+      final before = local.length;
+      local.addAll(remote);
+      if (local.length != before) {
+        await prefs.setStringList(revealedIdsKey, local.toList());
+      }
+      return local.length - before;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   static Future<Map<String, dynamic>?> _loadCachedScratchBatch() async {
     try {
       final prefs = await SharedPreferences.getInstance();

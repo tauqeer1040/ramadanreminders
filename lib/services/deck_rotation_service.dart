@@ -7,20 +7,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api_client.dart';
 import '../core/constants.dart';
+import 'deck_queue_logic.dart' show isDeckFullyRevealed;
 import 'insight_service.dart' show InsightCard, DeckResult;
 
 /// Client-side insight rotation.
 ///
 /// Model (product decision):
 ///   * The device caches ALL the user's AI decks once (server `/decks/all`,
-///     newest journal first) and rotates locally — the server is only the
-///     source of truth for content, never for daily serving state.
-///   * Every launch shows a different deck of 3 insights, newest-first,
-///     looping back to the start after the list is exhausted.
-///   * Max 3 deck *changes* per local day; after that, launches cycle among
-///     the 3 decks already shown today.
-///   * Decks the user is mid-reveal are protected (not rotated away) until
-///     fully revealed.
+///     newest journal first) — the server is the source of truth for content.
+///   * Fully revealed + resume/launch → advance to the newest not-yet-revealed
+///     deck, with fresh scratch covers. All decks consumed → stay put.
+///   * Untouched + already on newest → sticky (no pointless cycling).
+///   * Untouched older deck with newer content → adopt the newest.
+///   * Mid-reveal decks are protected (never yanked) until fully revealed.
+///   * Tab switches never rotate; only cold start + background→foreground
+///     resume re-evaluate (caller-side).
 ///
 /// Storage is a single JSON blob in SharedPreferences, written atomically.
 class DeckRotationService {
@@ -140,14 +141,20 @@ class DeckRotationService {
 
   /// Deck to show right now.
   ///
-  ///  * Current deck protected (user mid-reveal): returns it unchanged
-  ///    (no cap consumed).
-  ///  * First paint of the day: advances to the next unseen deck (change 1
-  ///    of 3), unless the app was reopened on the same deck without reveals.
-  ///  * Cap consumed: cycles among today's shown decks, in order.
   ///  * Empty cache: returns null (caller falls back to verse decks).
+  ///  * First paint (nothing on screen): adopts the newest deck.
+  ///  * Mid-reveal (partially scratched): returns the current deck unchanged
+  ///    (never yanked), even when a newer deck arrived in the background.
+  ///  * Fully revealed: advances to the newest deck the user has NOT fully
+  ///    revealed yet (excluding the current one). The new deck's card ids
+  ///    are absent from the revealed set, so it paints with fresh scratch
+  ///    covers. When every deck is consumed, stays on the current deck.
+  ///  * Untouched: sticky when already on the newest; otherwise adopts the
+  ///    newest (a new journal landed while the user never started the old).
   ///
   /// [revealedCardIds] and [currentCards] describe what's on screen.
+  /// Tab switches must NOT call this — only cold start and
+  /// background→foreground resume.
   static Future<DeckResult?> currentDeckForLaunch({
     required Set<String> revealedCardIds,
     required List<InsightCard> currentCards,
@@ -158,80 +165,114 @@ class DeckRotationService {
     final decks = (state['decks'] as List? ?? [])
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
+    if (decks.isEmpty) return null;
 
-    // Protected: user is mid-reveal (started but not finished) on a real
-    // deck — rotation never yanks it.
     final curId = currentDeckId;
     final hasContent = currentCards.isNotEmpty;
     final anyRevealed = revealedCardIds.isNotEmpty && !fullyRevealed;
+    final newest = decks.first;
+    final newestId = newest['deckId'] as String;
+
+    Map<String, dynamic>? byId(String id) {
+      for (final d in decks) {
+        if (d['deckId'] == id) return d;
+      }
+      return null;
+    }
+
+    Set<String> cardIdsOf(Map<String, dynamic> payload) {
+      return ((payload['insightCards'] as List? ?? [])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .map((m) => (m['id'] as String?) ?? '')
+              .where((id) => id.isNotEmpty))
+          .toSet();
+    }
+
+    // Protected: user is mid-reveal (started but not finished) — rotation
+    // never yanks it, even when a newer deck arrived while in background.
     if (hasContent &&
         anyRevealed &&
         curId != null &&
         curId.startsWith('deck_') &&
-        decks.any((d) => d['deckId'] == curId)) {
-      return _result(decks.firstWhere((d) => d['deckId'] == curId));
+        byId(curId) != null) {
+      final current = byId(curId)!;
+      state['currentDeckId'] = current['deckId'];
+      await _save(state);
+      return _result(current);
     }
 
-    int cursor = (state['cursor'] as int?) ?? 0;
-    if (decks.isEmpty) return null;
-
-    final changesToday = (state['changesToday'] as int?) ?? 0;
-
-    // Same-deck relaunch: no reveals since last time → don't burn a change.
-    if (hasContent &&
-        !anyRevealed &&
-        curId != null &&
-        state['currentDeckId'] == curId &&
-        changesToday > 0) {
-      return _result(decks.firstWhere((d) => d['deckId'] == curId));
+    // First paint or current deck gone (deleted server-side): adopt newest.
+    if (!hasContent || curId == null || byId(curId) == null) {
+      await _noteAdopted(state, decks, newestId,
+          isChange: curId != null && curId != newestId);
+      return _result(newest);
     }
 
-    if (changesToday >= decksPerDay) {
-      // Cap consumed: cycle among the decks already shown today.
+    final curCardIds = cardIdsOf(byId(curId)!);
+    final curUntouched = curCardIds.every((id) => !revealedCardIds.contains(id));
+    final curFull = isDeckFullyRevealed(curCardIds, revealedCardIds);
+
+    // Fully revealed: move on to the newest not-yet-revealed deck (not the
+    // current one). New card ids are absent from the revealed set, so the
+    // deck paints with fresh scratch covers — the "revealed state reset".
+    // Nothing newer/unseen → stay put rather than cycling pointlessly.
+    if (curFull) {
+      for (final d in decks) {
+        final id = d['deckId'] as String;
+        if (id == curId) continue;
+        if (!isDeckFullyRevealed(cardIdsOf(d), revealedCardIds)) {
+          await _noteAdopted(state, decks, id, isChange: true);
+          return _result(d);
+        }
+      }
+      state['currentDeckId'] = curId;
+      await _save(state);
+      return _result(byId(curId)!);
+    }
+
+    // Untouched and already on the newest: sticky (no new content to show).
+    if (curUntouched) {
+      if (curId == newestId) {
+        state['currentDeckId'] = curId;
+        await _save(state);
+        return _result(newest);
+      }
+      // Untouched older deck with newer content available: adopt newest.
+      await _noteAdopted(state, decks, newestId, isChange: true);
+      return _result(newest);
+    }
+
+    // Partially revealed but reached here (e.g. caller flags disagree with
+    // the cache): protect the current deck.
+    state['currentDeckId'] = curId;
+    await _save(state);
+    return _result(byId(curId)!);
+  }
+
+  /// Bookkeeping for adopting [deckId]: points the cursor at it, records it
+  /// in today's window, and bumps the change counter only on a real change.
+  static Future<void> _noteAdopted(
+    Map<String, dynamic> state,
+    List<Map<String, dynamic>> decks,
+    String deckId, {
+    required bool isChange,
+  }) async {
+    final idx = decks.indexWhere((d) => d['deckId'] == deckId);
+    state['cursor'] = idx < 0 ? 0 : (idx + 1) % decks.length;
+    state['currentDeckId'] = deckId;
+    if (isChange) {
+      final changesToday = (state['changesToday'] as int?) ?? 0;
+      state['changesToday'] = changesToday + 1;
       final todayIds = (state['todayDeckIds'] as List? ?? [])
           .map((e) => e as String)
           .toList();
-      if (todayIds.isNotEmpty) {
-        // Next deck in today's order, wrapping; keeps launches "different"
-        // without consuming anything new.
-        final idx = todayIds.indexOf(curId ?? '');
-        final nextId = todayIds[(idx < 0 ? 0 : idx + 1) % todayIds.length];
-        final payload = decks.firstWhere(
-          (d) => d['deckId'] == nextId,
-          orElse: () => decks.first,
-        );
-        state['currentDeckId'] = payload['deckId'];
-        await _save(state);
-        return _result(payload);
+      if (!todayIds.contains(deckId)) todayIds.add(deckId);
+      while (todayIds.length > decksPerDay) {
+        todayIds.removeAt(0);
       }
+      state['todayDeckIds'] = todayIds;
     }
-
-    // Normal advance: cursor forward one deck, loop the list.
-    // When the cache was refilled (new decks at the front), the cursor
-    // naturally lands on fresh content first — newest-first order.
-    cursor = cursor % decks.length;
-    var payload = decks[cursor];
-    // Never show the same deck twice in a row across a change.
-    if (payload['deckId'] == curId && decks.length > 1) {
-      cursor = (cursor + 1) % decks.length;
-      payload = decks[cursor];
-    }
-    state['cursor'] = (cursor + 1) % decks.length;
-    state['changesToday'] = changesToday + 1;
-    final todayIds = (state['todayDeckIds'] as List? ?? [])
-        .map((e) => e as String)
-        .toList();
-    if (!todayIds.contains(payload['deckId'])) {
-      todayIds.add(payload['deckId'] as String);
-    }
-    // Keep at most the last decksPerDay ids (cycling window).
-    while (todayIds.length > decksPerDay) {
-      todayIds.removeAt(0);
-    }
-    state['todayDeckIds'] = todayIds;
-    state['currentDeckId'] = payload['deckId'];
     await _save(state);
-    return _result(payload);
   }
 
   /// Mark the on-screen deck (syncs bookkeeping when the UI adopts a deck

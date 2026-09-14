@@ -4,7 +4,7 @@
 // with its error preserved.
 const db = require('./db');
 const { encrypt, decrypt } = require('../encryption');
-const { sendEmail, delightData, delightHtml } = require('../services/email');
+const { sendEmail, delightData, delightHtml, maxRecapData, maxRecapHtml, MAX_RECAP_SUBJECT } = require('../services/email');
 
 const WORKER_INTERVAL_MS = Math.max(
   15000,
@@ -15,7 +15,7 @@ const BACKOFFS_MIN = [1, 10, 60, 360];
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const EMAIL_SUBJECT = 'Finish setting up Meowmin — your trial is ready';
 
-async function enqueueEmailJob({ user_id, email, kind, tok, tok_hash, snapshot, display_name }) {
+async function enqueueEmailJob({ user_id, email, kind, tok, tok_hash, snapshot, display_name, notBefore }) {
   const now = Date.now();
   let tok_enc = null;
   try {
@@ -25,12 +25,17 @@ async function enqueueEmailJob({ user_id, email, kind, tok, tok_hash, snapshot, 
     sql: `INSERT INTO email_jobs
           (user_id, email, kind, tok_hash, tok_enc, snapshot, display_name, status, attempts, next_retry_at, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?)`,
-    args: [user_id, email, kind || 'mint', tok_hash || null, tok_enc, snapshot ? JSON.stringify(snapshot) : null, display_name || null, now, now],
+    args: [user_id, email, kind || 'mint', tok_hash || null, tok_enc, snapshot ? JSON.stringify(snapshot) : null, display_name || null, notBefore || now, now],
   });
   return Number(r.lastInsertRowid);
 }
 
 async function attemptJob(job) {
+  if (job.kind === 'max_recap') {
+    const d = await maxRecapData(job.user_id);
+    const html = maxRecapHtml({ name: job.display_name, email: job.email, d });
+    return sendEmail({ to: job.email, subject: MAX_RECAP_SUBJECT, html });
+  }
   let snapshot;
   try {
     snapshot = job.snapshot ? JSON.parse(job.snapshot) : undefined;
@@ -81,7 +86,9 @@ async function processEmailQueue() {
   }
 
   for (const job of rows) {
-    if (now - Number(job.created_at || now) > MAX_AGE_MS) {
+    // Age is measured from the last scheduled time so delayed jobs (e.g. a
+    // 24h-delayed recap) aren't born dead; each retry re-arms the window.
+    if (now - Number(job.next_retry_at || job.created_at || now) > MAX_AGE_MS) {
       await db.execute({
         sql: `UPDATE email_jobs SET status = 'dead', last_error = ? WHERE id = ?`,
         args: ['expired after 24h of retries', job.id],
@@ -156,6 +163,39 @@ async function attemptNow(jobId) {
   }
 }
 
+// Enqueue the 24h-delayed Max value-recap email. Deduplicated: at most one
+// recap per user per 30 days. Skipped silently when no email is on file
+// (the welcome sheet captures it later and re-triggers via the endpoint).
+async function enqueueMaxRecap(user_id) {
+  try {
+    const recent = await db.execute({
+      sql: `SELECT id FROM email_jobs WHERE user_id = ? AND kind = 'max_recap'
+            AND status IN ('queued','sending','sent') AND created_at > ? LIMIT 1`,
+      args: [user_id, Date.now() - 30 * 24 * 60 * 60 * 1000],
+    });
+    if (recent.rows.length) return null;
+    const u = await db.execute({
+      sql: `SELECT email, display_name FROM users WHERE id = ?`,
+      args: [user_id],
+    });
+    const row = u.rows[0];
+    if (!row?.email) return null;
+    let email = null;
+    try { email = decrypt(row.email, user_id); } catch (_) {}
+    if (!email || !String(email).includes('@')) return null;
+    return enqueueEmailJob({
+      user_id,
+      email: String(email),
+      kind: 'max_recap',
+      display_name: row.display_name || null,
+      notBefore: Date.now() + 24 * 60 * 60 * 1000,
+    });
+  } catch (e) {
+    console.error('[email-queue] enqueueMaxRecap failed:', e.message);
+    return null;
+  }
+}
+
 async function latestJobStatus(user_id) {
   try {
     const r = await db.execute({
@@ -193,6 +233,7 @@ function startEmailWorker() {
 
 module.exports = {
   enqueueEmailJob,
+  enqueueMaxRecap,
   attemptNow,
   processEmailQueue,
   startEmailWorker,

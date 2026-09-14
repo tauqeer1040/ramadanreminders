@@ -7,7 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/growth_prompt_service.dart';
+import '../services/max_status.dart';
 import '../services/revenuecat_service.dart';
+import '../components/widgets/max_welcome_sheet.dart';
 import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import '../theme/app_theme.dart';
 import 'onboarding_screen.dart';
@@ -253,22 +255,6 @@ class _SubscribeButton extends StatefulWidget {
 }
 
 class _SubscribeButtonState extends State<_SubscribeButton> {
-  late Future<bool> _subscribed;
-
-  @override
-  void initState() {
-    super.initState();
-    _subscribed = _loadSubscribed();
-  }
-
-  Future<bool> _loadSubscribed() async {
-    try {
-      return await RevenueCatService.instance.isSubscribed();
-    } catch (_) {
-      return false;
-    }
-  }
-
   /// IAP-first: open the RevenueCat paywall directly (no email gating).
   Future<void> _openMaxPaywall(BuildContext context) async {
     try {
@@ -292,15 +278,17 @@ class _SubscribeButtonState extends State<_SubscribeButton> {
       if ((result == PaywallResult.purchased ||
               result == PaywallResult.restored) &&
           context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Welcome to Max!'),
-            duration: Duration(seconds: 2),
-          ),
+        try {
+          await RevenueCatService.instance.getCustomerInfo();
+        } catch (_) {}
+        await RevenueCatService.flagWelcomePending(
+          forceShow: result == PaywallResult.restored,
         );
-        setState(() {
-          _subscribed = _loadSubscribed();
-        });
+        if (context.mounted) {
+          await MaxWelcomeSheet.showIfPending(context);
+        }
+        // Rebuild: MaxStatusService.current() re-resolves on next build.
+        if (context.mounted) setState(() {});
       }
     } catch (_) {
       if (context.mounted) {
@@ -316,11 +304,14 @@ class _SubscribeButtonState extends State<_SubscribeButton> {
 
   @override
   Widget build(BuildContext context) {
-    // Visible to everyone WITHOUT an active membership (trial included).
-    return FutureBuilder<bool>(
-      future: _subscribed,
+    // Visible only WITHOUT an active membership. Active members (including
+    // the 3-day expiry window) see nothing — no Get Max button.
+    return FutureBuilder<MaxStatus>(
+      future: MaxStatusService.current(),
       builder: (context, snap) {
-        if (snap.data == true) return const SizedBox.shrink();
+        if (snap.data == null || !snap.data!.showUpsells) {
+          return const SizedBox.shrink();
+        }
         return DuoButton(
           onPressed: () => _openMaxPaywall(context),
           backgroundColor: Colors.white,

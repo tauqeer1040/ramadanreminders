@@ -34,16 +34,26 @@ class _WebPaywallScreenState extends State<WebPaywallScreen> {
   int _page = 0; // 0 = overview, 1 = selected-plan inform
 
   // Live Paddle pri IDs mirrored from pricing.astro — used for web deep-link
+  // $1-first-month intro is EXIT-ONLY (expired_winback offering). The default
+  // offering always links the $15 standard monthly price.
   static const _priMap = {
-    r'$rc_monthly': 'pri_01m1h2jbnv7d7xs7eb8a9bswav',
+    r'$rc_monthly': 'pri_01m1h2jbrwd3q4j4bj7cqcfd2v',
     r'$rc_three_month': 'pri_01m1h2jqbb7e3gjym5kqf88b54',
     r'$rc_annual': 'pri_01m1h2jqe88brc2grgnr20jv80',
     r'$rc_lifetime': 'pri_01m1h2jqghnv9yj6k50fqf0wtr',
     r'$rc_custom_streak_shield': 'pri_01m1h2jqjntx6pec1arz3fzw48',
   };
 
+  static const _exitMonthlyIntroPri = 'pri_01m1h2jbnv7d7xs7eb8a9bswav';
+
+  bool get _isExitOffering =>
+      (_offering?.identifier == 'expired_winback') ||
+      (widget.offering?.identifier == 'expired_winback');
+
   String? _priForPackage(Package p) {
     final id = p.identifier;
+    // Exit offer only: $1 first month. Everywhere else: standard $15.
+    if (id == r'$rc_monthly' && _isExitOffering) return _exitMonthlyIntroPri;
     if (_priMap.containsKey(id)) return _priMap[id];
     final lower = id.toLowerCase();
     if (lower.contains('three_month') || lower.contains('quarterly')) return _priMap[r'$rc_three_month'];

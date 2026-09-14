@@ -39,10 +39,10 @@ class _StreakShieldBadgeState extends State<StreakShieldBadge> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: AppTheme.neonPurple.withValues(alpha: 0.15),
+              color: const Color(0xFF2A2A2A),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: AppTheme.neonPurple.withValues(alpha: 0.4),
+                color: Colors.white.withValues(alpha: 0.12),
                 width: 1,
               ),
             ),

@@ -172,6 +172,13 @@ class AppBootstrap {
       JournalRemoteStorage.pullAllJournalsToLocal()
           .then((_) => JournalService.notifyJournalsChanged())
           .catchError((e) => debugPrint('[AppBootstrap] journal pull failed: $e'));
+      // Same returning-user restore as post-sign-in: profile names (fixes
+      // notification headings), stars, unlocks, shields, streak.
+      UserService.restoreProfile().then((ok) {
+        if (!ok) debugPrint('[AppBootstrap] profile restore returned false');
+      }).catchError((e) {
+        debugPrint('[AppBootstrap] profile restore failed: $e');
+      });
     }
 
     // Warm encrypted cache now that crypto key is available.

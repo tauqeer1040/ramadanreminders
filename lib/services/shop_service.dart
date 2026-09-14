@@ -27,8 +27,7 @@ class ShopService {
   }
 
   static List<ShopItem> _fallbackItems() {
-    const names = [
-      'Delicate Translucent Flower',
+    const names = [      'Delicate Translucent Flower',
       'Orange Bloom',
       'Ethereal Flower in Motion',
       'Ethereal Flower',
@@ -50,7 +49,7 @@ class ShopService {
       'Scratch Card 8',
       'Scratch Card 9',
     ];
-    return List.generate(21, (i) {
+    final items = List.generate(21, (i) {
       final id = i + 1;
       return ShopItem(
         id: 'shop_$id',
@@ -61,6 +60,20 @@ class ShopService {
         localAsset: '',
       );
     });
+    // Streak Shield consumable — always first, real-money via Play Billing.
+    items.insert(
+      0,
+      const ShopItem(
+        id: 'shield',
+        name: 'Streak Shield',
+        thumbnailUrl: 'assets/shop/thumbs/streak_shield.webp',
+        imageUrl: 'assets/shop/full/streak_shield.webp',
+        cost: 0,
+        priceLabel: '\$0.99',
+        pinned: true,
+      ),
+    );
+    return items;
   }
 
   static Future<Set<String>> getUnlockedIds() async {

@@ -81,7 +81,7 @@ module.exports = function (app, apiLimiter) {
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors });
     }
-    const { displayName, email, journals } = parsed.data;
+    const { displayName, email, journals, force } = parsed.data;
     const uid = req.uid;
 
     try {
@@ -100,7 +100,7 @@ module.exports = function (app, apiLimiter) {
           skipped.push({ id: journal.id, reason: 'text_too_long', limit: FREE_CHAR_LIMIT });
           continue;
         }
-        const result = await upsertJournal(uid, { id: journal.id, text: trimmed });
+        const result = await upsertJournal(uid, { id: journal.id, text: trimmed }, { force: force === true });
         syncedCount += 1;
         if (result.isNew) newCount += 1;
         if (result.changed) changedCount += 1;

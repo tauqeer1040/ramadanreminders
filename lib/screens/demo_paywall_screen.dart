@@ -13,8 +13,8 @@ class DemoPaywallScreen extends StatelessWidget {
 
   static const _packages = <Map<String, String>>[
     {'name': 'Weekly', 'price': '\$4.99 / week', 'blurb': 'Flexible, cancel anytime'},
-    {'name': 'Monthly', 'price': '\$14.99 / month', 'blurb': 'Most flexible plan'},
-    {'name': 'Annual', 'price': '\$99.99 / year', 'blurb': 'Best value — save 44%'},
+    {'name': 'Monthly', 'price': '\$15.00 / month', 'blurb': 'Most flexible plan'},
+    {'name': 'Annual', 'price': '\$99.00 / year', 'blurb': 'Best value — save 44%'},
   ];
 
   @override

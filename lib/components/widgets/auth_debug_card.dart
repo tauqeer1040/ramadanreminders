@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import '../../services/auth_debug_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/deck_rotation_service.dart';
@@ -6,7 +7,12 @@ import '../../services/notification_service.dart';
 import '../../services/push_reminder_service.dart';
 
 class AuthDebugCard extends StatefulWidget {
-  const AuthDebugCard({super.key});
+  /// Key attached to the trail-test button so callers can measure it.
+  final GlobalKey? trailButtonKey;
+  /// Fires the debug star-trail overlay (pure visual, no star writes).
+  final VoidCallback? onTrailTest;
+
+  const AuthDebugCard({super.key, this.trailButtonKey, this.onTrailTest});
 
   @override
   State<AuthDebugCard> createState() => _AuthDebugCardState();
@@ -276,6 +282,18 @@ class _AuthDebugCardState extends State<AuthDebugCard> {
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),
+                  TextButton.icon(
+                    key: widget.trailButtonKey,
+                    onPressed: widget.onTrailTest,
+                    icon: const Icon(Icons.auto_awesome_rounded, size: 14),
+                    label: const Text('Star Trail Test', style: TextStyle(fontSize: 11)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.starGold,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   // ── Deck rotation debug ──
                   InkWell(
@@ -327,6 +345,7 @@ class _AuthDebugCardState extends State<AuthDebugCard> {
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
                         ),
+
                       ],
                     ),
                     const SizedBox(height: 4),

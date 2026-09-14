@@ -14,6 +14,10 @@ import 'browser_detector.dart';
 import 'crypto_service.dart';
 import 'journal_remote_storage.dart';
 import 'journal_service.dart';
+import 'journal_sync_service.dart';
+import 'insight_service.dart';
+import 'email_continue_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'revenuecat_service.dart' deferred as rc;
 
 class AuthService {
@@ -189,16 +193,58 @@ class AuthService {
   }
 
   /// Post-Google-sign-in housekeeping shared by popup, redirect, and boot
-  /// resume: backend sync, crypto key, journal pull, analytics, RevenueCat.
+  /// resume: push local progress first (backup under the new uid), then
+  /// migrate + pull everything back, so a sign-in can never shrink local
+  /// state and returning users see their data reflected immediately.
   static Future<void> _completeGoogleSignIn(
     User user, {
     required String analyticsMethod,
   }) async {
     final debug = AuthDebugService();
+    // Detect an anon -> existing-Google uid switch (credential-already-in-use
+    // fallback): entries synced under the anon uid must be re-homed.
+    bool uidSwitched = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final last = prefs.getString('last_auth_uid') ?? '';
+      uidSwitched = last.isNotEmpty && last != user.uid;
+    } catch (_) {}
     try {
       await UserService.syncUser(user);
     } catch (e) {
       debug.logEvent('SYNC_ERR', 'Backend sync failed: $e');
+    }
+    try {
+      // Backup first: max/union merge, so an older Google row can never
+      // shrink device-local stars, unlocks or shields.
+      final pushed = await UserService.pushLocalState();
+      if (!pushed) {
+        debug.logEvent('SYNC_ERR', 'Local-state push returned false');
+      }
+    } catch (e) {
+      debug.logEvent('SYNC_ERR', 'Local-state push failed: $e');
+    }
+    try {
+      // Migrate journals to the new uid when switched (force re-homes rows
+      // with correct per-uid encryption), else just flush pending syncs.
+      if (uidSwitched) {
+        await JournalSyncService.markAllForSync();
+      }
+      await JournalSyncService.syncNow(force: uidSwitched);
+    } catch (e) {
+      debug.logEvent('SYNC_ERR', 'Journal push failed: $e');
+    }
+    try {
+      // Returning users (skipped onboarding, new device, reinstall):
+      // pull profile, wallet, shields and streak into local prefs so
+      // names, cat, stars, unlocks and notification copy restore.
+      // All restores are max/union — never overwrite-down.
+      final restored = await UserService.restoreProfile();
+      if (!restored) {
+        debug.logEvent('RESTORE_SKIP', 'Profile restore returned false');
+      }
+    } catch (e) {
+      debug.logEvent('SYNC_ERR', 'Profile restore failed: $e');
     }
     try {
       await CryptoService.fetchAndStoreKey();
@@ -211,6 +257,13 @@ class AuthService {
     } catch (e) {
       debug.logEvent('SYNC_ERR', 'Journal pull failed: $e');
     }
+    try {
+      // Server-held Quran reveal acks -> local revealed set (stats progress).
+      await InsightService.pullRevealedFromServer();
+      JournalService.notifyJournalsChanged();
+    } catch (e) {
+      debug.logEvent('SYNC_ERR', 'Revealed pull failed: $e');
+    }
     AnalyticsService.instance.logEvent('sign_in', params: {'method': analyticsMethod});
     try {
       await rc.loadLibrary();
@@ -218,6 +271,18 @@ class AuthService {
     } catch (e) {
       debug.logEvent('RC_ERR', 'RevenueCat identify failed: $e');
     }
+    try {
+      // Welcome email on every Google sign-in path (profile + onboarding).
+      // Server dedupes auto-sends daily; the onboarding page additionally
+      // mints a rich snapshot email (also deduped).
+      await EmailContinueService.sendWelcome();
+    } catch (e) {
+      debug.logEvent('SYNC_ERR', 'Welcome email failed: $e');
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_auth_uid', user.uid);
+    } catch (_) {}
     debug.logSignInSuccess(details: {
       'uid': user.uid,
       'email': user.email ?? 'none',

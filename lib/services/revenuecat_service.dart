@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants.dart';
 import '../core/api_client.dart';
 import '../core/app_navigator.dart';
@@ -19,22 +20,14 @@ class RevenueCatService {
 
   static const String entitlementId = 'Meowmin Max';
 
-  // Live keys MUST be injected via --dart-define.
-  // No sandbox defaults ship in release — fail fast if missing.
-  // For local dev without flags, set REVENUECAT_API_KEY / REVENUECAT_WEB_API_KEY
-  // in your shell or use the sandbox values explicitly.
-  static const String _defaultApiKey = String.fromEnvironment(
-    'REVENUECAT_API_KEY_FALLBACK',
-    defaultValue: '',
-  );
+  // PROD ONLY — no sandbox. Public SDK keys are safe to ship in the app.
+  // --dart-define=REVENUECAT_API_KEY / REVENUECAT_WEB_API_KEY still override
+  // when provided, otherwise the hardcoded production keys below are used.
+  static const String _defaultApiKey =
+      'goog_lmIhhalxbfnLdzYwBuzpiPSoelu';
 
-  static const String _defaultWebApiKey = String.fromEnvironment(
-    'REVENUECAT_WEB_API_KEY_FALLBACK',
-    defaultValue: '',
-  );
-
-  static const String _sandboxApiKeyForDebug = 'test_JaHlwHvOQDMjKOBXtvRVrHQsqsN';
-  static const String _sandboxWebApiKeyForDebug = 'pdl_XjFiWxuHmAwKMGssUknrOGStnEEL';
+  static const String _defaultWebApiKey =
+      'pdl_JmDRIGIEjpuxaqfLGOuKskkWRNjc';
 
   final Set<CustomerInfoUpdateListener> _listeners = {};
 
@@ -68,36 +61,20 @@ class RevenueCatService {
           ? (webApiKey.isNotEmpty ? webApiKey : _defaultWebApiKey)
           : (apiKey.isNotEmpty ? apiKey : _defaultApiKey);
 
-      // Debug convenience: allow sandbox keys via FALLBACK dart-define.
-      // In release, require explicit live keys — never ship sandbox silently.
-      if (effectiveKey.isEmpty && kDebugMode) {
-        effectiveKey = kIsWeb ? _sandboxWebApiKeyForDebug : _sandboxApiKeyForDebug;
-        debugPrint('[RevenueCat] Using DEBUG sandbox fallback key (kDebugMode only)');
-      }
-
       if (effectiveKey.isEmpty) {
         throw StateError(
-          'RevenueCat API key missing. Pass --dart-define=REVENUECAT_API_KEY=... '
-          'and --dart-define=REVENUECAT_WEB_API_KEY=... (live keys for release).',
+          'RevenueCat API key missing. Production keys are hardcoded; '
+          'this should never happen.',
         );
       }
 
-      // Guard against accidentally shipping sandbox keys in release.
-      if (kReleaseMode) {
-        final isSandboxKey = effectiveKey.startsWith('test_') ||
-            effectiveKey.startsWith('pdl_') && !effectiveKey.startsWith('pdl_live');
-        // pdl_ sandbox keys start with pdl_; live Paddle keys via RC are distinct.
-        // Generic check: sandbox test_ prefix is a reliable signal.
-        if (effectiveKey.startsWith('test_')) {
-          throw StateError(
-            'Sandbox RevenueCat key (test_...) detected in release mode. '
-            'Provide live keys via --dart-define.',
-          );
-        }
-        // Warn but don't throw for pdl_ — live web keys also start with pdl_ variants.
-        if (isSandboxKey) {
-          debugPrint('[RevenueCat] WARNING: possible sandbox key in release: $effectiveKey');
-        }
+      // Prod-only guard: never allow sandbox test keys, even via dart-define.
+      if (effectiveKey.startsWith('test_') ||
+          effectiveKey == 'test_JaHlwHvOQDMjKOBXtvRVrHQsqsN' ||
+          effectiveKey == 'pdl_XjFiWxuHmAwKMGssUknrOGStnEEL') {
+        throw StateError(
+          'Sandbox RevenueCat key detected. This app is prod-only.',
+        );
       }
 
       await Purchases.setLogLevel(LogLevel.debug);
@@ -223,6 +200,106 @@ class RevenueCatService {
     }
   }
 
+  static const String _welcomePendingKey = 'max_welcome_pending';
+  static const String _welcomeLastShownKey = 'max_welcome_last_shown';
+
+  /// Per-purchase key for the Max thank-you sheet. Uses the active
+  /// entitlement's latest purchase date + product id, so renewals and
+  /// re-subscribes produce a NEW key (sheet shows again) while the same
+  /// purchase dedupes. Falls back to the account purchase date, then a
+  /// timestamp (always unique — shows).
+  static String welcomeKeyFor(CustomerInfo? info) {
+    try {
+      final ent = info?.entitlements.active[entitlementId];
+      if (ent != null) {
+        return '${ent.productIdentifier}@${ent.latestPurchaseDate}';
+      }
+      final orig = info?.originalPurchaseDate;
+      if (orig != null && orig.isNotEmpty) return orig;
+    } catch (_) {}
+    return 'ts:${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  /// Marks a purchase/restore for the Max thank-you sheet. The sheet
+  /// itself dedupes per purchase key (already-seen keys are skipped unless
+  /// the caller forces), so this is safe to call from every paywall
+  /// success path. Restores pass [forceShow] so the sheet shows even for
+  /// an already-seen purchase.
+  static Future<void> flagWelcomePending({bool forceShow = false}) async {
+    try {
+      final info = _instance?._cachedCustomerInfo;
+      final key = forceShow
+          ? 'restore:${DateTime.now().millisecondsSinceEpoch}'
+          : welcomeKeyFor(info);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_welcomePendingKey, key);
+      if (forceShow) await prefs.setBool(_welcomeForceKey, true);
+    } catch (_) {}
+  }
+
+  static const String _welcomeForceKey = 'max_welcome_force';
+
+  static Future<bool> consumeWelcomeForce() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final v = prefs.getBool(_welcomeForceKey) ?? false;
+      if (v) await prefs.remove(_welcomeForceKey);
+      return v;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Renewal catch-up: when the store renewed behind our back (new
+  /// latestPurchaseDate since the last shown sheet), stage the new key so
+  /// the next showIfPending displays it. Call from cold launch / resume
+  /// catch-up points — never from the live update listener (no mid-session
+  /// interruptions). Returns true when a renewal was staged.
+  static Future<bool> stageRenewalIfNeeded() async {
+    try {
+      final svc = _instance ?? RevenueCatService._();
+      _instance ??= svc;
+      CustomerInfo? info = svc._cachedCustomerInfo;
+      try {
+        info ??= await svc.getCustomerInfo();
+      } catch (_) {}
+      if (info == null) return false;
+      if (!svc.hasActiveEntitlement(info)) return false;
+      final key = welcomeKeyFor(info);
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString(_welcomePendingKey)?.isNotEmpty == true) {
+        return false; // a purchase/restore is already queued
+      }
+      final lastShown = prefs.getString(_welcomeLastShownKey);
+      if (lastShown == key) return false;
+      if (prefs.getBool('max_welcome_seen_$key') ?? false) return false;
+      await prefs.setString(_welcomePendingKey, key);
+      debugPrint('[RevenueCat] Renewal staged for thank-you: $key');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> noteWelcomeShown(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_welcomeLastShownKey, key);
+    } catch (_) {}
+  }
+
+  static Future<String?> consumeWelcomePending() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = prefs.getString(_welcomePendingKey);
+      if (key == null || key.isEmpty) return null;
+      await prefs.remove(_welcomePendingKey);
+      return key;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<PurchaseResult> purchasePackage(Package package) async {
     try {
       final result = await Purchases.purchase(
@@ -230,6 +307,7 @@ class RevenueCatService {
       );
       _cachedCustomerInfo = result.customerInfo;
       await _syncToBackend(result.customerInfo);
+      await flagWelcomePending();
       // Log purchase for GA4 funnel
       try {
         final customerInfo = result.customerInfo;
@@ -260,11 +338,17 @@ class RevenueCatService {
     }
   }
 
+  /// Restores purchases. When an entitlement is found, a FORCED thank-you
+  /// is staged so the sheet shows even for an already-seen purchase
+  /// (restores always thank). Callers still call showIfPending afterwards.
   Future<CustomerInfo> restorePurchases() async {
     try {
       final info = await Purchases.restorePurchases();
       _cachedCustomerInfo = info;
       await _syncToBackend(info);
+      if (hasActiveEntitlement(info)) {
+        await flagWelcomePending(forceShow: true);
+      }
       return info;
     } catch (e) {
       debugPrint('[RevenueCat] Restore failed: $e');
@@ -283,17 +367,8 @@ class RevenueCatService {
           displayCloseButton: displayCloseButton,
         );
       }
-      // Debug: present the "demo" Test Store offering so the RevenueCat
-      // paywall renders without Play products. Release always uses the
-      // current (production) offering.
-      if (offering == null && kDebugMode) {
-        try {
-          await ensureInitialized();
-          final offerings = await Purchases.getOfferings();
-          final demo = offerings.all['demo'];
-          if (demo != null) offering = demo;
-        } catch (_) {}
-      }
+      // Prod-only: always use the passed offering or the current
+      // (Default 3) production offering. No demo/Test Store routing.
       final result = await RevenueCatUI.presentPaywall(
         offering: offering,
         displayCloseButton: displayCloseButton,
@@ -361,6 +436,36 @@ class RevenueCatService {
     return result ?? PaywallResult.cancelled;
   }
 
+  static const String exitOfferingId = 'expired_winback';
+
+  /// Presents the exit/winback offer. This is the ONLY surface that
+  /// advertises the $1-first-month intro — the default paywall never does.
+  Future<PaywallResult> presentExitOffer({
+    bool displayCloseButton = true,
+  }) async {
+    try {
+      await ensureInitialized();
+      Offering? offering;
+      try {
+        final offerings = await Purchases.getOfferings();
+        offering = offerings.all[exitOfferingId];
+      } catch (_) {}
+      if (kIsWeb) {
+        return await presentWebPaywall(
+          offering: offering,
+          displayCloseButton: displayCloseButton,
+        );
+      }
+      return await RevenueCatUI.presentPaywall(
+        offering: offering,
+        displayCloseButton: displayCloseButton,
+      );
+    } catch (e) {
+      debugPrint('[RevenueCat] presentExitOffer failed: $e');
+      return PaywallResult.error;
+    }
+  }
+
   Future<PaywallResult> presentPaywallIfNeeded({
     bool displayCloseButton = true,
     Offering? offering,
@@ -383,6 +488,10 @@ class RevenueCatService {
         onRestoreCompleted: (info) {
           _cachedCustomerInfo = info;
           debugPrint('[RevenueCat] Customer Center restore completed');
+          if (hasActiveEntitlement(info)) {
+            // Restore via Customer Center always thanks (forced).
+            flagWelcomePending(forceShow: true);
+          }
         },
         onRestoreFailed: (error) {
           debugPrint('[RevenueCat] Customer Center restore failed: $error');

@@ -29,6 +29,12 @@ class StreakService {
   static const _claimedPrimesKey = 'claimed_prime_rewards';
   static const _shieldBalanceKey = 'shield_balance';
 
+  /// Locally armed shields from Streak Shield purchases. Each entry is
+  /// `{'a': armedAtMs, 'p': preservedStreak}`. An armed shield auto-fires
+  /// when a gap resets the streak, but only within [_armedTtl].
+  static const _armedShieldsKey = 'armed_shields';
+  static const _armedTtl = Duration(days: 2);
+
   static AnalyticsProtocol _analytics = AnalyticsService.instance;
 
   static void injectAnalytics(AnalyticsProtocol a) {
@@ -76,8 +82,7 @@ class StreakService {
     return prefs.getInt(_shieldBalanceKey) ?? 0;
   }
 
-  static Future<int> consumeShields(int daysGap) async {
-    try {
+  static Future<int> consumeShields(int daysGap) async {    try {
       final response = await http.post(
         Uri.parse('${AppConstants.backendUrl}/shop/shield-consume'),
         headers: {'Content-Type': 'application/json'},
@@ -92,6 +97,129 @@ class StreakService {
       }
     } catch (_) {}
     return 0;
+  }
+
+  /// Reads armed shields, dropping ones older than [_armedTtl].
+  static Future<List<Map<String, int>>> _validArmedShields() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_armedShieldsKey);
+    if (raw == null || raw.isEmpty) return [];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final valid = <Map<String, int>>[];
+    try {
+      final decoded = json.decode(raw) as List;
+      for (final e in decoded) {
+        final m = Map<String, dynamic>.from(e as Map);
+        final armedAt = (m['a'] as num?)?.toInt() ?? 0;
+        final preserved = (m['p'] as num?)?.toInt() ?? 0;
+        if (preserved > 1 &&
+            now - armedAt <= _armedTtl.inMilliseconds) {
+          valid.add({'a': armedAt, 'p': preserved});
+        }
+      }
+    } catch (_) {}
+    await prefs.setString(
+      _armedShieldsKey,
+      jsonEncode(valid.map((e) => {'a': e['a'], 'p': e['p']}).toList()),
+    );
+    return valid;
+  }
+
+  /// Number of live (unexpired) armed shields. Used for the `Use XN` banner.
+  static Future<int> getArmedShieldCount() async {
+    return (await _validArmedShields()).length;
+  }
+
+  /// Arms a shield preserving the current streak. Called after a verified
+  /// $0.99 purchase while the streak is still alive (> 1).
+  static Future<void> armShield(int preservedStreak) async {
+    if (preservedStreak <= 1) return;
+    final prefs = await SharedPreferences.getInstance();
+    final valid = await _validArmedShields();
+    valid.add({
+      'a': DateTime.now().millisecondsSinceEpoch,
+      'p': preservedStreak,
+    });
+    await prefs.setString(_armedShieldsKey, jsonEncode(valid));
+    _analytics.logEvent('streak_shield_armed',
+        params: {'preserved': preservedStreak.toString()});
+  }
+
+  /// Consumes one armed shield for auto-fire. Returns the preserved streak
+  /// to restore, or null when no live armed shield exists. Keeps the server
+  /// balance in sync (purchases increment it via shield-grant).
+  static Future<int?> consumeArmedShield() async {
+    final valid = await _validArmedShields();
+    if (valid.isEmpty) return null;
+    valid.sort((a, b) => b['p']!.compareTo(a['p']!));
+    final preserved = valid.removeAt(0)['p']!;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_armedShieldsKey, jsonEncode(valid));
+    // Server decrements its balance by exactly 1 to mirror the local arm.
+    await consumeShields(1);
+    return preserved;
+  }
+
+  /// Longest consecutive-day run in the recorded activity dates. This is
+  /// the "longest previous streak" the manual Restore button repairs to.
+  static Future<int> longestRun() async {
+    final prefs = await SharedPreferences.getInstance();
+    return longestRunOf(prefs.getStringList(_activityDatesKey) ?? []);
+  }
+
+  /// Pure longest-run computation over `yyyy-MM-dd` date strings.
+  /// Unit-testable; invalid entries are ignored.
+  static int longestRunOf(List<String> dateStrs) {
+    final days = <DateTime>{};
+    for (final d in dateStrs) {
+      try {
+        final parsed = DateTime.parse(d);
+        days.add(DateTime(parsed.year, parsed.month, parsed.day));
+      } catch (_) {}
+    }
+    if (days.isEmpty) return 1;
+    final sorted = days.toList()..sort();
+    var best = 1;
+    var run = 1;
+    for (var i = 1; i < sorted.length; i++) {
+      if (sorted[i].difference(sorted[i - 1]).inDays == 1) {
+        run += 1;
+        if (run > best) best = run;
+      } else {
+        run = 1;
+      }
+    }
+    return best;
+  }
+
+  /// Manual restore: consumes one armed shield and repairs the streak to
+  /// the longest recorded run. Returns the restored streak, or null when
+  /// there is nothing to restore (no shields, or streak already healthy).
+  static Future<int?> restoreToLongest() async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getInt(_streakKey) ?? 1;
+    final longest = await longestRun();
+    if (longest <= 1 || current >= longest) return null;
+    final valid = await _validArmedShields();
+    if (valid.isEmpty) return null;
+    valid.sort((a, b) => b['p']!.compareTo(a['p']!));
+    valid.removeAt(0);
+    await prefs.setString(_armedShieldsKey, jsonEncode(valid));
+    await consumeShields(1);
+
+    final today = DateTime.now();
+    final todayStr = today.toIso8601String().split('T')[0];
+    final dates = (prefs.getStringList(_activityDatesKey) ?? []).toList();
+    if (!dates.contains(todayStr)) {
+      dates.add(todayStr);
+      await prefs.setStringList(_activityDatesKey, dates);
+    }
+    await prefs.setInt(_streakKey, longest);
+    await prefs.setString(_lastActivityDateKey, todayStr);
+    _analytics.logEvent('streak_shield_restored',
+        params: {'streak': longest.toString()});
+    unawaited(InviteService.pushMyStreak(longest));
+    return longest;
   }
 
   static Future<StreakResult> checkAndUpdateStreak() async {
@@ -118,15 +246,25 @@ class StreakService {
       } else {
         final gap = normalizedToday.difference(DateTime(lastDate.year, lastDate.month, lastDate.day)).inDays;
         if (gap > 1) {
-          final consumed = await consumeShields(gap);
-          if (consumed > 0) {
+          // Armed Streak Shields fire first: restore the preserved number.
+          final armedRestore = await consumeArmedShield();
+          if (armedRestore != null) {
             _analytics.logEvent('streak_shield_used', params: {
               'gap': gap.toString(),
-              'consumed': consumed.toString(),
+              'restored': armedRestore.toString(),
             });
-            streak = streak;
+            streak = armedRestore;
           } else {
-            streak = 1;
+            final consumed = await consumeShields(gap);
+            if (consumed > 0) {
+              _analytics.logEvent('streak_shield_used', params: {
+                'gap': gap.toString(),
+                'consumed': consumed.toString(),
+              });
+              streak = streak;
+            } else {
+              streak = 1;
+            }
           }
         } else {
           streak = 1;

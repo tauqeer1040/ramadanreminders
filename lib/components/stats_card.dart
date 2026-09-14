@@ -7,8 +7,10 @@ import '../services/journal_service.dart';
 import '../services/streak_service.dart';
 import '../services/favorites_service.dart';
 import '../services/auth_service.dart';
+import '../services/max_status.dart';
 import '../theme/app_theme.dart';
 import 'widgets/glass_container.dart';
+import 'widgets/monthly_line_chart.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data model
@@ -143,7 +145,7 @@ class _StatsCardState extends State<StatsCard>
   late Future<_StatsData> _future;
   late AnimationController _fadeCtrl;
   late Animation<double> _fade;
-  // App is free - no subscription needed
+  Future<MaxStatus>? _maxFuture;
 
   @override
   void initState() {
@@ -163,6 +165,7 @@ class _StatsCardState extends State<StatsCard>
 
   void _load() {
     _future = _loadStats();
+    _maxFuture = MaxStatusService.current();
     _future.then((_) {
       if (mounted) _fadeCtrl.forward(from: 0);
     });
@@ -611,7 +614,7 @@ class _StatsCardState extends State<StatsCard>
             SizedBox(
               height: 100,
               child: CustomPaint(
-                painter: _LineChartPainter(
+                painter: MonthlyLinePainter(
                   data: data.monthlyEntries,
                   lineColor: lineColor,
                   currentMonth: DateTime.now().month - 1,
@@ -885,67 +888,88 @@ class _StatsCardState extends State<StatsCard>
   Widget _subscriptionCard() {
     const bg = Color(0xFFA5D6A7);
     const fg = Color(0xFF1A1A1A);
-    const statusText = 'Free';
-    const subText = 'All features unlocked';
-    const showBolt = false;
 
-    return GestureDetector(
-      onTap: () => _showSubscriptionSheet(context),
-      child: Container(
-      height: 72,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return FutureBuilder<MaxStatus>(
+      future: _maxFuture ?? MaxStatusService.current(),
+      builder: (context, snap) {
+        final status = snap.data;
+        final isActive = status?.isActive ?? false;
+        final plan = status?.planLabel;
+        final String statusText;
+        final String subText;
+        if (!isActive) {
+          statusText = 'Free';
+          subText = 'All features unlocked';
+        } else if (status?.state == MaxState.expiringSoon) {
+          statusText = 'Expiring';
+          subText = '${plan ?? 'Max'} · ${status!.daysRemaining}d left';
+        } else {
+          statusText = 'Active';
+          subText = plan ?? 'Max';
+        }
+        return GestureDetector(
+          onTap: () => _showSubscriptionSheet(context, status),
+          child: Container(
+          height: 72,
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'SUBSCRIPTION',
-                style: TextStyle(
-                  color: fg,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                decoration: BoxDecoration(
-                  color: fg.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Text(
-                  statusText,
-                  style: const TextStyle(
-                    color: fg,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w700,
+              Row(
+                children: [
+                  const Text(
+                    'SUBSCRIPTION',
+                    style: TextStyle(
+                      color: fg,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: fg.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text(
+                      statusText,
+                      style: const TextStyle(
+                        color: fg,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      subText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: fg,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const Spacer(),
-          Row(
-            children: [
-              Text(
-                subText,
-                style: const TextStyle(
-                  color: fg,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
           ),
-        ],
-      ),
-      ),
+        );
+      },
     );
   }
 
@@ -962,7 +986,28 @@ class _StatsCardState extends State<StatsCard>
     );
   }
 
-  void _showSubscriptionSheet(BuildContext context) {
+  void _showSubscriptionSheet(BuildContext context, [MaxStatus? status]) {
+    final isActive = status?.isActive ?? false;
+    final plan = status?.planLabel;
+    final String title;
+    final String body;
+    if (!isActive) {
+      title = 'Free Plan';
+      body =
+          'All features unlocked — no subscription needed. Write, reflect, and grow without limits.';
+    } else if (status?.state == MaxState.expiringSoon) {
+      title = '${plan ?? 'Max'} — expiring';
+      body =
+          'Your ${plan ?? 'plan'} renews in ${status!.daysRemaining}d. Renew to keep unlimited journaling, insights and streak shields.';
+    } else if (status?.lifetime == true) {
+      title = 'Lifetime';
+      body =
+          'Towards a more mindful Duniya — lifetime Max is yours. Unlimited journaling, insights and streak shields.';
+    } else {
+      title = plan ?? 'Max active';
+      body =
+          'Your ${plan ?? 'Max plan'} is active. Unlimited journaling, insights and streak shields.';
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1003,9 +1048,9 @@ class _StatsCardState extends State<StatsCard>
                   child: const Icon(Icons.check_circle_rounded, color: Color(0xFFA5D6A7), size: 30),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Free Plan',
-                  style: TextStyle(
+                Text(
+                  title,
+                  style: const TextStyle(
                     color: AppTheme.starWhite,
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
@@ -1015,7 +1060,7 @@ class _StatsCardState extends State<StatsCard>
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Text(
-                    'All features unlocked — no subscription needed. Write, reflect, and grow without limits.',
+                    body,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: AppTheme.starWhite.withValues(alpha: 0.6),
@@ -1035,153 +1080,6 @@ class _StatsCardState extends State<StatsCard>
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom painters
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _LineChartPainter extends CustomPainter {
-  final List<int> data;
-  final Color lineColor;
-  final int currentMonth;
-
-  _LineChartPainter({
-    required this.data,
-    required this.lineColor,
-    required this.currentMonth,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (data.isEmpty) return;
-
-    final count = min(currentMonth + 1, data.length);
-    if (count < 2) return;
-
-    final maxVal = data.sublist(0, count).reduce(max).clamp(1, 9999999);
-    final totalMonths = data.length;
-    final points = <Offset>[];
-
-    for (int i = 0; i < count; i++) {
-      final x = i / (totalMonths - 1) * size.width;
-      final y = size.height - (data[i] / maxVal * size.height * 0.85) - 4;
-      points.add(Offset(x, y));
-    }
-
-    // Linear regression on existing data
-    double sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-    for (int i = 0; i < count; i++) {
-      sumX += i;
-      sumY += data[i];
-      sumXY += i * data[i];
-      sumX2 += i * i;
-    }
-    final slope = (count * sumXY - sumX * sumY) / (count * sumX2 - sumX * sumX);
-    final intercept = (sumY - slope * sumX) / count;
-
-    final barPaint = Paint()
-      ..color = lineColor.withValues(alpha: 0.2)
-      ..style = PaintingStyle.fill;
-
-    final barW = size.width / totalMonths * 0.4;
-
-    // Draw bars for existing data
-    for (int i = 0; i < count; i++) {
-      final x = i / (totalMonths - 1) * size.width;
-      final barH = (data[i] / maxVal * size.height * 0.85);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(
-            center: Offset(x, size.height - barH / 2 - 4),
-            width: barW,
-            height: barH,
-          ),
-          const Radius.circular(2),
-        ),
-        barPaint,
-      );
-    }
-
-    // Draw fill
-    final fillPath = Path()..moveTo(points.first.dx, size.height);
-    for (final p in points) {
-      fillPath.lineTo(p.dx, p.dy);
-    }
-    fillPath.lineTo(points.last.dx, size.height);
-    fillPath.close();
-
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          lineColor.withValues(alpha: 0.25),
-          lineColor.withValues(alpha: 0.0),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-    canvas.drawPath(fillPath, fillPaint);
-
-    // Draw smooth line for existing data
-    final linePaint = Paint()
-      ..color = lineColor
-      ..strokeWidth = 2.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    if (points.length >= 2) {
-      final linePath = Path()..moveTo(points.first.dx, points.first.dy);
-      for (int i = 1; i < points.length; i++) {
-        final prev = points[i - 1];
-        final curr = points[i];
-        final cpx = (prev.dx + curr.dx) / 2;
-        linePath.cubicTo(cpx, prev.dy, cpx, curr.dy, curr.dx, curr.dy);
-      }
-      canvas.drawPath(linePath, linePaint);
-    }
-
-    // ── Estimated trajectory ──────────────────────────────────────────
-    if (count < totalMonths) {
-      final projectedPaint = Paint()
-        ..color = lineColor.withValues(alpha: 0.45)
-        ..strokeWidth = 2.5
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round;
-
-      final projPoints = <Offset>[];
-      for (int i = count; i < totalMonths; i++) {
-        final projVal = (slope * i + intercept).clamp(0, maxVal * 1.5).toInt();
-        final x = i / (totalMonths - 1) * size.width;
-        final y = size.height - (projVal / maxVal * size.height * 0.85) - 4;
-        projPoints.add(Offset(x, y));
-
-        // Bars for projected months
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromCenter(
-              center: Offset(x, size.height - (projVal / maxVal * size.height * 0.85) / 2 - 4),
-              width: barW,
-              height: projVal / maxVal * size.height * 0.85,
-            ),
-            const Radius.circular(2),
-          ),
-          barPaint,
-        );
-      }
-
-      if (projPoints.isNotEmpty) {
-        final allPoints = [...points, ...projPoints];
-        final projPath = Path()
-          ..moveTo(allPoints.first.dx, allPoints.first.dy);
-        for (int i = 1; i < allPoints.length; i++) {
-          final prev = allPoints[i - 1];
-          final curr = allPoints[i];
-          final cpx = (prev.dx + curr.dx) / 2;
-          projPath.cubicTo(cpx, prev.dy, cpx, curr.dy, curr.dx, curr.dy);
-        }
-        canvas.drawPath(projPath, projectedPaint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
 
 class _GaugePainter extends CustomPainter {
   final double percentage; // 0.0 – 1.0

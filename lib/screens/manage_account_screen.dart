@@ -9,6 +9,7 @@ import '../services/revenuecat_provider.dart';
 import '../theme/app_theme.dart';
 import '../core/app_background.dart';
 import '../components/widgets/duo_button.dart';
+import '../components/widgets/max_welcome_sheet.dart';
 
 class ManageAccountScreen extends ConsumerWidget {
   final User user;
@@ -149,6 +150,11 @@ class ManageAccountScreen extends ConsumerWidget {
                         await RevenueCatService.instance.presentCustomerCenter();
                         if (context.mounted) {
                           ref.read(revenueCatProvider.notifier).refresh();
+                          // A restore inside Customer Center stages a forced
+                          // thank-you (no-op when nothing was restored).
+                          try {
+                            await MaxWelcomeSheet.showIfPending(context);
+                          } catch (_) {}
                         }
                         return;
                       }

@@ -7,6 +7,7 @@ import '../../services/analytics_service.dart';
 import '../../services/email_continue_service.dart';
 import '../../services/revenuecat_service.dart';
 import '../../theme/app_theme.dart';
+import 'max_welcome_sheet.dart';
 import '../onboarding/check_email_page.dart';
 import '../onboarding/onboarding_data.dart';
 import '../onboarding/pages/email_page.dart';
@@ -145,6 +146,13 @@ class _RegistrationFormState extends State<_RegistrationForm> {
                               : 'Email confirmed — Max unlocks after checkout.'),
                         ),
                       );
+                    }
+                    // Restore found Max: forced thank-you (staged by
+                    // restorePurchases), no-op when nothing was restored.
+                    if (ok && context.mounted) {
+                      try {
+                        await MaxWelcomeSheet.showIfPending(context);
+                      } catch (_) {}
                     }
                   } catch (_) {}
                 },

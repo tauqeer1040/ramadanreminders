@@ -77,12 +77,33 @@ module.exports = function (app) {
           });
           console.log(`[Subscription Sync] Awarded ${shields} shields to ${appUserId} for ${productId}`);
         }
+        // Value-recap email, 24h delayed (stats settle). Deduped 30d;
+        // skipped when no email is on file (welcome sheet captures later).
+        try {
+          const { enqueueMaxRecap } = require('../lib/email-queue');
+          await enqueueMaxRecap(appUserId);
+        } catch (e) {
+          console.warn('[Subscription Sync] recap enqueue failed:', e.message);
+        }
       }
 
       res.json({ received: true, verified: true });
     } catch (error) {
       console.error('[Subscription Sync] DB error:', error.message);
       res.status(500).json({ error: 'Sync failed' });
+    }
+  });
+
+  // Re-trigger the recap email after the welcome sheet captures an email
+  // (purchase-time enqueue skips users with no address on file).
+  app.post('/api/v2/subscription/recap-email', async (req, res) => {
+    try {
+      const { enqueueMaxRecap } = require('../lib/email-queue');
+      const id = await enqueueMaxRecap(req.uid);
+      return res.json({ queued: id != null });
+    } catch (e) {
+      console.error('[Subscription] recap-email failed:', e.message);
+      return res.status(500).json({ error: 'Failed to queue recap email' });
     }
   });
 

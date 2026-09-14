@@ -145,7 +145,7 @@ class _ProUpsellBanner extends StatelessWidget {
             ),
           ),
           Text(
-            'Write more with Max, ${userName ?? 'friend'}',
+            'Write more with Max ${userName ?? 'friend'}',
             style: tt.labelMedium?.copyWith(
               color: Colors.black,
               fontWeight: FontWeight.w700,

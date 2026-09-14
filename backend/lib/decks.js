@@ -50,11 +50,19 @@ function parseCards(row) {
 function deckPayload(row, { fallback = false, queueDepth = 0 } = {}) {
   const cards = parseCards(row);
   const surahCard = cards.find((c) => c && c.type === 'surah_guidance');
+  let revealedCards = [];
+  try {
+    revealedCards = JSON.parse(row.revealed_cards || '[]');
+    if (!Array.isArray(revealedCards)) revealedCards = [];
+  } catch (_) {
+    revealedCards = [];
+  }
   return {
     deckId: row.id,
     journalId: row.journal_id,
     deckDate: row.deck_date,
     status: row.status,
+    revealedCards,
     insightCards: cards,
     related: { journalId: row.journal_id, reflectionTags: [], taskTags: [], similarReflections: [], similarTasks: [] },
     featuredReference: (surahCard && surahCard.reference) || (cards[0] && (cards[0].reference || null)) || null,
@@ -350,6 +358,26 @@ async function ackRevealed(uid, deckId, cardIds) {
   const cards = parseCards(row);
   const expected = new Set(cards.map((c) => c && c.id).filter(Boolean));
   const provided = new Set((Array.isArray(cardIds) ? cardIds : []).map(String));
+  // Persist partial progress on every ack (union) so stats/restore see
+  // per-card Quran progress even before a deck is fully revealed.
+  try {
+    let known = [];
+    try {
+      known = JSON.parse(row.revealed_cards || '[]');
+      if (!Array.isArray(known)) known = [];
+    } catch (_) {
+      known = [];
+    }
+    const union = [...new Set([...known, ...[...provided].filter((id) => expected.has(id))])];
+    if (union.length !== known.length) {
+      await db.execute({
+        sql: `UPDATE insight_decks SET revealed_cards = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        args: [JSON.stringify(union), deckId],
+      });
+    }
+  } catch (e) {
+    console.warn('[decks.ackRevealed] partial persist failed:', e.message);
+  }
   const covered = [...expected].every((id) => provided.has(id));
   if (!covered) {
     const remaining = [...expected].filter((id) => !provided.has(id));

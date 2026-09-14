@@ -19,6 +19,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../core/app_background.dart';
 import '../services/insight_service.dart';
+import '../services/journal_service.dart';
 import '../services/deck_rotation_service.dart';
 import '../services/moment_paywall_service.dart';
 import '../services/deck_queue_logic.dart';
@@ -77,6 +78,12 @@ class _QuranPageState extends State<QuranPage>
   // Screenshot offers only fire while the app is foregrounded and this tab
   // is the visible page (see _offerShare).
   bool _isAppResumed = true;
+
+  // Background→foreground resume refresh (NOT tab switches): re-syncs the
+  // deck cache and adopts the newest deck when safe. Debounced + guarded so
+  // rapid pause/resume or concurrent refreshes never stack setStates.
+  bool _resumeRefreshInFlight = false;
+  DateTime? _lastResumeRefreshAt;
 
   // Keep state alive when the tab scrolls out of the PageView cache extent.
   // Without this, each tab toggle disposes QuranPage and recreates it —
@@ -160,6 +167,40 @@ class _QuranPageState extends State<QuranPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _isAppResumed = state == AppLifecycleState.resumed;
+    if (state == AppLifecycleState.resumed) {
+      _handleResume();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      // Foreground-only audio: never play recitation/SFX while backgrounded.
+      // Recitation deliberately stays paused on return — the user taps play.
+      _player.pause();
+      _purrPlayer.pause();
+      _rewardPlayer.pause();
+    }
+  }
+
+  /// Refresh on background→foreground resume only. Tab switches do not come
+  /// through here, so they never rotate the deck (per product decision).
+  Future<void> _handleResume() async {
+    if (!mounted || _isLoading || _resumeRefreshInFlight) return;
+    final now = DateTime.now();
+    if (_lastResumeRefreshAt != null &&
+        now.difference(_lastResumeRefreshAt!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _resumeRefreshInFlight = true;
+    _lastResumeRefreshAt = now;
+    try {
+      // Revealed IDs may have grown (or prefs reloaded); refresh before
+      // deciding adopt vs protect so fully-revealed decks actually adopt.
+      await _loadRevealedCards();
+      if (!mounted) return;
+      await _syncDecksSilently();
+    } finally {
+      _resumeRefreshInFlight = false;
+    }
   }
 
   @override
@@ -189,8 +230,8 @@ class _QuranPageState extends State<QuranPage>
 
   Future<void> _loadInsightLocallyOnly() async {
     try {
-      // Client-side rotation first: cached AI decks, newest-first, looping,
-      // max 3 deck changes per local day (cycles today's 3 after the cap).
+      // Latest-sticky rotation first: newest cached AI deck, kept across
+      // resumes when there is nothing newer (revealed state preserved).
       final rotated = await DeckRotationService.currentDeckForLaunch(
         revealedCardIds: _revealedCards,
         currentCards: const [],
@@ -265,49 +306,57 @@ class _QuranPageState extends State<QuranPage>
     if (FirebaseAuth.instance.currentUser == null) return;
     try {
       // Pull the full deck list into the rotation cache. New decks land at
-      // the front (newest-first), so the next launch picks them up first.
+      // the front (newest-first); latest-sticky rotation adopts the newest
+      // when safe, otherwise keeps the current deck (mid-reveal protected).
       final synced = await DeckRotationService.sync();
       if (synced && mounted) {
-        // Adopt the rotation's deck if it differs from what's on screen
-        // (e.g. cache was empty at first paint, or this launch had changes
-        // left). Protected decks (mid-reveal) come back unchanged.
         final rotated = await DeckRotationService.currentDeckForLaunch(
           revealedCardIds: _revealedCards,
           currentCards: _insightCards,
           currentDeckId: _deckId,
           fullyRevealed: _fullyRevealed,
         );
-        if (rotated != null &&
-            rotated.cards.isNotEmpty &&
-            rotated.deckId != _deckId) {
-          final newIds = rotated.cards.map((c) => c.id ?? '').toSet();
-          final curIds = _insightCards.map((c) => c.id ?? '').toSet();
-          switch (deckSwapAction(
-            fetchedDeckId: rotated.deckId,
-            fetchedCardIds: newIds,
-            currentDeckId: _deckId,
-            currentCardIds: curIds,
-            revealedCardIds: _revealedCards,
-          )) {
-            case DeckSwapAction.keep:
-            case DeckSwapAction.refreshMetadata:
-              break;
-            case DeckSwapAction.swap:
-              setState(() {
-                _deckId = rotated.deckId;
-                _insightCards = rotated.cards;
-                _queueDepth = rotated.queueDepth;
-                _buildDeck();
-              });
-              _advanceScratchRotation();
-              break;
-          }
+        if (rotated == null || rotated.cards.isEmpty) return;
+        final newIds = rotated.cards.map((c) => c.id ?? '').toSet();
+        final curIds = _insightCards.map((c) => c.id ?? '').toSet();
+        switch (deckSwapAction(
+          fetchedDeckId: rotated.deckId,
+          fetchedCardIds: newIds,
+          currentDeckId: _deckId,
+          currentCardIds: curIds,
+          revealedCardIds: _revealedCards,
+        )) {
+          case DeckSwapAction.keep:
+            break;
+          case DeckSwapAction.refreshMetadata:
+            // Same deck, same cards: metadata only, no rebuild/flicker.
+            if (rotated.queueDepth != _queueDepth && mounted) {
+              setState(() => _queueDepth = rotated.queueDepth);
+            }
+            break;
+          case DeckSwapAction.swap:
+            // Same-deck edit-regenerate also swaps content (no flicker guard
+            // needed: deckSwapAction already decided the ids changed or the
+            // deck is adoptable).
+            if (!mounted) return;
+            setState(() {
+              _deckId = rotated.deckId;
+              _insightCards = rotated.cards;
+              _queueDepth = rotated.queueDepth;
+              // New deck → restart from its top card with fresh covers.
+              _topIndex = 0;
+              _buildDeck();
+            });
+            _advanceScratchRotation();
+            break;
         }
       }
     } catch (_) {
       // Offline or server error: the rotation cache keeps working as-is.
     }
   }
+
+
 
 
 
@@ -1336,6 +1385,46 @@ class _QuranPageState extends State<QuranPage>
                                                                       .add(id),
                                                             );
                                                             _saveRevealedCards();
+                                                            // StatsCard listens to this (profile tab stays
+                                                            // cached), so the Quran gauge updates live.
+                                                            try {
+                                                              JournalService
+                                                                  .notifyJournalsChanged();
+                                                            } catch (_) {}
+                                                            // Record partial progress server-side on
+                                                            // every reveal (unioned per deck), so the
+                                                            // stats Quran gauge survives reinstalls and
+                                                            // restores on Google sign-in. Fire-and-forget.
+                                                            try {
+                                                              final deckIds =
+                                                                  _insightCards
+                                                                      .map(
+                                                                        (c) =>
+                                                                            c.id ??
+                                                                            '',
+                                                                      )
+                                                                      .where(
+                                                                        (d) =>
+                                                                            d.isNotEmpty,
+                                                                      )
+                                                                      .toSet();
+                                                              final mine =
+                                                                  _revealedCards
+                                                                      .where(
+                                                                        deckIds
+                                                                            .contains,
+                                                                      )
+                                                                      .toList();
+                                                              if (mine
+                                                                  .isNotEmpty) {
+                                                                unawaited(
+                                                                  InsightService.ackDeckRevealed(
+                                                                    _deckId,
+                                                                    mine,
+                                                                  ),
+                                                                );
+                                                              }
+                                                            } catch (_) {}
                                                             HapticFeedback.heavyImpact();
                                                             _triggerConfetti();
                                                             _rewardPlayer.play(

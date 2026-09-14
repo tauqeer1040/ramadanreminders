@@ -6,19 +6,48 @@ const { getInitialAiScheduleSql } = require('./config');
 const { sanitizeInsightCards } = require('./sanitize');
 const { contentHash } = require('./decks');
 
-async function upsertJournal(uid, journal) {
+async function upsertJournal(uid, journal, opts = {}) {
   const initialAiScheduleSql = getInitialAiScheduleSql();
   const trimmed = String(journal.text || '').trim();
   const hash = contentHash(trimmed);
 
   const existing = await db.execute({
-    sql: 'SELECT id, content_hash FROM journal_entries WHERE id = ?',
+    sql: 'SELECT id, user_id, content_hash FROM journal_entries WHERE id = ?',
     args: [journal.id],
   });
   const isNew = existing.rows.length === 0;
   // No-op guard: same content hash → don't reset AI, don't churn the queue,
   // don't supersede decks. This is what makes per-keystroke autosave safe.
-  if (!isNew && existing.rows[0].content_hash === hash) {
+  // `force` (uid-switch migration) bypasses it so the row is re-homed to the
+  // new uid with correct per-uid encryption; content is identical.
+  if (!isNew && !opts.force && existing.rows[0].content_hash === hash) {
+    return { isNew: false, changed: false };
+  }
+  const sameOwnerNoChange =
+    !isNew && existing.rows[0].user_id === uid && existing.rows[0].content_hash === hash;
+  if (sameOwnerNoChange) {
+    return { isNew: false, changed: false };
+  }
+  // Ownership-only move (uid-switch migration, identical content): re-home
+  // the row + re-encrypt under the new uid WITHOUT resetting AI, churning
+  // decks, or touching stars. Full path below handles real content edits.
+  if (!isNew && opts.force && existing.rows[0].content_hash === hash) {
+    await db.execute({
+      sql: `UPDATE journal_entries SET user_id = ?, content = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?`,
+      args: [uid, encrypt(trimmed, uid), journal.id],
+    });
+    // Re-home this journal's decks too (cards_json is plaintext, no
+    // per-uid encryption) so revealed Quran progress follows the uid.
+    try {
+      await db.execute({
+        sql: `UPDATE insight_decks SET user_id = ?, updated_at = CURRENT_TIMESTAMP
+              WHERE journal_id = ? AND user_id != ?`,
+        args: [uid, journal.id, uid],
+      });
+    } catch (e) {
+      console.warn('[upsertJournal] deck re-home failed:', e.message);
+    }
     return { isNew: false, changed: false };
   }
 

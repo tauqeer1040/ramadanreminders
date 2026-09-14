@@ -1,0 +1,293 @@
+---
+import Base from '../layouts/Base.astro';
+
+const title = 'Onboarding demo (new flow)';
+const description = 'Interactive demo of the proposed 20-step Meowmin onboarding: same pitch length, faster micro-win, optional auth, resumable.';
+---
+
+<Base title={title} description={description} noindex={true}>
+  <section class="px-4 sm:px-6 py-8" style="background:#0d0d1a;min-height:100vh;">
+    <div class="max-w-6xl mx-auto">
+      <p class="text-center text-[11px] tracking-[0.2em] text-white/40 mb-2">DEMO · NOT SHIPPED · NOINDEX</p>
+      <h1 class="text-white text-2xl sm:text-3xl font-black text-center">Onboarding demo — same 20 steps, less friction</h1>
+      <p class="text-white/60 text-sm text-center mt-2 max-w-2xl mx-auto">
+        Activation = <strong class="text-white/85">first value</strong> (journal + insight) first, <strong class="text-white/85">trial/purchase</strong> second.
+        Auth is optional — Continue is never disabled. Progress resumes after refresh.
+      </p>
+
+      <div class="grid lg:grid-cols-[400px_1fr] gap-6 mt-8 items-start">
+        <!-- Phone -->
+        <div class="mx-auto w-full max-w-[400px]">
+          <div class="rounded-[2.2rem] border-[10px] border-black bg-black shadow-2xl overflow-hidden">
+            <div class="bg-[#141422] px-5 pt-4 pb-3">
+              <div class="flex items-center justify-between">
+                <p id="ob-step-label" class="text-white text-sm font-bold">Step 1 of 20</p>
+                <div class="flex items-center gap-1.5 rounded-lg px-2.5 py-1" style="background:rgba(250,204,21,.15);border:1px solid rgba(250,204,21,.35);">
+                  <span>⭐</span><span id="ob-stars" class="text-sm font-black" style="color:#FACC15;">10</span>
+                </div>
+              </div>
+              <p id="ob-act" class="text-[11px] font-bold tracking-widest text-white/45 mt-1.5">ACT I · WHY · 20% HEAD START</p>
+              <div class="h-2 rounded-full bg-white/10 mt-2 overflow-hidden"><div id="ob-bar" class="h-full rounded-full" style="width:20%;background:linear-gradient(90deg,#8b5cf6,#facc15);transition:width .3s;"></div></div>
+            </div>
+            <div id="ob-body" class="bg-[#141422] px-5 pb-5 pt-2 min-h-[520px] flex flex-col" style="min-height:520px;"></div>
+          </div>
+          <div class="flex gap-2 mt-3">
+            <button id="ob-back" class="flex-1 rounded-xl py-2.5 text-sm font-bold text-white/70 bg-white/10 hover:bg-white/15">← Back</button>
+            <button id="ob-restart" class="flex-1 rounded-xl py-2.5 text-sm font-bold text-white/70 bg-white/10 hover:bg-white/15">↺ Restart demo</button>
+          </div>
+          <p class="text-white/35 text-xs mt-2 text-center">Refresh the page — demo resumes where you left off (fix #3).</p>
+        </div>
+
+        <!-- Explainer + events -->
+        <div class="space-y-4">
+          <div class="rounded-2xl p-5 bg-white/[.06] border border-white/10">
+            <h2 class="text-white font-black">What changed vs. the app today</h2>
+            <ul class="text-white/70 text-sm mt-2 space-y-1.5 list-disc pl-5">
+              <li><strong class="text-white/90">Micro-win at step 3:</strong> name → instant verse greeting. Value in ~30s, full journal insight still the Peak at step 13.</li>
+              <li><strong class="text-white/90">Endowed 20%:</strong> starts with 10⭐ + “head start” instead of 0%. 20 steps read as 4 acts, not 20 chores.</li>
+              <li><strong class="text-white/90">Name:</strong> one field + Skip; cat name optional with default “Noor”.</li>
+              <li><strong class="text-white/90">Music:</strong> real choice (3 vibes + mute), not a fake Continue.</li>
+              <li><strong class="text-white/90">Hold:</strong> 2s hold <em>or</em> tap to commit (accessible).</li>
+              <li><strong class="text-white/90">Journal:</strong> sticky Save bar (never hidden by keyboard), chips, “tiny is fine”.</li>
+              <li><strong class="text-white/90">Feedback:</strong> optional, no forced 3s countdown; review moved out of onboarding.</li>
+              <li><strong class="text-white/90">Google (step 17):</strong> Continue always enabled → anonymous OK. Logs <code>google_completed</code> vs <code>google_skipped</code>.</li>
+              <li><strong class="text-white/90">Paywall:</strong> dismissible + personalized (“Because you said…”) + trial secondary activation.</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl p-5 bg-white/[.06] border border-white/10">
+            <div class="flex items-center justify-between">
+              <h2 class="text-white font-black">Event log <span class="text-white/40 font-normal text-xs">(mirrors AnalyticsService)</span></h2>
+              <button id="ob-copy" class="text-xs font-bold text-white/70 bg-white/10 rounded-lg px-3 py-1.5 hover:bg-white/15">Copy JSON</button>
+            </div>
+            <ol id="ob-log" class="mt-3 space-y-1.5 text-xs font-mono text-white/70 max-h-64 overflow-auto"></ol>
+            <div id="ob-metrics" class="mt-3 text-xs text-white/60"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const KEY = 'meowmin-demo-onb-v1';
+    const STARS = [5,5,10, 5,5,5,5, 30, 5,5,10,10, 50,60, 15,15, 0,0,5,10];
+    const ACTS = [[0,6,'ACT I · WHY'],[7,11,'ACT II · THE MIRROR'],[12,14,'ACT III · FIRST LIGHT'],[15,19,'ACT IV · COMMIT']];
+    const VERSES = {
+      'deeper connection with allah': '“And He is with you wherever you are.” (57:4) — closeness starts with one honest line.',
+      'quran consistency': '“The most beloved deeds are the most consistent, even if small.” (Bukhari) — tiny daily beats heroic weekly.',
+      'peace': '“Verily, in the remembrance of Allah do hearts find rest.” (13:28) — rest is a practice, not a place.',
+      'gratitude': '“If you are grateful, I will surely increase you.” (14:7) — noticed blessings multiply.',
+    };
+    const DEFAULTS = { i: 0, stars: 10, startTime: Date.now(), firstValueMs: null, data: { name: '', catName: 'Noor', music: 'Rain + lofi', intention: '', million: '', wakeup: '', phoneHours: 4, journal: '', email: '', authed: false }, log: [] };
+
+    let S;
+    try { S = JSON.parse(localStorage.getItem(KEY)) || structuredClone(DEFAULTS); }
+    catch { S = structuredClone(DEFAULTS); }
+    if (typeof S.i !== 'number' || S.i < 0 || S.i > 19) S.i = 0;
+    const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+    function logEvent(name, params) {
+      const t = Date.now() - S.startTime;
+      S.log.push({ t_ms: t, event: name, ...(params ? { params } : {}) });
+      save(); renderLog();
+    }
+    function renderLog() {
+      const ol = $('ob-log'); if (!ol) return;
+      ol.innerHTML = S.log.slice(-40).map(e =>
+        `<li><span class="text-white/35">${(e.t_ms/1000).toFixed(1)}s</span> <span class="text-yellow-200/90">${esc(e.event)}</span> <span class="text-white/40">${esc(e.params ? JSON.stringify(e.params) : '')}</span></li>`
+      ).join('') || '<li class="text-white/35">No events yet.</li>';
+      ol.scrollTop = ol.scrollHeight;
+      const fv = S.firstValueMs == null ? '—' : (S.firstValueMs/1000).toFixed(1) + 's';
+      $('ob-metrics').innerHTML = `Primary activation (first value): <strong class="text-white/85">${S.firstValueMs == null ? 'not yet' : fv}</strong> · Trial: <strong class="text-white/85">${S.log.some(e=>e.event==='trial_started') ? 'started' : '—'}</strong> · Drop-off position: <strong class="text-white/85">step ${S.i+1}/20</strong>`;
+    }
+
+    function actFor(i) { return ACTS.find(([a,b]) => i >= a && i <= b)[2]; }
+    function addStars(n) { S.stars += n; }
+
+    function shell(inner, cta) {
+      return `${inner}<div class="mt-auto pt-4">${cta || ''}<button data-nav="back" class="w-full mt-2 text-white/35 text-xs font-semibold py-1">← Back (system back goes one step, never exits silently)</button></div>`;
+    }
+    const primaryBtn = (label, extra='') => `<button data-nav="next" ${extra} class="w-full rounded-2xl py-4 bg-white text-black font-black hover:bg-gray-100">${label}</button>`;
+    const ghostBtn = (label, act) => `<button data-nav="${act}" class="w-full rounded-2xl py-3 mt-2 text-sm font-bold text-white/70 bg-white/10 hover:bg-white/15">${label}</button>`;
+    const chips = (opts, key) => `<div class="flex flex-wrap gap-2 mt-3">${opts.map(o => `<button data-chip="${esc(key)}|${esc(o)}" class="rounded-full px-4 py-2 text-sm font-bold border ${S.data[key]===o ? 'bg-white text-black border-white' : 'text-white/80 border-white/20 bg-white/5'}">${esc(o)}</button>`).join('')}</div>`;
+
+    function verseFor() {
+      const k = (S.data.intention || '').toLowerCase();
+      for (const key of Object.keys(VERSES)) if (k.includes(key.split(' ')[0])) return VERSES[key];
+      return '“And your Lord says: Call upon Me; I will respond to you.” (40:60) — this journal is a form of calling.';
+    }
+
+    function render() {
+      const i = S.i, d = S.data;
+      $('ob-step-label').textContent = `Step ${i+1} of 20`;
+      $('ob-stars').textContent = S.stars;
+      const pct = Math.max(20, Math.round(((i+1)/20)*100));
+      $('ob-bar').style.width = pct + '%';
+      $('ob-act').textContent = `${actFor(i)} · ${pct}%`;
+      $('ob-back').disabled = i === 0;
+      $('ob-back').style.opacity = i === 0 ? .4 : 1;
+      const B = $('ob-body');
+      const name = d.name ? `, ${esc(d.name)}` : '';
+
+      const pages = [
+        // 0 welcome
+        () => shell(`<div class="text-center pt-6"><img src="/images/face.png" class="w-20 h-20 rounded-full mx-auto" alt="Meowmin"/><h2 class="text-white text-2xl font-black mt-4">Assalamu alaikum${name} 🌙</h2><p class="text-white/60 text-sm mt-2">Your 20-step path to a Quran that speaks to <em>your</em> day. You already started — <strong class="text-yellow-200">10⭐ head start</strong>.</p></div>`,
+          `${primaryBtn('Waalikumassalam →')}${ghostBtn('I already have an account → step 17', 'login')}`),
+        // 1 music (REAL choice)
+        () => shell(`<h2 class="text-white text-xl font-black">Pick your vibe 🎧</h2><p class="text-white/60 text-sm mt-1">Real choice — it sticks for journaling.</p>${chips(['Rain + lofi','Silent dhikr','Ocean night','Muted'], 'music')}`, primaryBtn('Continue with “' + esc(d.music) + '” →')),
+        // 2 name (single + skip)
+        () => shell(`<h2 class="text-white text-xl font-black">What should we call you?</h2><input id="f-name" maxlength="24" value="${esc(d.name)}" placeholder="Your name (optional)" class="mt-3 w-full rounded-2xl px-4 py-3.5 text-white bg-white/10 border border-white/15 outline-none" /><input id="f-cat" maxlength="24" value="${esc(d.catName)}" placeholder="Cat companion name (default Noor)" class="mt-2 w-full rounded-2xl px-4 py-3 text-sm text-white/80 bg-white/5 border border-white/10 outline-none" /><p class="text-white/40 text-xs mt-2">One field. Skip anytime — we personalize anyway.</p>`,
+          `${primaryBtn(d.name ? `Continue as ${esc(d.name)} →` : 'Continue →')}${ghostBtn('Skip for now', 'next')}`),
+        // 3 intention + MICRO-WIN verse
+        () => shell(`<h2 class="text-white text-xl font-black">What do you seek most${name}?</h2>${chips(['Deeper connection with Allah','Quran consistency','Peace & stillness','Gratitude & contentment'], 'intention')}<div class="rounded-2xl p-4 mt-4 text-left" style="background:rgba(250,204,21,.1);border:1px solid rgba(250,204,21,.35);"><p class="text-[11px] font-bold tracking-widest text-yellow-200/80">✨ MICRO-WIN · YOUR VERSE</p><p class="text-white/85 text-sm mt-1">${esc(verseFor())}</p></div><p class="text-white/40 text-xs mt-2">Value in ~30 seconds — the full insight still lands at step 13.</p>`,
+          `${primaryBtn('I feel seen — continue →')}${ghostBtn('No hard questions → jump to step 8', 'jump7')}`),
+        // 4 million
+        () => shell(`<div class="text-center pt-4"><p class="text-5xl">💰</p><h2 class="text-white text-xl font-black mt-3">If you had a million dollars tomorrow…</h2><p class="text-white/60 text-sm mt-2">…would your heart feel any closer to Allah? Wealth fills hands. Only remembrance fills hearts.</p></div>`, primaryBtn('Yeah, I feel that →')),
+        // 5 wakeup
+        () => shell(`<div class="text-center pt-4"><p class="text-5xl">🌅</p><h2 class="text-white text-xl font-black mt-3">Do you wake up rested?</h2><p class="text-white/60 text-sm mt-2">Most of us wake up tired — phone first, Quran never. It is not discipline you lack. It is a door that opens easily.</p></div>`, primaryBtn('Nah, not really →')),
+        // 6 conclusion hold OR tap
+        () => shell(`<div class="text-center pt-4"><p class="text-5xl">🤲</p><h2 class="text-white text-xl font-black mt-3">Ready to build your path${name}?</h2><p class="text-white/60 text-sm mt-2">Hold 2s — or just tap. Both count (accessible).</p><div class="h-3 rounded-full bg-white/10 mt-4 overflow-hidden"><div id="hold-fill" class="h-full" style="width:0%;background:#facc15;"></div></div></div>`,
+          `<button id="hold-btn" class="w-full rounded-2xl py-4 bg-white text-black font-black mt-4 select-none">Hold to commit (or tap)</button>${ghostBtn('Just tap to commit', 'next')}`),
+        // 7 phone hours
+        () => shell(`<h2 class="text-white text-xl font-black">Hours on your phone daily?</h2><p class="text-white/60 text-sm">Default 4h — slide, no typing.</p><input id="f-hours" type="range" min="0" max="16" value="${d.phoneHours}" class="w-full mt-4" /><p class="text-center text-white text-3xl font-black mt-2">${d.phoneHours}h</p>`, primaryBtn('Continue →')),
+        // 8 bombshell 1
+        () => shell(`<div class="text-center pt-4"><p class="text-5xl">📱</p><h2 class="text-white text-xl font-black mt-3">That is ~${(d.phoneHours*365).toLocaleString()} hours this year.</h2><p class="text-white/60 text-sm mt-2">If just 10% became reflection, that is <strong class="text-yellow-200">${Math.round(d.phoneHours*365*0.1)} hours</strong> of growth${name}.</p></div>`, primaryBtn('Whoa — continue →')),
+        // 9 bombshell 2
+        () => shell(`<div class="text-center pt-4"><p class="text-5xl">⏳</p><h2 class="text-white text-xl font-black mt-3">Over 40 years: ${Math.round(d.phoneHours*365*40/24/365*10)/10} years of screen.</h2><p class="text-white/60 text-sm mt-2">Nobody regrets the scrolling. Everybody remembers the returning.</p></div>`, primaryBtn('I want to return →')),
+        // 10 bombshell 3
+        () => shell(`<div class="text-center pt-4"><p class="text-5xl">📖</p><h2 class="text-white text-xl font-black mt-3">Meowmin readers open the Quran 3× more.</h2><p class="text-white/60 text-sm mt-2">Not by trying harder — by writing 2 minutes and letting the verse come to them.</p></div>`, primaryBtn('Let’s do this →')),
+        // 11 bridge
+        () => shell(`<div class="text-center pt-4"><p class="text-5xl">🌉</p><h2 class="text-white text-xl font-black mt-3">It doesn’t have to be this way${name}.</h2><p class="text-white/60 text-sm mt-2">Let’s build your personal path — starting with one honest line.</p></div>`, primaryBtn('Start writing ✍️')),
+        // 12 journal (sticky save)
+        () => `<div class="flex flex-col" style="min-height:440px;"><h2 class="text-white text-xl font-black">First entry — tiny is fine</h2><p class="text-white/60 text-sm">2 minutes. Even one sentence counts.</p><div class="flex flex-wrap gap-2 mt-2">${['Grateful for…','Today was heavy because…','I felt distant when…','A small win today…'].map(s => `<button data-sug="${esc(s)}" class="rounded-full px-3 py-1.5 text-xs font-bold text-white/75 bg-white/10 border border-white/10">+ ${esc(s)}</button>`).join('')}</div><textarea id="f-journal" rows="5" placeholder="Alhamdulillah, today…" class="mt-3 w-full rounded-2xl px-4 py-3 text-white bg-white/10 border border-white/15 outline-none">${esc(d.journal)}</textarea><p class="text-white/40 text-xs mt-1"><span id="j-count">${(d.journal||'').length}</span> chars · autosaved locally</p><div class="mt-auto pt-3 sticky bottom-0 bg-[#141422] pb-1"><button data-nav="save-journal" class="w-full rounded-2xl py-4 font-black ${d.journal.trim() ? 'bg-white text-black' : 'bg-white/15 text-white/50'}">Save & Continue →</button><p class="text-center text-white/35 text-[11px] mt-1">Save bar stays visible while typing (fix #5)</p></div></div>`,
+        // 13 AI insight (simulated staged load + scratch)
+        () => shell(`<h2 class="text-white text-xl font-black">✨ Your insight</h2><div id="ai-load" class="rounded-2xl p-4 mt-3 bg-white/5 border border-white/10"><p class="text-white/70 text-sm" id="ai-status">Reading your words…</p><div class="h-2 rounded-full bg-white/10 mt-2 overflow-hidden"><div id="ai-fill" class="h-full" style="width:5%;background:#8b5cf6;"></div></div></div><div id="ai-cards" class="hidden grid grid-cols-3 gap-2 mt-3">${['Verse|“So remember Me; I will remember you.” (2:152)','Story|Yusuf (AS) — patience in the well becomes power in the palace.','Hadith|“Actions are but by intentions…” (Bukhari 1)'].map((c,ix) => { const [t,b] = c.split('|'); return `<button data-scratch="${ix}" class="rounded-2xl p-3 text-left bg-white/5 border border-yellow-200/30"><p class="text-[10px] font-bold tracking-widest text-yellow-200/80">${t}</p><p class="text-white/85 text-xs mt-1 card-body" data-locked="1">Tap to reveal</p><p class="hidden text-white/60 text-[11px] mt-1">${esc(b)}</p></button>`; }).join('')}</div><p class="text-white/35 text-[11px] mt-2">Demo insight is local. In-app: 60s AI → 45s fallback → static. Never blocks.</p>`,
+          primaryBtn('This moved me — continue →')),
+        // 14 celebration (peak-end)
+        () => shell(`<div class="text-center pt-4" id="celebrate"><p class="text-6xl">🎉</p><h2 class="text-white text-2xl font-black mt-3">Day 1 — closer to Allah!</h2><div class="flex justify-center gap-1.5 mt-3">${'🔥'.padEnd(1)}<span class="text-white/70 text-sm">1-day streak · ${S.stars}⭐ earned</span></div><p class="text-white/60 text-sm mt-2">Peak moment. End Act III on a high (Peak-End Rule).</p></div>`, `${primaryBtn('Continue my journey →')}`),
+        // 15 summary (spiritual profile)
+        () => shell(`<h2 class="text-white text-xl font-black">Your Spiritual Profile</h2><div class="rounded-2xl p-4 mt-3 bg-white/5 border border-white/10 text-sm text-white/80 space-y-1.5"><p>🧕 <strong>${esc(d.name || 'Friend')}</strong> + 🐱 <strong>${esc(d.catName || 'Noor')}</strong> · 🎧 ${esc(d.music)}</p><p>🧭 Seeks: <strong>${esc(d.intention || 'closeness')}</strong></p><p>📱 ${d.phoneHours}h/day → <strong class="text-yellow-200">${Math.round(d.phoneHours*365*0.1)}h possible reflection/yr</strong></p><p>✍️ “${esc((d.journal||'—').slice(0,90))}${(d.journal||'').length>90?'…':''}”</p><p>⏱️ Time to first value: <strong>${S.firstValueMs==null?'—':(S.firstValueMs/1000).toFixed(0)+'s'}</strong></p></div>`, primaryBtn('Looks good →')),
+        // 16 feedback (optional, NO countdown)
+        () => shell(`<h2 class="text-white text-xl font-black">Loving it so far${name}?</h2><p class="text-white/60 text-sm mt-1">Optional — no timer, no trap. (Store review lives post-Day-2 in-app.)</p>${chips(['Yes, I love it!','It’s okay','Needs work'], 'fb')}`, `${primaryBtn('Continue →')}${ghostBtn('Skip feedback', 'next')}`),
+        // 17 google OPTIONAL
+        () => shell(`<div class="text-center pt-2"><p class="text-5xl">🔐</p><h2 class="text-white text-xl font-black mt-3">Back up your journey?</h2><p class="text-white/60 text-sm mt-1">Google syncs across devices. <strong class="text-white/85">Optional — Continue works without it.</strong></p><button data-nav="google" class="w-full rounded-2xl py-3.5 mt-3 font-black ${d.authed ? 'bg-green-400 text-black' : 'bg-white text-black'}">${d.authed ? '✓ Connected as demo@meowmin.app' : 'G  Continue with Google (demo)'}</button></div>`,
+          `${primaryBtn(d.authed ? 'Continue →' : 'Continue without Google →')}`),
+        // 18 email (skippable, prefilled)
+        () => shell(`<h2 class="text-white text-xl font-black">Get your journey recap?</h2><p class="text-white/60 text-sm mt-1">One email with your verse + excerpt. Skippable.</p><input id="f-email" value="${esc(d.email)}" placeholder="you@example.com" inputmode="email" class="mt-3 w-full rounded-2xl px-4 py-3.5 text-white bg-white/10 border border-white/15 outline-none" />`,
+          `${primaryBtn('Send recap & continue →')}${ghostBtn('Skip for now', 'skip-email')}`),
+        // 19 paywall personalized
+        () => shell(`<div class="text-center"><p class="text-[11px] font-bold tracking-[0.2em] text-yellow-200/80">MEOWMIN MAX · 3-DAY FREE TRIAL</p><h2 class="text-white text-2xl font-black mt-2">Keep ${esc(d.name || 'your')} ${Math.round(d.phoneHours*365*0.1)} hours of light.</h2><p class="text-white/65 text-sm mt-2">Because you seek <strong class="text-white/90">“${esc(d.intention || 'closeness')}”</strong>${d.journal ? ` and wrote <em>“${esc(d.journal.slice(0,60))}…”</em>` : ''} — Max keeps unlimited journaling, daily insights, and your streak alive.</p><div class="grid grid-cols-3 gap-2 mt-3 text-center">${[['Unlimited','journals'],['Daily','insights'],['Streak','shield']].map(([a,b]) => `<div class="rounded-2xl py-2.5 bg-white/5 border border-white/10"><p class="text-white text-sm font-black">${a}</p><p class="text-white/50 text-[11px]">${b}</p></div>`).join('')}</div></div>`,
+          `<button data-nav="purchase" class="w-full rounded-2xl py-4 bg-white text-black font-black mt-4">Start 3-day free trial →</button>${ghostBtn('Not now — explore free', 'finish-free')}`),
+      ];
+
+      B.innerHTML = pages[i]();
+      wire(i);
+    }
+
+    function go(n, how) {
+      const prev = S.i;
+      S.i = Math.max(0, Math.min(19, n));
+      if (S.i !== prev) { addStars(0); }
+      save(); render(); renderLog();
+    }
+    function next() {
+      if (S.i >= 19) return finish('purchase');
+      addStars(0);
+      // star award for arriving at next step
+      const ns = STARS[S.i + 1] || 0;
+      S.stars += ns;
+      const from = S.i;
+      S.i = S.i + 1;
+      logEvent('onboarding_page_viewed', { page: S.i + 1, from: from + 1 });
+      save(); render();
+    }
+
+    function finish(kind) {
+      if (!S.log.some(e => e.event === 'trial_started')) logEvent('trial_started', { trialType: '3_day_free', via: kind });
+      logEvent('onboarding_complete', { steps: 20, timeToSignUpMs: Date.now() - S.startTime, auth: S.data.authed ? 'google' : 'anonymous' });
+      save();
+      $('ob-body').innerHTML = `<div class="text-center pt-8"><p class="text-6xl">🌙</p><h2 class="text-white text-2xl font-black mt-3">Welcome home${S.data.name ? ', ' + esc(S.data.name) : ''}.</h2><p class="text-white/60 text-sm mt-2">Primary activation: first value in ${S.firstValueMs==null?'—':(S.firstValueMs/1000).toFixed(0)+'s'} · Secondary: trial ${kind === 'purchase' ? 'started + paywall converted 🎉' : 'started, paywall deferred'}.</p><div class="rounded-2xl p-4 mt-4 bg-white/5 border border-white/10 text-left text-sm text-white/75"><p>⭐ ${S.stars} stars · 🔥 Day-1 streak · 📝 1 journal</p><p class="mt-1">Tomorrow: Day-2 card “2-min reflection” — the habit loop begins outside onboarding.</p></div><button data-nav="home" class="w-full rounded-2xl py-4 bg-white text-black font-black mt-4">Enter demo home →</button>${ghostBtn('Replay onboarding', 'replay')}</div>`;
+      wireHome();
+    }
+
+    function wire(i) {
+      const B = $('ob-body');
+      B.querySelectorAll('[data-nav]').forEach(b => b.addEventListener('click', () => {
+        const a = b.dataset.nav;
+        if (a === 'next') { if (i === 6 || i === 12) return; collect(i); next(); }
+        if (a === 'login') { logEvent('skip_to_login', {}); S.i = 17; save(); render(); }
+        if (a === 'jump7') { logEvent('branch_skip_hard_questions', {}); S.i = 7; S.stars += STARS[7]; save(); render(); }
+        if (a === 'back') back();
+        if (a === 'save-journal') { collect(i); if (!S.data.journal.trim()) { B.querySelector('#f-journal').focus(); return; } logEvent('first_true_action', { which: 'journal', words: S.data.journal.trim().split(/\s+/).length }); if (S.firstValueMs == null) { S.firstValueMs = Date.now() - S.startTime; } next(); }
+        if (a === 'google') { S.data.authed = true; logEvent('google_completed', {}); save(); render(); }
+        if (a === 'skip-email') { logEvent('email_check_skipped', {}); next(); }
+        if (a === 'purchase') { collect(i); logEvent('purchase', { plan: 'max_annual', via: 'onboarding_paywall' }); finish('purchase'); }
+        if (a === 'finish-free') { collect(i); logEvent('paywall_dismissed', {}); finish('free'); }
+      }));
+      B.querySelectorAll('[data-chip]').forEach(b => b.addEventListener('click', () => {
+        const [k, v] = b.dataset.chip.split('|');
+        S.data[k] = v; save(); render();
+      }));
+      B.querySelectorAll('[data-sug]').forEach(b => b.addEventListener('click', () => {
+        const t = $('f-journal'); t.value = (t.value ? t.value + ' ' : '') + b.dataset.sug + ' ';
+        t.dispatchEvent(new Event('input')); t.focus();
+      }));
+      const j = B.querySelector('#f-journal');
+      if (j) {
+        j.addEventListener('input', () => { S.data.journal = j.value; $('j-count').textContent = j.value.length; const btn = B.querySelector('[data-nav="save-journal"]'); if (btn) { btn.className = `w-full rounded-2xl py-4 font-black ${j.value.trim() ? 'bg-white text-black' : 'bg-white/15 text-white/50'}`; } save(); });
+      }
+      const h = B.querySelector('#f-hours');
+      if (h) h.addEventListener('input', () => { S.data.phoneHours = +h.value; save(); render(); });
+      const hb = B.querySelector('#hold-btn');
+      if (hb) {
+        let t0, prog;
+        const fill = () => B.querySelector('#hold-fill');
+        hb.addEventListener('pointerdown', () => { t0 = Date.now(); prog = setInterval(() => { const p = Math.min(100, (Date.now()-t0)/2000*100); if (fill()) fill().style.width = p + '%'; if (p >= 100) { clearInterval(prog); logEvent('commitment', { mode: 'hold' }); next(); } }, 50); });
+        ['pointerup','pointerleave'].forEach(ev => hb.addEventListener(ev, () => clearInterval(prog)));
+        hb.addEventListener('click', (e) => { if (Date.now() - (t0||0) < 1500) { /* treat short press as tap fallback only if explicitly via ghost */ } });
+      }
+      // AI insight staged load
+      if (i === 13) {
+        const stages = ['Reading your words…','Finding your verse…','Weaving your story…'];
+        let sIdx = 0;
+        const iv = setInterval(() => {
+          const st = B.querySelector('#ai-status'), fl = B.querySelector('#ai-fill');
+          if (!st) { clearInterval(iv); return; }
+          sIdx++;
+          if (sIdx < stages.length) { st.textContent = stages[sIdx]; if (fl) fl.style.width = (20 + sIdx*30) + '%'; }
+          else { clearInterval(iv); if (fl) fl.style.width = '100%'; st.textContent = 'Revealed — tap cards, then continue.'; const c = B.querySelector('#ai-cards'); if (c) c.classList.remove('hidden'); if (S.firstValueMs == null && S.data.journal.trim()) { S.firstValueMs = Date.now() - S.startTime; } logEvent('insight_viewed', { mode: 'demo_local' }); save(); renderLog(); }
+        }, 900);
+        B.querySelectorAll('[data-scratch]').forEach(card => card.addEventListener('click', () => {
+          const body = card.querySelector('.card-body'), extra = card.querySelector('.hidden');
+          if (body) { body.textContent = extra ? extra.textContent : body.textContent; body.dataset.locked = '0'; }
+          if (extra) extra.classList.remove('hidden');
+          logEvent('onboarding_scratch_revealed', { card: card.dataset.scratch });
+        }));
+      }
+      if (i === 14 && window.confetti) { try { confetti({ particleCount: 90, spread: 75, origin: { y: .3 } }); } catch {} }
+    }
+    function wireHome() {
+      document.querySelectorAll('[data-nav]').forEach(b => b.addEventListener('click', () => {
+        if (b.dataset.nav === 'replay') { localStorage.removeItem(KEY); location.reload(); }
+        if (b.dataset.nav === 'home') { logEvent('demo_home_entered', {}); }
+      }));
+    }
+    function collect(i) {
+      const g = (id) => document.getElementById(id)?.value ?? null;
+      if (i === 2) { const v = g('f-name'); if (v != null) S.data.name = v.trim().slice(0,24); const c = g('f-cat'); if (c != null && c.trim()) S.data.catName = c.trim().slice(0,24); if (S.data.name) logEvent('micro_win_verse', { name: S.data.name }); }
+      if (i === 12) { const v = g('f-journal'); if (v != null) S.data.journal = v; }
+      if (i === 18) { const v = g('f-email'); if (v != null) S.data.email = v.trim(); if (S.data.email) logEvent('email_continue_sent', { skipped: false }); }
+      save();
+    }
+    function back() { if (S.i > 0) { S.i--; save(); render(); } }
+
+    $('ob-back').addEventListener('click', back);
+    $('ob-restart').addEventListener('click', () => { localStorage.removeItem(KEY); location.reload(); });
+    $('ob-copy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(JSON.stringify(S.log, null, 2)); $('ob-copy').textContent = 'Copied ✓'; setTimeout(() => $('ob-copy').textContent = 'Copy JSON', 1500); } catch {} });
+
+    if (!S.log.length) logEvent('onboarding_started', {});
+    else renderLog();
+    render();
+  </script>
+</Base>

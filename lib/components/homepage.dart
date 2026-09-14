@@ -3,7 +3,10 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import '../services/auth_service.dart';
+import '../services/max_status.dart';
+import '../services/revenuecat_service.dart';
 import '../services/streak_service.dart';
 import '../services/star_service.dart';
 import '../services/audio_service.dart';
@@ -16,6 +19,8 @@ import 'widgets/star_badge.dart';
 import 'widgets/journal_entry_button.dart';
 import 'streak_reward_dialog.dart';
 import 'widgets/mascot_greeting.dart';
+import 'widgets/max_expiry_banner.dart';
+import 'widgets/max_welcome_sheet.dart';
 import 'widgets/deferred_lottie.dart';
 
 class Homepage extends ConsumerStatefulWidget {
@@ -36,10 +41,14 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
   late CurvedAnimation _wobbleAnim;
   Timer? _wobbleTimer;
   bool _belowFoldReady = false;
+  // Cached once: an inline future would refire on EVERY rebuild, flashing
+  // the expiry banner in/out and shoving the Write button up and down.
+  late Future<MaxStatus> _maxStatusFuture;
 
   @override
   void initState() {
     super.initState();
+    _maxStatusFuture = MaxStatusService.current();
     _loadStreak();
     _loadStars();
 
@@ -70,7 +79,11 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
     });
 
     AuthService.authStateChanges.listen((user) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {
+          _maxStatusFuture = MaxStatusService.current();
+        });
+      }
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -90,6 +103,33 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
   Future<void> _loadStars() async {
     final stars = await StarService.loadStars();
     if (mounted) ref.read(homepageProvider.notifier).setStars(stars);
+  }
+
+  /// Renewal entry from the Max expiry banner (expiring members only).
+  Future<void> _openMaxPaywall() async {
+    if (!mounted) return;
+    HapticFeedback.lightImpact();
+    try {
+      final result = await RevenueCatService.instance.presentPaywall(
+        displayCloseButton: true,
+      );
+      if ((result == PaywallResult.purchased ||
+              result == PaywallResult.restored) &&
+          mounted) {
+        try {
+          await RevenueCatService.instance.getCustomerInfo();
+        } catch (_) {}
+        await RevenueCatService.flagWelcomePending(
+          forceShow: result == PaywallResult.restored,
+        );
+        await MaxWelcomeSheet.showIfPending(context);
+        if (mounted) {
+          setState(() {
+            _maxStatusFuture = MaxStatusService.current();
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -127,6 +167,22 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      FutureBuilder<MaxStatus>(
+                        future: _maxStatusFuture,
+                        builder: (context, snap) {
+                          final status = snap.data;
+                          if (status == null || !status.showExpiryBanner) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: MaxExpiryBanner(
+                              status: status,
+                              onRenew: () => _openMaxPaywall(),
+                            ),
+                          );
+                        },
+                      ),
                       SizedBox(
                         height: 128,
                         child: Padding(
@@ -221,10 +277,27 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
                         child: JournalEntryButton(
                           displayName: _getDisplayName(),
                           starBadgeKey: _starBadgeKey,
+                          onStarsTicked: (_) {
+                            _loadStars();
+                            _starAnimController.forward(from: 0);
+                          },
                           onJournalSaved: (msg) {
+                            // Pin the scroll offset across the post-save
+                            // reflow burst (new message + stars + history all
+                            // land in one frame) so the page can't jump.
+                            final pinned = _scrollCtrl.hasClients
+                                ? _scrollCtrl.offset
+                                : null;
                             _loadStars();
                             _starAnimController.forward(from: 0);
                             ref.read(homepageProvider.notifier).setMascotMessage(msg);
+                            if (pinned != null) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (!_scrollCtrl.hasClients) return;
+                                final max = _scrollCtrl.position.maxScrollExtent;
+                                _scrollCtrl.jumpTo(pinned.clamp(0.0, max));
+                              });
+                            }
                           },
                         ),
                       ),
@@ -232,7 +305,18 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
                       if (_belowFoldReady) ...[
                         JournalHistorySection(key: _journalKey, maxEntries: 3),
                         const SizedBox(height: 24),
-                        StreakGraph(streak: state.streakCount, size: 220),
+                        FutureBuilder<int>(
+                          future: StreakService.getArmedShieldCount(),
+                          builder: (context, shieldSnap) {
+                            final shieldActive =
+                                (shieldSnap.data ?? 0) > 0;
+                            return StreakGraph(
+                              streak: state.streakCount,
+                              size: 220,
+                              shieldActive: shieldActive,
+                            );
+                          },
+                        ),
                         Image.asset(
                           'assets/photos/mascot/trio3.webp',
                           width: double.infinity,

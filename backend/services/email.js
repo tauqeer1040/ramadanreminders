@@ -112,4 +112,68 @@ function delightHtml({ name, email, tok, d }) {
   </body></html>`;
 }
 
-module.exports = { sendEmail, delightData, delightHtml, continueLink, esc };
+// Value recap for Max members: what the subscription delivered — journals
+// written, insights revealed, streak — plus plan/expiry context. Computed at
+// SEND time (not enqueue) so the 24h-delayed job reflects settled stats.
+async function maxRecapData(uid) {
+  const d = { journals: 0, decksRevealed: 0, streak: 1, plan: null, expiresAt: null, name: null };
+  try {
+    const u = await db.execute({
+      sql: 'SELECT display_name, subscription_product_id, subscription_expires_at FROM users WHERE id = ?',
+      args: [uid],
+    });
+    const row = u.rows[0];
+    if (!row) return d;
+    d.name = row.display_name || null;
+    d.plan = row.subscription_product_id || null;
+    d.expiresAt = row.subscription_expires_at ?? null;
+    const j = await db.execute({
+      sql: `SELECT COUNT(*) AS n FROM journal_entries WHERE user_id = ?`,
+      args: [uid],
+    });
+    d.journals = Number(j.rows[0]?.n || 0);
+    const r = await db.execute({
+      sql: `SELECT COUNT(*) AS n FROM insight_decks WHERE user_id = ? AND status = 'revealed'`,
+      args: [uid],
+    });
+    d.decksRevealed = Number(r.rows[0]?.n || 0);
+    const s = await db.execute({
+      sql: `SELECT streak FROM streaks WHERE uid = ?`,
+      args: [uid],
+    });
+    if (s.rows[0]) d.streak = Math.max(1, Number(s.rows[0].streak || 1));
+  } catch (e) {
+    console.error('[email] maxRecapData failed:', e.message);
+  }
+  return d;
+}
+
+const MAX_RECAP_SUBJECT = 'Your Meowmin Max journey so far 🌙';
+
+function maxRecapHtml({ name, email, d }) {
+  const first = esc(((name || (email || 'friend').split('@')[0] || 'friend')).split(' ')[0]);
+  const expiry = d.expiresAt
+    ? `<p>Your plan renews ${d.plan ? `(${esc(d.plan)}) ` : ''}on <strong>${esc(new Date(d.expiresAt).toDateString())}</strong>. Cancel anytime — your journals stay yours.</p>`
+    : '';
+  const row = (big, small) =>
+    `<td style="text-align:center;padding:12px 6px;"><div style="font-size:22px;font-weight:800;">${esc(String(big))}</div><div style="font-size:12px;color:#8a7f6a;">${esc(small)}</div></td>`;
+  return `<!doctype html><html><body style="font-family:sans-serif;color:#222;max-width:560px;margin:auto;padding:24px;">
+    <div style="text-align:center;margin-bottom:8px;">
+      <img src="${PUBLIC_WEB_URL}/images/face.png" alt="Meowmin" width="72" height="72" style="border-radius:50%;display:block;margin:auto;" />
+    </div>
+    <p>Assalamu alaikum ${first} 🌙</p>
+    <p><strong>Thank you for getting Max.</strong> Here is what your subscription delivered:</p>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      ${row(d.journals, 'journals written')}
+      ${row(d.decksRevealed, 'insight decks revealed')}
+      ${row(`${d.streak}-day`, 'streak')}
+    </tr></table>
+    <div style="background:#f6f1e7;border-radius:12px;padding:16px;margin:16px 0;">
+      <p style="margin:0;">Keep walking — unlimited journaling, deeper streaks, and fresh insights queued every day. A calmer, closer you, one page at a time.</p>
+    </div>
+    ${expiry}
+    <p style="font-size:12px;color:#888;">Questions? reply to this email or write to contact@taucity.xyz.</p>
+  </body></html>`;
+}
+
+module.exports = { sendEmail, delightData, delightHtml, continueLink, esc, maxRecapData, maxRecapHtml, MAX_RECAP_SUBJECT };

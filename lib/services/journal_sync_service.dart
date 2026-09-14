@@ -56,7 +56,50 @@ class JournalSyncService {
     );
   }
 
-  static Future<void> _syncAllLocalJournalsToCloud() async {
+  /// Re-marks every locally stored journal for upload. Used after a Google
+  /// sign-in that switched uids (anon -> existing Google account) so entries
+  /// first synced under the anon uid are re-homed under the Google uid.
+  /// Server upserts by id, so already-migrated rows are cheap no-ops.
+  static Future<int> markAllForSync() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      var count = 0;
+      for (final key in prefs.getKeys()) {
+        if (!key.startsWith(_keyPrefix) || !key.endsWith('_text')) continue;
+        final stored = prefs.getString(key);
+        if (stored == null || stored.trim().isEmpty) continue;
+        final id = key.substring(
+          _keyPrefix.length,
+          key.length - '_text'.length,
+        );
+        if (id.isEmpty) continue;
+        await prefs.setBool('$_keyPrefix${id}_needs_sync', true);
+        count++;
+      }
+      return count;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// One awaitable sync pass. [force] bypasses the server's content-hash
+  /// no-op guard so rows already stored under a previous (anon) uid are
+  /// re-homed to the current uid with correct per-uid encryption.
+  /// Fire-and-forget callers should keep using [triggerSync].
+  static Future<void> syncNow({bool force = false}) async {
+    if (_syncInProgress) return;
+    _syncInProgress = true;
+    try {
+      await _syncAllLocalJournalsToCloud(force: force);
+      _currentInterval = _baseInterval;
+    } catch (e) {
+      debugPrint('[Sync] failed: $e');
+    } finally {
+      _syncInProgress = false;
+    }
+  }
+
+  static Future<void> _syncAllLocalJournalsToCloud({bool force = false}) async {
     final user = _auth.currentUser;
     if (user == null) return;
 
@@ -99,6 +142,7 @@ class JournalSyncService {
               'displayName': user.displayName,
               'email': user.email,
               'journals': journalsToSync,
+              if (force) 'force': true,
             }),
           )
           .timeout(const Duration(seconds: 20));

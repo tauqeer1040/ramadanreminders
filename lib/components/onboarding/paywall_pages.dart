@@ -407,7 +407,7 @@ class _PaywallPage3State extends State<PaywallPage3> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      "For less than the price of a coffee, you can spend the next three days putting Meowmin to a real test. Journal each morning and night. Let the reflections surface. See if the Quran begins to read you as much as you read it.\n\nIf, after three days, you don't feel this was the best dollar you've ever spent on your aakhirah, we'll refund it. No questions asked.",
+                      "Put Meowmin to a real test. Journal each morning and night. Let the reflections surface. See if the Quran begins to read you as much as you read it.\n\nMonthly, 4-month, yearly, and lifetime plans — cancel anytime.",
                       style: tt.bodyLarge?.copyWith(
                         color: cs.onSurface.withValues(alpha: 0.7),
                       ),
@@ -424,7 +424,7 @@ class _PaywallPage3State extends State<PaywallPage3> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Text(
-                          '\$1',
+                          'Max',
                           style: TextStyle(
                             color: AppTheme.starGold,
                             fontSize: 32,
@@ -436,7 +436,7 @@ class _PaywallPage3State extends State<PaywallPage3> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              '3-Day Trial',
+                              'Meowmin Max',
                               style: TextStyle(
                                 color: AppTheme.starWhite,
                                 fontSize: 16,
@@ -444,7 +444,7 @@ class _PaywallPage3State extends State<PaywallPage3> {
                               ),
                             ),
                             Text(
-                              'Starts at \$1 for 3 days, then \$49.99/4mo',
+                              'Monthly · 4-month · Yearly · Lifetime',
                               style: TextStyle(
                                 color: AppTheme.ghostSilver.withValues(alpha: 0.8),
                                 fontSize: 12,
@@ -466,7 +466,7 @@ class _PaywallPage3State extends State<PaywallPage3> {
                       radius: 16,
                       height: 56,
                       child: const Text(
-                        'Start Your \$1 Trial',
+                        'See Plans',
                         style: TextStyle(
                           color: Colors.black,
                           fontSize: 16,

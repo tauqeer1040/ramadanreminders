@@ -15,6 +15,18 @@ const syncJournalsSchema = z.object({
     content_hash: z.string().optional(),
     client_updated_at: z.string().optional(),
   })),
+  // UID-switch migration (anon -> existing Google account): bypass the
+  // content-hash no-op guard so rows are re-homed to the new uid with
+  // correct per-uid encryption. Content-identical, no AI churn otherwise.
+  force: z.boolean().optional(),
+});
+
+const userStateSchema = z.object({
+  // Merge-only backup from the device: server resolves max/union so an
+  // older row can never shrink device-local progress.
+  stars: z.number().int().min(0).max(100000000).optional(),
+  purchases: z.array(z.string().max(200)).max(500).optional(),
+  shieldBalance: z.number().int().min(0).max(1000000).optional(),
 });
 
 const createJournalSchema = z.object({
@@ -42,7 +54,7 @@ const generateInsightsSchema = z.object({
 });
 
 const awardStarsSchema = z.object({
-  action: z.enum(['onboarding_complete', 'quran_read']),
+  action: z.enum(['onboarding_complete', 'quran_read', 'first_journal']),
 });
 
 const claimBonusSchema = z.object({
@@ -112,6 +124,7 @@ const transferClaimSchema = z.object({
 module.exports = {
   upsertUserSchema,
   syncJournalsSchema,
+  userStateSchema,
   createJournalSchema,
   deckRevealSchema,
   deckDayQuerySchema,

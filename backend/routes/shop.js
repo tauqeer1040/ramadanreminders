@@ -95,7 +95,8 @@ module.exports = function (app) {
       return res.status(400).json({ error: 'purchaseToken and productId required' });
     }
 
-    if (!productId.includes('streak-shield')) {
+    const pid = String(productId);
+    if (!pid.includes('streak-shield') && !pid.includes('meowmin_shield')) {
       return res.status(400).json({ error: 'Invalid product' });
     }
 
@@ -113,7 +114,7 @@ module.exports = function (app) {
           );
           if (!hasActive) {
             const nonSubPurchase = rcData?.subscriber?.non_subscription_transactions?.find(
-              t => t.product_identifier?.includes('streak-shield') && t.purchase_token === purchaseToken
+              t => (t.product_identifier?.includes('streak-shield') || t.product_identifier?.includes('meowmin_shield')) && t.purchase_token === purchaseToken
             );
             if (!nonSubPurchase) {
               console.warn(`[Shield Grant] No matching purchase found for ${uid}`);

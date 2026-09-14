@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../../components/widgets/glass_container.dart';
 import 'package:flutter/services.dart';
@@ -245,7 +247,7 @@ class _CompactLabel extends StatelessWidget {
   }
 }
 
-class _CompactSlider extends StatelessWidget {
+class _CompactSlider extends StatefulWidget {
   final double value;
   final Color petalColor;
   final ValueChanged<double> onChanged;
@@ -259,26 +261,40 @@ class _CompactSlider extends StatelessWidget {
   });
 
   @override
+  State<_CompactSlider> createState() => _CompactSliderState();
+}
+
+class _CompactSliderState extends State<_CompactSlider> {
+  @override
+  void initState() {
+    super.initState();
+    // Warm the mascot face so the thumb never paints its fallback.
+    _MascotThumbShape.precache().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final thumbR = isTight ? 8.0 : 10.0;
-    final trackH = isTight ? 6.0 : 8.0;
+    final thumbR = widget.isTight ? 12.0 : 16.0;
+    final trackH = widget.isTight ? 6.0 : 8.0;
 
     return SliderTheme(
       data: SliderThemeData(
         trackHeight: trackH,
         trackShape: _PillTrackShape(),
-        thumbShape: _ShadowedThumbShape(radius: thumbR),
-        activeTrackColor: petalColor,
-        inactiveTrackColor: petalColor.withValues(alpha: 0.20),
-        thumbColor: petalColor.withValues(alpha: 0.85),
-        overlayColor: petalColor.withValues(alpha: 0.12),
+        thumbShape: _MascotThumbShape(radius: thumbR),
+        activeTrackColor: widget.petalColor,
+        inactiveTrackColor: widget.petalColor.withValues(alpha: 0.20),
+        thumbColor: widget.petalColor.withValues(alpha: 0.85),
+        overlayColor: widget.petalColor.withValues(alpha: 0.12),
         overlayShape: RoundSliderOverlayShape(overlayRadius: thumbR + 4),
       ),
       child: Slider(
-        value: value,
+        value: widget.value,
         min: 0.0,
         max: 1.0,
-        onChanged: onChanged,
+        onChanged: widget.onChanged,
       ),
     );
   }
@@ -372,9 +388,33 @@ class _PillTrackShape extends RoundedRectSliderTrackShape {
   }
 }
 
-class _ShadowedThumbShape extends RoundSliderThumbShape {
-  const _ShadowedThumbShape({required double radius})
-      : super(enabledThumbRadius: radius);
+/// Mascot-face slider thumb. Spins with drag position (two full turns
+/// across the track), pops bigger while pressed, falls back to a gold dot
+/// until the face image finishes loading.
+class _MascotThumbShape extends SliderComponentShape {
+  static const _faceAsset = 'assets/photos/mascot/face.webp';
+  static ui.Image? _faceImage;
+  static Future<void>? _precacheFlight;
+
+  final double radius;
+  const _MascotThumbShape({required this.radius});
+
+  static Future<void> precache() {
+    return _precacheFlight ??= (() async {
+      try {
+        final data = await rootBundle.load(_faceAsset);
+        final codec = await ui.instantiateImageCodec(
+          data.buffer.asUint8List(),
+        );
+        final frame = await codec.getNextFrame();
+        _faceImage = frame.image;
+      } catch (_) {}
+    })();
+  }
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
+      Size.fromRadius(radius);
 
   @override
   void paint(
@@ -392,21 +432,32 @@ class _ShadowedThumbShape extends RoundSliderThumbShape {
     required Size sizeWithOverflow,
   }) {
     final canvas = context.canvas;
-    final fontSize = enabledThumbRadius * 2.2;
-    final tp = TextPainter(
-      text: TextSpan(
-        text: String.fromCharCode(Icons.star_rounded.codePoint),
-        style: TextStyle(
-          fontSize: fontSize,
-          fontFamily: Icons.star_rounded.fontFamily,
-          color: const Color(0xFFFFD700),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(
-      canvas,
-      center - Offset(tp.width / 2, tp.height / 2),
+    final press = activationAnimation.value;
+    final angle = value * math.pi * 4;
+    final r = radius * (1.0 + 0.3 * press);
+    // Soft drop shadow.
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.35)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
     );
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(angle);
+    final img = _faceImage;
+    if (img != null) {
+      final rect = Rect.fromCircle(center: Offset.zero, radius: r);
+      canvas.clipPath(Path()..addOval(rect));
+      paintImage(canvas: canvas, rect: rect, image: img, fit: BoxFit.cover);
+    } else {
+      canvas.drawCircle(
+        Offset.zero,
+        r,
+        Paint()..color = sliderTheme.thumbColor ?? const Color(0xFFFFD700),
+      );
+    }
+    canvas.restore();
   }
 }

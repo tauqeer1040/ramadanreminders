@@ -1,0 +1,101 @@
+---
+import Base from '../layouts/Base.astro';
+
+// INTERNAL reference only — mirrors the in-app Max welcome sheet
+// (lib/components/widgets/max_welcome_sheet.dart). Not linked anywhere.
+const title = 'Max welcome (internal reference)';
+const description = 'Internal visual reference for the Meowmin Max thank-you sheet. Not for indexing.';
+---
+
+<Base title={title} description={description} noindex={true}>
+  <section class="py-12 px-6" style="background:#1a0533;min-height:100vh;">
+    <div class="max-w-[480px] mx-auto">
+      <p class="text-center text-xs tracking-widest text-white/40 mb-6">INTERNAL REFERENCE · NOT LINKED · NOINDEX</p>
+
+      <!-- ── Welcome sheet (scrollable) ─────────────────── -->
+      <div class="rounded-3xl p-6 text-center" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(20px);max-height:80vh;overflow-y:auto;">
+        <div class="w-11 h-1.5 rounded-full mx-auto mb-5" style="background:rgba(255,255,255,.25);"></div>
+        <img src="/images/face.png" alt="Meowmin" width="76" height="76" class="mx-auto" />
+        <h1 class="text-white text-2xl font-black mt-4">Thank you for getting Max, Tauqeer!</h1>
+        <p class="text-white/70 text-sm mt-2 leading-relaxed">Look how far 3 days took you — imagine where daily reflection carries you next.</p>
+
+        <!-- Streak: full row (mirrors STREAK card) -->
+        <div class="rounded-2xl p-4 mt-5 text-left" style="background:rgba(157,80,255,.2);border:1px solid rgba(255,255,255,.18);">
+          <p class="text-[10px] font-extrabold tracking-widest text-white m-0">STREAK</p>
+          <div class="flex items-end gap-2 mt-2">
+            <span class="text-5xl">🔥</span>
+            <span class="text-white font-black leading-none" style="font-size:40px;">3</span>
+            <span class="text-white/60 text-xs pb-1">day streak</span>
+          </div>
+        </div>
+
+        <!-- Graph + insights side by side, same box sizing -->
+        <div class="grid grid-cols-2 gap-2.5 mt-2.5 text-left">
+          <!-- Analytics graph (mirrors monthly line chart) -->
+          <div class="rounded-2xl p-3" style="background:#2A2A2A;">
+            <div class="flex justify-between items-center">
+              <p class="text-[10px] font-extrabold tracking-widest m-0" style="color:#F1F1F1;">GRAPH</p>
+              <p class="m-0 font-black" style="color:#F1F1F1;font-size:16px;">12+</p>
+            </div>
+            <svg viewBox="0 0 120 60" class="w-full mt-2" style="height:64px;">
+              <polyline points="0,48 15,42 30,44 45,34 60,36 75,26 90,28 105,16 120,18" fill="none" stroke="#F5E6A3" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="flex justify-between mt-1" style="color:#F1F1F1;font-size:8px;">
+              <span>J-M</span><span>A-J</span><span>J-S</span><span>O-D</span>
+            </div>
+          </div>
+          <!-- Insights (mirrors BREAKDOWN card) -->
+          <div class="rounded-2xl p-3" style="background:#2A2A2A;">
+            <p class="text-[10px] font-extrabold tracking-widest m-0" style="color:#F1F1F1;">INSIGHTS</p>
+            <div class="mt-2 space-y-1.5 text-[11.5px]" style="color:#F1F1F1;">
+              <div class="flex justify-between"><span>Entries</span><strong>12</strong></div>
+              <div class="flex justify-between"><span>Words</span><strong>4.2K</strong></div>
+              <div class="flex justify-between"><span>Revealed</span><strong>9</strong></div>
+              <div class="flex justify-between"><span>Favs</span><strong>3</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Benefits -->
+        <div class="rounded-2xl p-4 mt-4 text-left" style="background:rgba(250,204,21,.1);border:1px solid rgba(250,204,21,.35);">
+          <ul class="m-0 pl-5 space-y-1.5 text-white/85 text-[13.5px] leading-relaxed">
+            <li><strong>Unlimited word count</strong> — the 280-character cap is gone</li>
+            <li><strong>Fresh AI insights</strong> queued every day</li>
+            <li><strong>Streak shields</strong> — never lose your progress</li>
+            <li><strong>Private, encrypted diary</strong> across all 114 surahs</li>
+          </ul>
+        </div>
+
+        <div class="flex gap-2 mt-4">
+          <input disabled placeholder="Email for your journey recap (optional)" class="flex-1 rounded-[14px] px-3.5 py-3 text-sm text-white/80" style="background:rgba(255,255,255,.06);border:none;outline:none;" />
+          <span class="rounded-[14px] px-4 py-3 bg-white text-black font-bold">➤</span>
+        </div>
+
+        <span class="block mt-3.5 rounded-2xl py-4 text-white font-black" style="background:#9D50FF;box-shadow:0 8px 0 #6A00FF;">Continue</span>
+      </div>
+
+      <!-- ── Expiry banner ─────────────────────────────── -->
+      <p class="text-center text-xs tracking-widest text-white/40 mt-10 mb-3">EXPIRY BANNER ( renewal surface )</p>
+      <div class="rounded-2xl px-4 py-3.5 flex items-center gap-2.5" style="background:rgba(250,204,21,.12);border:1px solid rgba(250,204,21,.45);">
+        <span class="text-lg">⏳</span>
+        <span class="flex-1 font-extrabold text-[13px]" style="color:#FACC15;">Max expiring in 2 days — please renew</span>
+        <span style="color:#FACC15;">→</span>
+      </div>
+
+      <!-- ── Recap email ───────────────────────────────── -->
+      <p class="text-center text-xs tracking-widest text-white/40 mt-10 mb-3">RECAP EMAIL (Resend · delayed 24h)</p>
+      <div class="rounded-3xl p-6 bg-white text-gray-800">
+        <p class="m-0">Assalamu alaikum Tauqeer 🌙</p>
+        <p><strong>Thank you for getting Max.</strong> Here is what your subscription delivered:</p>
+        <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td style="text-align:center;"><div style="font-size:22px;font-weight:800;">12</div><div style="font-size:12px;color:#8a7f6a;">journals written</div></td>
+          <td style="text-align:center;"><div style="font-size:22px;font-weight:800;">9</div><div style="font-size:12px;color:#8a7f6a;">insight decks revealed</div></td>
+          <td style="text-align:center;"><div style="font-size:22px;font-weight:800;">3-day</div><div style="font-size:12px;color:#8a7f6a;">streak</div></td>
+        </tr></table>
+        <div style="background:#f6f1e7;border-radius:12px;padding:16px;margin:16px 0;">
+          <p style="margin:0;">Keep walking — unlimited journaling, deeper streaks, and fresh insights queued every day.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>

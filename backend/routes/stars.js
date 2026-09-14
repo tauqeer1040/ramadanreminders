@@ -67,6 +67,19 @@ module.exports = function (app) {
           });
           break;
         }
+        case 'first_journal': {
+          const claimed = JSON.parse(user.claimed_bonuses ?? '[]');
+          if (claimed.includes('first_journal')) {
+            return res.status(409).json({ error: 'First-journal bonus already claimed' });
+          }
+          awardAmount = 50;
+          claimed.push('first_journal');
+          await db.execute({
+            sql: 'UPDATE users SET stars = COALESCE(stars, 0) + ?, claimed_bonuses = ? WHERE id = ?',
+            args: [awardAmount, JSON.stringify(claimed), uid],
+          });
+          break;
+        }
         case 'quran_read': {
           const today = new Date().toISOString().slice(0, 10);
           const lastDate = user.daily_award_date || '';

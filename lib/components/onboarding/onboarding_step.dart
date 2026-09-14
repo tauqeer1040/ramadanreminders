@@ -7,8 +7,6 @@ import 'pages/bombshell_page1.dart';
 import 'pages/bombshell_page2.dart';
 import 'pages/bombshell_page3.dart';
 import 'pages/bridge_page.dart';
-import 'pages/email_page.dart';
-import 'pages/store_paywall_page.dart';
 import 'pages/qualifying_page.dart';
 import '../../screens/google_signin_page.dart' show GoogleSignInPage;
 
@@ -39,8 +37,9 @@ sealed class OnboardingStep {
     _SummaryStep(15),
     _AppFeedbackStep(16),
     _GoogleSignInStep(17),
-    _EmailStep(18),
-    _StorePaywallStep(19),
+    // _EmailStep removed — welcome email fires at Google sign-in instead.
+    // _StorePaywallStep removed — Google Continue launches the paywall sheet
+    // directly (no separate loading-plans step).
     // _QualifyingStep hidden — replaced by RevenueCat popup after Google sign-in
   ];
 
@@ -170,21 +169,7 @@ class _GoogleSignInStep extends OnboardingStep {
   const _GoogleSignInStep(int i) : super(i, 'google_signin');
   @override
   Widget buildPage(OnboardingData data, VoidCallback onNext, VoidCallback onBack, {VoidCallback? onSkipToLogin, void Function(int)? onGoToStep, ValueChanged<int>? onStarsEarned}) =>
-      GoogleSignInPage(onFinish: onNext, onBack: onBack);
-}
-
-class _EmailStep extends OnboardingStep {
-  const _EmailStep(int i) : super(i, 'email');
-  @override
-  Widget buildPage(OnboardingData data, VoidCallback onNext, VoidCallback onBack, {VoidCallback? onSkipToLogin, void Function(int)? onGoToStep, ValueChanged<int>? onStarsEarned}) =>
-      EmailPage(data: data, onNext: onNext, onBack: onBack);
-}
-
-class _StorePaywallStep extends OnboardingStep {
-  const _StorePaywallStep(int i) : super(i, 'store_paywall');
-  @override
-  Widget buildPage(OnboardingData data, VoidCallback onNext, VoidCallback onBack, {VoidCallback? onSkipToLogin, void Function(int)? onGoToStep, ValueChanged<int>? onStarsEarned}) =>
-      StorePaywallPage(data: data, onNext: onNext, onBack: onBack);
+      GoogleSignInPage(data: data, onFinish: onNext, onBack: onBack);
 }
 
 class _QualifyingStep extends OnboardingStep {

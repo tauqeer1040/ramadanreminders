@@ -11,7 +11,7 @@ import '../theme/app_theme.dart';
 import '../utils/image_urls.dart';
 
 Future<void> showStreakRewardDialog(BuildContext context) async {
-  final streak = await StreakService.getStreak();
+  final streak = await StreakService.getDisplayStreak();
   if (!context.mounted) return;
 
   final random = Random();

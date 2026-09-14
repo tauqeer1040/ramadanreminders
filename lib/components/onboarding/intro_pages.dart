@@ -31,6 +31,7 @@ class WelcomePage extends StatelessWidget {
           Text(
             "Assalamualikum...",
             style: tt.displaySmall?.copyWith(
+              fontFamily: 'PlayfairDisplay',
               fontWeight: FontWeight.w900,
               color: cs.onSurface,
               fontSize: 32,

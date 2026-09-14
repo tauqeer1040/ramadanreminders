@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import '../components/onboarding/onboarding_data.dart';
 import '../services/auth_service.dart';
 import '../services/analytics_service.dart';
+import '../services/email_continue_service.dart';
 import '../services/revenuecat_service.dart';
+import '../services/user_service.dart';
 import '../components/widgets/duo_button.dart';
 
 class GoogleSignInPage extends StatefulWidget {
+  final OnboardingData data;
   final VoidCallback onFinish;
   final VoidCallback onBack;
 
   const GoogleSignInPage({
+    required this.data,
     required this.onFinish,
     required this.onBack,
     super.key,
@@ -37,6 +42,10 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
           await RevenueCatService.instance.identify(uid);
         }
       } catch (_) {}
+      // Persist the Google email server-side, then fire the welcome email
+      // with the onboarding summary + spiritual profile (replaces the
+      // removed email step). Fire-and-forget — never blocks Continue.
+      _fireWelcomeEmail(cred?.user?.email);
       if (mounted) {
         setState(() {
           _loggedIn = true;
@@ -48,6 +57,49 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Sends the welcome/delight email carrying the onboarding summary and
+  /// spiritual profile. Best-effort: failures are silent by design.
+  Future<void> _fireWelcomeEmail(String? email) async {
+    try {
+      final user = AuthService.currentUser;
+      if (user != null) {
+        try {
+          await UserService.syncUser(user);
+        } catch (_) {}
+      }
+      final data = widget.data;
+      final journal = data.journalEntry;
+      final mins = DateTime.now().difference(data.startTime).inMinutes;
+      await EmailContinueService.mint(
+        email: (email ?? '').trim().isNotEmpty
+            ? email!.trim()
+            : (user?.email ?? '').trim(),
+        displayName: data.displayName,
+        snapshot: {
+          'intention': data.intentionAnswer,
+          'journalExcerpt': journal == null
+              ? null
+              : (journal.length > 500 ? journal.substring(0, 500) : journal),
+          'insights': data.journalAnalogies.take(3).toList(),
+          'timeSpent': mins < 1 ? 'a few mindful minutes' : '${mins}m',
+          // Spiritual profile (template/pages refined later).
+          'commitment': data.commitmentLevel,
+          'journey': data.journeyAnswer,
+          'heart': data.heartAnswer,
+          'challenge': data.challengeAnswer,
+          'displayName': data.displayName,
+        },
+      );
+      // Surface the address for the end-of-onboarding fallback mint.
+      try {
+        final addr = (email ?? '').trim().isNotEmpty
+            ? email!.trim()
+            : (user?.email ?? '').trim();
+        if (addr.isNotEmpty) data.email = addr;
+      } catch (_) {}
+    } catch (_) {}
   }
 
   @override
@@ -151,9 +203,9 @@ class _GoogleSignInPageState extends State<GoogleSignInPage> {
               Expanded(
                 flex: 2,
                 child: DuoButton(
-                  // Mandatory sign-in: Continue stays disabled until signed in.
-                  onPressed: _loggedIn ? widget.onFinish : null,
-                  dimOnDisabled: true,
+                  // Optional sign-in: Continue is always enabled — less
+                  // friction toward the paywall.
+                  onPressed: widget.onFinish,
                   backgroundColor: cs.primary,
                   depthColor: cs.primary.withValues(alpha: 0.8),
                   radius: 16,
