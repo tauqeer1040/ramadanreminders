@@ -216,5 +216,12 @@ class AppBootstrap {
     unawaited(BackgroundMusicService().init());
     unawaited(SfxService().init());
     StreakService.recordActivity();
+    // DB is authoritative for streak: adopt the server's users.streak after
+    // the local pass above. Fire-and-forget; on no response / offline the
+    // local streak stays untouched (fail-open inside pullStreakFromServer).
+    // Success notifies so the home card picks up an adjusted value.
+    unawaited(UserService.pullStreakFromServer().then((adopted) {
+      if (adopted) JournalService.notifyJournalsChanged();
+    }));
   }
 }

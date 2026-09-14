@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../services/max_status.dart';
 import '../services/revenuecat_service.dart';
 import '../services/streak_service.dart';
+import '../services/user_service.dart';
 import '../services/star_service.dart';
 import '../services/audio_service.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -94,6 +95,18 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
   Future<void> _loadStreak() async {
     final streak = await StreakService.getDisplayStreak();
     if (mounted) ref.read(homepageProvider.notifier).setStreak(streak);
+    // Launch-time DB pull (users.streak is authoritative): bootstrap fires
+    // it in the background — refresh once it settles so a server-side
+    // streak value shows up without a second app start.
+    try {
+      final pulled = await UserService.pullStreakFromServer();
+      if (pulled && mounted) {
+        final dbStreak = await StreakService.getDisplayStreak();
+        if (dbStreak != streak) {
+          ref.read(homepageProvider.notifier).setStreak(dbStreak);
+        }
+      }
+    } catch (_) {}
     final hasReward = await StreakService.checkAndClaimPrimeReward();
     if (hasReward && mounted) {
       showStreakRewardDialog(context);

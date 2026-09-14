@@ -27,6 +27,13 @@ const userStateSchema = z.object({
   stars: z.number().int().min(0).max(100000000).optional(),
   purchases: z.array(z.string().max(200)).max(500).optional(),
   shieldBalance: z.number().int().min(0).max(1000000).optional(),
+  // Streak carries its last-activity date so the server can judge
+  // freshness: a stale streak past its gap does not resurrect on restore.
+  streak: z.number().int().min(0).max(100000).optional(),
+  streakDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 const createJournalSchema = z.object({

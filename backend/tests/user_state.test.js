@@ -70,3 +70,64 @@ test('POST /user/state rejects invalid payloads', async () => {
   await h(req('u1', { stars: -5 }), r);
   expect(r.out.code).toBe(400);
 });
+
+test('streak merge: same-day report takes max and echoes back', async () => {
+  const h = handlers['POST /api/v2/user/state'];
+  const today = new Date().toISOString().slice(0, 10);
+
+  let r = res();
+  await h(req('u2', { streak: 4, streakDate: today }), r);
+  expect(r.out.code).toBe(200);
+  expect(r.out.body.streak).toBe(4);
+  expect(r.out.body.streakDate).toBe(today);
+
+  // Same-day lower report must not shrink it.
+  r = res();
+  await h(req('u2', { streak: 1, streakDate: today }), r);
+  expect(r.out.body.streak).toBe(4);
+});
+
+test('streak merge: consecutive day advances, gap restarts, lagging device ignored', async () => {
+  const h = handlers['POST /api/v2/user/state'];
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 86400000);
+
+  // Consecutive-day higher report: takes the new value, date advances.
+  let r = res();
+  await h(req('u3', { streak: 2, streakDate: fmt(today) }), r);
+  expect(r.out.body.streak).toBe(2);
+  expect(r.out.body.streakDate).toBe(fmt(today));
+
+  // Lagging device (yesterday's stale report) is ignored entirely.
+  r = res();
+  await h(req('u3', { streak: 9, streakDate: fmt(yesterday) }), r);
+  expect(r.out.body.streak).toBe(2);
+  expect(r.out.body.streakDate).toBe(fmt(today));
+
+  // Gap > 1 day: a NEWER observation wins (streak broke while this device
+  // was offline; the freshest report describes reality). An OLDER report is
+  // already covered by the lagging-device case above.
+  const future = new Date(today.getTime() + 3 * 86400000);
+  r = res();
+  await h(req('u3', { streak: 1, streakDate: fmt(future) }), r);
+  expect(r.out.body.streak).toBe(1);
+  expect(r.out.body.streakDate).toBe(fmt(future));
+});
+
+test('streak sync route writes users row (primary store)', async () => {
+  require('../routes/invites')(fakeApp);
+  const h = handlers['POST /api/v2/streaks/sync'];
+  expect(h).toBeDefined();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const r = res();
+  await h(req('u4', { streak: 7 }), r);
+  expect(r.out.code).toBe(200);
+  expect(r.out.body.streak).toBe(7);
+
+  // Verify it landed in users (read back through /user/state echo path).
+  const r2 = res();
+  await handlers['POST /api/v2/user/state'](req('u4', { streak: 1, streakDate: today }), r2);
+  expect(r2.out.body.streak).toBe(7); // same-day max keeps 7
+});

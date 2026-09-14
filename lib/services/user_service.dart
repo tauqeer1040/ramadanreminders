@@ -44,6 +44,8 @@ class UserService {
         } catch (_) {}
       }
       final shields = prefs.getInt('shield_balance');
+      final streak = prefs.getInt('streak');
+      final streakDate = prefs.getString('last_activity_date');
       final headers = await ApiClient.postHeaders();
       final res = await http
           .post(
@@ -53,10 +55,33 @@ class UserService {
               'stars': stars,
               'purchases': purchases,
               if (shields != null) 'shieldBalance': shields,
+              if (streak != null) 'streak': streak,
+              if (streakDate != null) 'streakDate': streakDate,
             }),
           )
           .timeout(const Duration(seconds: 10));
-      return res.statusCode == 200;
+      if (res.statusCode == 200) {
+        // Adopt the server's post-merge verdict: when this device's clock
+        // was behind, the echo carries the authoritative streak/date.
+        try {
+          final body = jsonDecode(res.body) as Map<String, dynamic>;
+          final srvStreak = body['streak'];
+          final srvDate = body['streakDate'];
+          if (srvStreak is num && srvDate is String && srvDate.isNotEmpty) {
+            final localDate = prefs.getString('last_activity_date');
+            if (localDate == null || srvDate.compareTo(localDate) >= 0) {
+              if (srvStreak.toInt() > (prefs.getInt('streak') ?? 0)) {
+                await prefs.setInt('streak', srvStreak.toInt());
+              }
+              if (srvDate != localDate) {
+                await prefs.setString('last_activity_date', srvDate);
+              }
+            }
+          }
+        } catch (_) {}
+        return true;
+      }
+      return false;
     } catch (e) {
       debugPrint('[UserService] pushLocalState failed: $e');
       return false;
@@ -141,10 +166,87 @@ class UserService {
         }
       }
 
+      // Journal-date history backfill first (activity-dates graph, max-wins
+      // count), then the DB streak — users.streak is authoritative for the
+      // number and lands last so neither pass can mask a server-side edit.
       await _restoreStreakFromServer(headers, prefs);
+      final srvStreak = body['streak'];
+      if (srvStreak is num && srvStreak > 0) {
+        final adopted = await _adoptServerStreak(
+          prefs,
+          srvStreak.toInt(),
+          body['streak_date'] as String?,
+        );
+        if (adopted) {
+          debugPrint('[UserService] Adopted server streak: ${srvStreak.toInt()}');
+        }
+      }
+
       return true;
     } catch (e) {
       debugPrint('[UserService] restoreProfile failed: $e');
+      return false;
+    }
+  }
+
+  /// Adopts the server's streak into local prefs. The DB value wins when its
+  /// observation is at least as fresh as local (missing streak_date is
+  /// treated as "current today"); a strictly older server observation is
+  /// rejected so an offline device's newer local run is never rolled back.
+  static Future<bool> _adoptServerStreak(
+    SharedPreferences prefs,
+    int streak,
+    String? serverDate,
+  ) async {
+    final now = DateTime.now();
+    final today =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final effective =
+        (serverDate == null || serverDate.isEmpty) ? today : serverDate;
+    final localDate = prefs.getString('last_activity_date');
+    if (localDate != null && effective.compareTo(localDate) < 0) {
+      return false; // server older than local -> keep local
+    }
+    await prefs.setInt('streak', streak);
+    await prefs.setString('last_activity_date', effective);
+    return true;
+  }
+
+  /// Launch-time streak pull (users.streak is the primary store). When the
+  /// server responds, its value is adopted so DB-side edits and cross-device
+  /// moves show up locally. If the server does NOT respond — offline,
+  /// timeout, non-200, bad payload — the local streak is kept untouched
+  /// (fail-open). Never throws.
+  static Future<bool> pullStreakFromServer() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) return false;
+      final headers = await ApiClient.authHeaders();
+      final res = await http
+          .get(
+            Uri.parse('${AppConstants.backendUrl}/user/$uid/streak'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 5));
+      if (res.statusCode != 200) {
+        debugPrint('[UserService] streak pull: HTTP ${res.statusCode}, keeping local');
+        return false;
+      }
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final streak = (body['streak'] as num?)?.toInt() ?? 0;
+      if (streak <= 0) return false; // no usable server value -> keep local
+      final prefs = await SharedPreferences.getInstance();
+      final adopted = await _adoptServerStreak(
+        prefs,
+        streak,
+        body['streakDate'] as String?,
+      );
+      if (adopted) {
+        debugPrint('[UserService] Pulled streak from server: $streak');
+      }
+      return adopted;
+    } catch (e) {
+      debugPrint('[UserService] streak pull failed (keeping local): $e');
       return false;
     }
   }
@@ -183,15 +285,26 @@ class UserService {
       }
       if (days.isEmpty) return;
 
+      // Merge server-known active days with the device's own history BEFORE
+      // recomputing: the fetch is capped at 50 entries, so a long journal
+      // history can lack the most recent days entirely. Recomputing from the
+      // raw server page alone produced a stale/zero streak and — worse — a
+      // stale last_activity_date, which the next launch read as a >1-day gap
+      // and reset the streak to 1 (the reported sync bug).
+      final localDates =
+          prefs.getStringList('streak_activity_dates') ?? const <String>[];
+      final mergedDays = <String>{...days, ...localDates}.toList()
+        ..sort();
+
       final now = DateTime.now();
-      final today =
-          DateTime(now.year, now.month, now.day);
+      final today = DateTime(now.year, now.month, now.day);
       String fmt(DateTime d) =>
           '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-      var cursor =
-          days.contains(fmt(today)) ? today : today.subtract(const Duration(days: 1));
+      var cursor = mergedDays.contains(fmt(today))
+          ? today
+          : today.subtract(const Duration(days: 1));
       var streak = 0;
-      while (days.contains(fmt(cursor))) {
+      while (mergedDays.contains(fmt(cursor))) {
         streak++;
         cursor = cursor.subtract(const Duration(days: 1));
       }
@@ -202,13 +315,15 @@ class UserService {
         if (streak > localStreak) {
           await prefs.setInt('streak', streak);
         }
-        final sorted = days.toList()..sort();
-        final localDates =
-            prefs.getStringList('streak_activity_dates') ?? const [];
-        final merged = {...localDates, ...sorted}.toList()..sort();
-        await prefs.setStringList('streak_activity_dates', merged);
-        await prefs.setString(
-            'last_activity_date', merged.last);
+        await prefs.setStringList('streak_activity_dates', mergedDays);
+        // Only ADVANCE last_activity_date — never overwrite it with an older
+        // observation. The old unconditional write is what corrupted gap
+        // detection and reset streaks on launch.
+        final curLast = prefs.getString('last_activity_date');
+        final newest = mergedDays.last;
+        if (curLast == null || newest.compareTo(curLast) > 0) {
+          await prefs.setString('last_activity_date', newest);
+        }
       }
     } catch (_) {}
   }

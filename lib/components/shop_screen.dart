@@ -165,14 +165,14 @@ class _ShopScreenState extends State<ShopScreen> {
     }
   }
 
-  /// Buys [qty] Streak Shields ($0.99 each, one Play Billing sheet per
-  /// shield — the store sells them singly). Cancelling stops the loop and
-  /// keeps whatever already succeeded. Every unit arms immediately and
-  /// fires automatically on a future missed day.
-  /// Healthy streak (> 1) → arms (auto-protects for 2 days each).
-  /// Broken streak (== 1) → first shield restores to the longest run, the
-  /// rest stay armed for next time.
+  /// Buys ONE Streak Shield ($0.99, single Play Billing sheet). The store
+  /// sells shields singly — quantity pickers were removed (Play Billing
+  /// consumables re-buy one at a time, and the per-unit sheets confused
+  /// pricing). [qty] is clamped to 1 defensively.
+  /// Healthy streak (> 1) → arms (auto-protects for 2 days).
+  /// Broken streak (== 1) → restores to the longest run.
   Future<void> _purchaseShields(int qty, {required bool restoreIfBroken}) async {
+    qty = 1;
     final streak = await StreakService.getDisplayStreak();
     final longest = await StreakService.longestRun();
     if (streak <= 1 && longest <= 1) {
@@ -304,8 +304,7 @@ class _ShopScreenState extends State<ShopScreen> {
         'automatically for one extra day. If your streak broke, use it to '
         'repair it.';
 
-    var qty = 1;
-    String priceFor(int n) => '\$${(0.99 * n).toStringAsFixed(2)}';
+    const String priceLabel = r'$0.99';
 
     await showDialog(
       context: context,
@@ -397,98 +396,30 @@ class _ShopScreenState extends State<ShopScreen> {
                       ),
                     )
                   else
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(
-                              width: 40,
-                              height: 40,
-                              child: MaterialButton(
-                                onPressed: qty > 1
-                                    ? () => setDialogState(() => qty--)
-                                    : null,
-                                padding: EdgeInsets.zero,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Text(
-                                  '−',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppTheme.starWhite,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: 44,
-                              child: Text(
-                                '$qty',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: AppTheme.starWhite,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: 40,
-                              height: 40,
-                              child: MaterialButton(
-                                onPressed: () =>
-                                    setDialogState(() => qty++),
-                                padding: EdgeInsets.zero,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Text(
-                                  '+',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppTheme.starWhite,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: MaterialButton(
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await _purchaseShields(
+                            1,
+                            restoreIfBroken: true,
+                          );
+                        },
+                        color: AppTheme.neonPurple,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 44,
-                          child: MaterialButton(
-                            onPressed: () async {
-                              Navigator.pop(ctx);
-                              await _purchaseShields(
-                                qty,
-                                restoreIfBroken: true,
-                              );
-                            },
-                            color: AppTheme.neonPurple,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              broken
-                                  ? 'BUY $qty · ${priceFor(qty)}'
-                                  : qty == 1
-                                      ? 'BUY SHIELD · ${priceFor(1)}'
-                                      : 'BUY $qty · ${priceFor(qty)}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.starWhite,
-                              ),
-                            ),
+                        child: Text(
+                          'BUY SHIELD · $priceLabel',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.starWhite,
                           ),
                         ),
-                      ],
+                      ),
                     ),
                 ],
               ),
@@ -861,8 +792,6 @@ class _ShopCard extends StatefulWidget {
 }
 
 class _ShopCardState extends State<_ShopCard> {
-  int _qty = 1;
-
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -873,13 +802,12 @@ class _ShopCardState extends State<_ShopCard> {
     final isShield = item.isShield;
     final showBanner = isShield ? shieldCount > 0 : owned;
     final bannerText = isShield ? 'USE X$shieldCount' : 'OWNED';
-    String priceFor(int n) => '\$${(0.99 * n).toStringAsFixed(2)}';
 
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: isShield
-            ? const Color(0xFF12121A)
+            ? Colors.transparent // shield card: transparent bg (orb art supplies its own backdrop)
             : Colors.white.withValues(alpha: 0.055),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
@@ -966,83 +894,32 @@ class _ShopCardState extends State<_ShopCard> {
                   width: double.infinity,
                   height: 32,
                   child: isShield
-                      ? Row(
-                          children: [
-                            SizedBox(
-                              width: 28,
-                              height: 32,
-                              child: MaterialButton(
-                                onPressed: _qty > 1
-                                    ? () => setState(() => _qty--)
-                                    : null,
-                                padding: EdgeInsets.zero,
-                                minWidth: 0,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                                child: const Text(
-                                  '−',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppTheme.starWhite,
-                                  ),
+                      ? MaterialButton(
+                          onPressed: () => widget.onPurchase(1),
+                          color: AppTheme.neonPurple,
+                          height: 32,
+                          minWidth: double.infinity,
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.shield_rounded,
+                                  size: 14, color: AppTheme.starWhite),
+                              const SizedBox(width: 3),
+                              Text(
+                                item.priceLabel.isNotEmpty
+                                    ? item.priceLabel
+                                    : r'$0.99',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.starWhite,
                                 ),
                               ),
-                            ),
-                            Expanded(
-                              child: MaterialButton(
-                                onPressed: () async {
-                                  final n = _qty;
-                                  setState(() => _qty = 1);
-                                  await widget.onPurchase(n);
-                                },
-                                color: AppTheme.neonPurple,
-                                height: 32,
-                                padding: EdgeInsets.zero,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.shield_rounded,
-                                        size: 14, color: AppTheme.starWhite),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      _qty == 1
-                                          ? (item.priceLabel.isNotEmpty
-                                              ? item.priceLabel
-                                              : '\$0.99')
-                                          : '$_qty · ${priceFor(_qty)}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                        color: AppTheme.starWhite,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: 28,
-                              height: 32,
-                              child: MaterialButton(
-                                onPressed: () => setState(() => _qty++),
-                                padding: EdgeInsets.zero,
-                                minWidth: 0,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                                child: const Text(
-                                  '+',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppTheme.starWhite,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         )
                       : owned
                       ? OutlinedButton(

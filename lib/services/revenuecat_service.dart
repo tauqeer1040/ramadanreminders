@@ -149,6 +149,10 @@ class RevenueCatService {
 
   Future<CustomerInfo?> getCustomerInfo() async {
     try {
+      // Self-heal: without configure() this throws for every caller
+      // (isSubscribed, purchase flows) and free/paid state reads as
+      // "never subscribed". Idempotent — a no-op once initialized.
+      await ensureInitialized();
       final info = await Purchases.getCustomerInfo();
       _cachedCustomerInfo = info;
       return info;
@@ -176,6 +180,7 @@ class RevenueCatService {
 
   Future<Offerings?> getOfferings() async {
     try {
+      await ensureInitialized();
       return await Purchases.getOfferings();
     } catch (e) {
       debugPrint('[RevenueCat] getOfferings failed: $e');
@@ -302,6 +307,7 @@ class RevenueCatService {
 
   Future<PurchaseResult> purchasePackage(Package package) async {
     try {
+      await ensureInitialized();
       final result = await Purchases.purchase(
         PurchaseParams.package(package),
       );
@@ -361,11 +367,24 @@ class RevenueCatService {
     bool displayCloseButton = true,
   }) async {
     try {
+      // Belt-and-braces: bootstrap is fire-and-forget, so a fast tap (or a
+      // stalled bootstrap) can reach here before configure() ran — the
+      // native fragment would silently self-dismiss ("Purchases is not
+      // configured"), dead-ending the non-dismissable hard wall.
+      await ensureInitialized();
       if (kIsWeb) {
         return await presentWebPaywall(
           offering: offering,
           displayCloseButton: displayCloseButton,
         );
+      }
+      // Self-heal: the native paywall dismisses itself instantly when the
+      // SDK is unconfigured ("Purchases is not configured. Dismissing.")
+      // — a silent dead button. Guarantee configure() ran first.
+      await ensureInitialized();
+      if (!_initialized) {
+        debugPrint('[RevenueCat] presentPaywall: SDK not initialized');
+        return PaywallResult.error;
       }
       // Prod-only: always use the passed offering or the current
       // (Default 3) production offering. No demo/Test Store routing.
@@ -471,6 +490,13 @@ class RevenueCatService {
     Offering? offering,
   }) async {
     try {
+      if (!kIsWeb) {
+        await ensureInitialized();
+        if (!_initialized) {
+          debugPrint('[RevenueCat] presentPaywallIfNeeded: SDK not initialized');
+          return PaywallResult.error;
+        }
+      }
       return await RevenueCatUI.presentPaywallIfNeeded(
         entitlementId,
         offering: offering,

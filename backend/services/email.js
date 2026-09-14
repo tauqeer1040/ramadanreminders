@@ -138,10 +138,18 @@ async function maxRecapData(uid) {
     });
     d.decksRevealed = Number(r.rows[0]?.n || 0);
     const s = await db.execute({
-      sql: `SELECT streak FROM streaks WHERE uid = ?`,
+      sql: `SELECT COALESCE(streak, 0) AS streak FROM users WHERE id = ?`,
       args: [uid],
     });
-    if (s.rows[0]) d.streak = Math.max(1, Number(s.rows[0].streak || 1));
+    if (s.rows[0] && Number(s.rows[0].streak || 0) > 0) {
+      d.streak = Math.max(1, Number(s.rows[0].streak));
+    } else {
+      const legacy = await db.execute({
+        sql: `SELECT streak FROM streaks WHERE uid = ?`,
+        args: [uid],
+      });
+      if (legacy.rows[0]) d.streak = Math.max(1, Number(legacy.rows[0].streak || 1));
+    }
   } catch (e) {
     console.error('[email] maxRecapData failed:', e.message);
   }

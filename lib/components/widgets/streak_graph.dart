@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_confetti/flutter_confetti.dart';
+import '../../services/invite_service.dart';
 import '../../theme/app_theme.dart';
 import 'deferred_lottie.dart';
 
@@ -23,6 +24,7 @@ class _StreakGraphState extends State<StreakGraph> with SingleTickerProviderStat
   late final AnimationController _popController;
   late final Animation<double> _popScale;
   bool _hintDismissed = true; // Hidden by default, revealed on tap
+  String? _friendLabel;
 
   @override
   void initState() {
@@ -34,6 +36,29 @@ class _StreakGraphState extends State<StreakGraph> with SingleTickerProviderStat
     _popScale = Tween<double>(begin: 1.0, end: 1.08).animate(
       CurvedAnimation(parent: _popController, curve: Curves.easeOutBack),
     );
+    _loadFriendLabel();
+  }
+
+  /// Friend linked via the share link (whoever keeps the longer streak
+  /// shields you both) — shown in the protection line under the number.
+  Future<void> _loadFriendLabel() async {
+    try {
+      if (!await InviteService.isFriendLinked()) return;
+      final label = await InviteService.getFriendLabel();
+      if (label != null && label.isNotEmpty && mounted) {
+        setState(() => _friendLabel = label);
+      }
+    } catch (_) {}
+  }
+
+  /// One small line under the number: shield armed, friend backing, or both.
+  String get _protectionLine {
+    final friend = _friendLabel;
+    if (widget.shieldActive && friend != null) {
+      return 'streak protected with shield & $friend';
+    }
+    if (widget.shieldActive) return 'streak shield active';
+    return 'streak protected by $friend';
   }
 
   @override
@@ -97,23 +122,26 @@ class _StreakGraphState extends State<StreakGraph> with SingleTickerProviderStat
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              if (widget.shieldActive) ...[
+              if (widget.shieldActive || (_friendLabel?.isNotEmpty ?? false)) ...[
                 const SizedBox(height: 4),
                 Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(
+                  children: [
+                    const Icon(
                       Icons.shield_rounded,
                       size: 12,
                       color: AppTheme.neonPurple,
                     ),
-                    SizedBox(width: 4),
-                    Text(
-                      'streak shield active',
-                      style: TextStyle(
-                        color: AppTheme.neonPurple,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        _protectionLine,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppTheme.neonPurple,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],

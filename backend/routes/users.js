@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const db = require('../lib/db');
 const { getCache, setCache, clearUserCache } = require('../lib/cache');
 const { decrypt } = require('../encryption');
-const { upsertUser, recalculateUserMetadata } = require('../lib/users');
+const { upsertUser, recalculateUserMetadata, mergeUserStreak } = require('../lib/users');
 const { upsertUserSchema, userStateSchema } = require('../lib/validation');
 
 module.exports = function (app) {
@@ -39,10 +39,17 @@ module.exports = function (app) {
         args: [uid],
       });
       const row = cur.rows[0] || {};
-      const { stars, purchases, shieldBalance } = parsed.data;
+      const { stars, purchases, shieldBalance, streak, streakDate } = parsed.data;
       if (stars !== undefined) {
         const merged = Math.max(Number(row.stars ?? 0), stars);
         await db.execute({ sql: 'UPDATE users SET stars = ? WHERE id = ?', args: [merged, uid] });
+      }
+      // Date-aware merge (see mergeUserStreak): a lagging device report can
+      // never roll the stored run backwards, and a broken streak stays broken.
+      let streakOut = null;
+      if (streak !== undefined) {
+        const mergedStreak = await mergeUserStreak(uid, streak, streakDate ?? null);
+        streakOut = mergedStreak;
       }
       if (shieldBalance !== undefined) {
         const merged = Math.max(Number(row.shield_balance ?? 0), shieldBalance);
@@ -64,7 +71,13 @@ module.exports = function (app) {
         sql: 'SELECT stars, purchases, shield_balance FROM users WHERE id = ?',
         args: [uid],
       });
-      res.json({ success: true, ...(out.rows[0] || {}) });
+      res.json({
+        success: true,
+        ...(out.rows[0] || {}),
+        // Echo the post-merge streak so the device can re-adopt truth when
+        // its local clock/date was behind the server's.
+        ...(streakOut ? { streak: streakOut.streak, streakDate: streakOut.streak_date } : {}),
+      });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -102,6 +115,35 @@ module.exports = function (app) {
 
       setCache(`user:${uid}`, user);
       res.json(user);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Lightweight streak pull (users.streak is the primary store). Used by
+  // the app at launch so DB-side streak changes show up locally.
+  app.get('/api/v2/user/:uid/streak', async (req, res) => {
+    if (req.params.uid !== req.uid) return res.status(403).json({ error: 'Forbidden' });
+    const uid = req.uid;
+    try {
+      const out = await db.execute({
+        sql: 'SELECT streak, streak_date FROM users WHERE id = ?',
+        args: [uid],
+      });
+      if (!out.rows.length) return res.status(404).json({ error: 'User not found' });
+      const legacy = !(out.rows[0].streak > 0)
+        ? await db.execute({
+            sql: 'SELECT streak, updated_at FROM streaks WHERE uid = ?',
+            args: [uid],
+          })
+        : null;
+      const streak = Number(out.rows[0].streak ?? 0) > 0
+        ? Number(out.rows[0].streak)
+        : Number(legacy?.rows[0]?.streak ?? 0);
+      const streakDate = Number(out.rows[0].streak ?? 0) > 0
+        ? out.rows[0].streak_date
+        : (legacy?.rows[0]?.updated_at || '').slice(0, 10) || null;
+      res.json({ streak, streakDate, success: true });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
