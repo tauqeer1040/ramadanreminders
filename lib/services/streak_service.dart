@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'analytics_protocol.dart';
 import 'analytics_service.dart';
 import 'invite_service.dart';
+import '../core/api_client.dart';
 import '../core/constants.dart';
 
 class StreakResult {
@@ -65,11 +67,15 @@ class StreakService {
     return result;
   }
 
+  /// Server balance is the truth (plan purchases grant shields there), so this
+  /// sends the auth token — without it the route 401s and the device silently
+  /// kept a stale local count, which is why plan-granted shields never showed.
   static Future<int> getShieldBalance() async {
     try {
       final response = await http.get(
         Uri.parse('${AppConstants.backendUrl}/subscription/shields'),
-      );
+        headers: await ApiClient.authHeaders(),
+      ).timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final shields = data['shields'] as int? ?? 0;
@@ -77,17 +83,19 @@ class StreakService {
         await prefs.setInt(_shieldBalanceKey, shields);
         return shields;
       }
+      debugPrint('[Streak] shields fetch: HTTP ${response.statusCode}, using local');
     } catch (_) {}
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_shieldBalanceKey) ?? 0;
   }
 
-  static Future<int> consumeShields(int daysGap) async {    try {
+  static Future<int> consumeShields(int daysGap) async {
+    try {
       final response = await http.post(
         Uri.parse('${AppConstants.backendUrl}/shop/shield-consume'),
-        headers: {'Content-Type': 'application/json'},
+        headers: await ApiClient.postHeaders(),
         body: json.encode({'daysGap': daysGap}),
-      );
+      ).timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final remaining = data['remaining'] as int? ?? 0;

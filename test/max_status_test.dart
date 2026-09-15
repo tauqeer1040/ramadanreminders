@@ -93,6 +93,15 @@ void main() {
       expect(s.showExpiryBanner, isFalse);
     });
 
+    test('Play 4-month plan is labelled 4-month, not 30-day', () {
+      // Play versionName of the plan is `meowmin_4month`.
+      expect(MaxStatusService.planLabelFor('meowmin_4month'), '4-month challenge');
+      expect(MaxStatusService.planLabelFor('four-month-journey'), '4-month challenge');
+      expect(MaxStatusService.planLabelFor('meowmin_yearly'), '12-month journey');
+      expect(MaxStatusService.planLabelFor('meowmin_monthly'), '30-day challenge');
+      expect(MaxStatusService.planLabelFor('meowmin_lifetime'), 'Lifetime');
+    });
+
     test('cancelled-but-active (willRenew false, future expiry) still counts down', () {
       final s = MaxStatusService.fromCustomerInfo(infoWith(
         activeEntitlement: {

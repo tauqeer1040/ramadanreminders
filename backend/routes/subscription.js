@@ -2,18 +2,24 @@ const crypto = require('crypto');
 const db = require('../lib/db');
 const { subscriptionSyncSchema, transferLifetimeSchema, transferClaimSchema } = require('../lib/validation');
 
-const SHIELD_AWARDS = {
-  'monthly-challenge-1': 3,
-  'monthly-challenge-5': 3,
-  'four-month-journey': 18,
-  'yearly': 72,
-  'lifetime-gift': 150,
-};
+// Shield allowance per plan. Matched as substrings because the id differs per
+// storefront and era: Play sells `meowmin_yearly` / `meowmin_4month`, while
+// RC/Paddle rows carry the long-form catalogue ids. Order matters — the
+// 4-month match must beat the monthly fallback.
+const SHIELD_AWARDS = [
+  { match: ['lifetime'], shields: 150 },
+  { match: ['four-month', 'four_month', 'fourmonth', '4month'], shields: 18 },
+  { match: ['yearly', 'year', 'annual', '12-month', '12month'], shields: 72 },
+  { match: ['monthly-challenge-1', 'monthly-challenge-5'], shields: 3 },
+];
 
 function shieldsForProduct(productId) {
   if (!productId) return 0;
-  const key = Object.keys(SHIELD_AWARDS).find(k => productId.includes(k));
-  return SHIELD_AWARDS[key] || 0;
+  const id = String(productId).toLowerCase();
+  for (const award of SHIELD_AWARDS) {
+    if (award.match.some((m) => id.includes(m))) return award.shields;
+  }
+  return 0;
 }
 
 module.exports = function (app) {
@@ -364,3 +370,6 @@ module.exports = function (app) {
     }
   });
 };
+
+// Exposed for the shield-award unit test.
+module.exports.shieldsForProduct = shieldsForProduct;

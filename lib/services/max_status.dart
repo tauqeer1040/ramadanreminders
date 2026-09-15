@@ -102,7 +102,13 @@ class MaxStatusService {
     final id = (productId ?? '').toLowerCase();
     if (id.isEmpty) return 'Free';
     if (id.contains('lifetime')) return 'Lifetime';
-    if (id.contains('four-month') || id.contains('four_month')) {
+    // Play sells the plan as `meowmin_4month`; keep the spelled-out forms for
+    // the RC/Paddle catalogue so the longest plan never falls through to the
+    // 30-day label below.
+    if (id.contains('four-month') ||
+        id.contains('four_month') ||
+        id.contains('4month') ||
+        id.contains('fourmonth')) {
       return '4-month challenge';
     }
     if (id.contains('year') || id.contains('annual') || id.contains('12')) {
