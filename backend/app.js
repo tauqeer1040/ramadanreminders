@@ -103,6 +103,7 @@ require('./routes/stars')(app);
 require('./routes/shop')(app);
 require('./routes/paddleWebhook')(app);
 require('./routes/trial')(app);
+require('./routes/entitlement')(app);
 require('./routes/subscription')(app);
 require('./routes/invites')(app);
 require('./routes/push')(app);

@@ -10,6 +10,7 @@ import '../core/app_background.dart';
 import '../components/widgets/max_welcome_sheet.dart';
 import '../services/analytics_service.dart';
 import '../services/auth_service.dart';
+import '../services/entitlement_service.dart';
 import '../services/local_trial_service.dart';
 import '../services/revenuecat_service.dart';
 import '../services/streak_gate.dart';
@@ -154,20 +155,29 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         }
         return;
       }
-      // Never-subscribed + friend-boosted streak>3 → skip soft paywall
-      // and fall through to the expired hard lock below.
-      bool streakGate = false;
+      // Server verdict first: an expired trial is locked no matter what the
+      // local clock or the streak gate believe.
+      bool entitlementLock = false;
       try {
-        streakGate = await StreakGate.shouldShowStreakGate();
+        entitlementLock = await EntitlementService.shouldLock(subscribed: false);
       } catch (_) {}
       if (!mounted) return;
+      // Never-subscribed + own streak>3 → skip soft paywall and fall through
+      // to the expired hard lock below.
+      bool streakGate = false;
+      if (!entitlementLock) {
+        try {
+          streakGate = await StreakGate.shouldShowStreakGate();
+        } catch (_) {}
+      }
+      if (!mounted) return;
       final started = await LocalTrialService.hasStarted();
-      // Streak gate fires even when no trial started yet (high streak,
-      // never paid) — don't early-return on !started in that case.
-      if (!started && !streakGate) return;
+      // Either gate fires even when no trial started yet (high streak, never
+      // paid) — don't early-return on !started in that case.
+      if (!started && !streakGate && !entitlementLock) return;
       final soft = await LocalTrialService.isSoftWindow();
       if (!mounted) return;
-      if (soft && !streakGate) {
+      if (soft && !streakGate && !entitlementLock) {
         // Anti-loop: the sheet's own dismiss resumes the activity. Skip
         // while a sheet is open or just closed; otherwise every real
         // bg->fg relaunch presents (no cooldown — cold boot already covers
@@ -294,6 +304,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       if (result == PaywallResult.purchased ||
           result == PaywallResult.restored) {
         await RevenueCatService.instance.getCustomerInfo();
+        // Drop the cached verdict so the fresh (paid) state is re-read
+        // instead of an old denial holding the wall shut.
+        await EntitlementService.clear();
         await RevenueCatService.flagWelcomePending();
         return true;
       }

@@ -9,10 +9,6 @@
     <application
         android:label="Meowmin"
         android:name="${applicationName}"
-        <!-- TEMP (device sim testing): debuggable so run-as can edit prefs.
-             MUST revert before any Play upload. -->
-        android:debuggable="true"
-        tools:ignore="HardcodedDebugMode"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false"
         android:networkSecurityConfig="@xml/network_security_config">

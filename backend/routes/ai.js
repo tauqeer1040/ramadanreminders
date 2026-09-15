@@ -2,6 +2,7 @@ const db = require('../lib/db');
 const fanar = require('../services/ai');
 const { getCache, setCache } = require('../lib/cache');
 const { verifyAuth } = require('../middleware/auth');
+const { requireEntitlement } = require('../middleware/entitlement');
 const { generateAnalogySchema, generateInsightsSchema } = require('../lib/validation');
 
 const AI_DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT) || 25;
@@ -34,7 +35,9 @@ async function incrementAICount(uid) {
 }
 
 module.exports = function (app, aiLimiter) {
-  app.post('/api/v2/generate-analogy', verifyAuth, aiLimiter, async (req, res) => {
+  // AI generation is the expensive path: server-gated so an expired trial is
+  // cut off even from a client that skipped its own onboarding gate.
+  app.post('/api/v2/generate-analogy', verifyAuth, requireEntitlement(), aiLimiter, async (req, res) => {
     const parsed = generateAnalogySchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors });
@@ -99,7 +102,7 @@ module.exports = function (app, aiLimiter) {
     }
   });
 
-  app.post('/api/v2/generate-insights', verifyAuth, aiLimiter, async (req, res) => {
+  app.post('/api/v2/generate-insights', verifyAuth, requireEntitlement(), aiLimiter, async (req, res) => {
     const parsed = generateInsightsSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors });

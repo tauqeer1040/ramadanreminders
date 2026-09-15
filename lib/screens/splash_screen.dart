@@ -14,8 +14,11 @@ import '../services/analytics_service.dart';
 import '../screens/onboarding_screen.dart';
 import '../screens/main_screen.dart';
 import '../services/local_trial_service.dart';
+import '../services/entitlement_service.dart';
 import '../services/revenuecat_service.dart';
 import '../services/streak_gate.dart';
+import '../services/streak_service.dart';
+import '../services/journal_local_storage.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -167,17 +170,45 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               .timeout(const Duration(seconds: 4));
         } catch (_) {}
         if (!mounted) return;
-        // Never-subscribed + friend-boosted streak>3 → expired hard lock,
-        // even inside the soft window (or before trial start).
-        bool streakGate = false;
+        // Backfill the streak from past LOCAL journals first: a returning
+        // user with on-device history must count it on this same launch,
+        // before the streak gate below reads the display value. Local
+        // prefs only (no network, no decrypt) — max-wins and forward-only
+        // inside adoptActivityDates, so this can never shrink a streak.
         try {
-          streakGate = await StreakGate.shouldShowStreakGate();
+          final localDays = await JournalLocalStorage.localActivityDays();
+          if (localDays.isNotEmpty) {
+            final backfilled = await StreakService.adoptActivityDates(localDays);
+            debugPrint('[Splash] streak backfill: ${localDays.length} local days → streak $backfilled');
+          }
         } catch (_) {}
-        if (streakGate) {
+        if (!mounted) return;
+        // Server verdict first: the backend owns the trial clock, so a
+        // wiped install or a rolled-back device clock cannot re-open it.
+        // Fail-open when the server is unreachable (offline users keep the
+        // local clock; a cached denial is sticky inside the service).
+        bool entitlementLock = false;
+        try {
+          entitlementLock = await EntitlementService.shouldLock(subscribed: false);
+        } catch (_) {}
+        if (!mounted) return;
+        // Never-subscribed + own streak>3 → expired hard lock, even inside
+        // the soft window (or before trial start). Skipped when the server
+        // already decided.
+        bool streakGate = false;
+        if (!entitlementLock) {
+          try {
+            streakGate = await StreakGate.shouldShowStreakGate();
+          } catch (_) {}
+        }
+        if (entitlementLock || streakGate) {
           try {
             AnalyticsService.instance.logEvent(
               'max_expired_shown',
-              params: const {'reason': 'streak_gate'},
+              params: {
+                'reason':
+                    entitlementLock ? 'server_entitlement' : 'streak_gate',
+              },
             );
           } catch (_) {}
           if (mounted) {
@@ -190,10 +221,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             });
           }
         } else {
-        if (!mounted) return;
-        final softWindow = await LocalTrialService.isSoftWindow();
-        final trialStarted = await LocalTrialService.hasStarted();
-        if (trialStarted && softWindow) {
+          if (!mounted) return;
+          final softWindow = await LocalTrialService.isSoftWindow();
+          final trialStarted = await LocalTrialService.hasStarted();
+          debugPrint('[Splash] gate: entitlementLock=$entitlementLock streakGate=$streakGate trialStarted=$trialStarted softWindow=$softWindow');
+          if (trialStarted && softWindow) {
           // Trial active OR 3-day post-expiry grace — dismissable paywall
           // on every cold launch.
           setState(() {
@@ -348,6 +380,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       if (result == PaywallResult.purchased ||
           result == PaywallResult.restored) {
         await RevenueCatService.instance.getCustomerInfo();
+        await EntitlementService.clear();
         await RevenueCatService.flagWelcomePending();
         return true;
       }

@@ -8,6 +8,7 @@ import 'duo_button.dart';
 import '../journal_bottom_sheet.dart';
 import 'max_welcome_sheet.dart';
 import '../../services/star_service.dart';
+import '../../services/entitlement_service.dart';
 import '../../services/local_trial_service.dart';
 import '../../services/revenuecat_service.dart';
 
@@ -109,7 +110,12 @@ class JournalEntryButtonState extends State<JournalEntryButton> {
           await RevenueCatService.instance.isSubscribed();
       final pastGrace =
           await LocalTrialService.isPastGrace();
-      if (!subscribed && pastGrace && context.mounted) {
+      // Server verdict overrides the local clock: an expired trial must not
+      // be able to keep journaling by resetting local state.
+      final serverLocked = subscribed
+          ? false
+          : await EntitlementService.shouldLock(subscribed: false);
+      if (!subscribed && (pastGrace || serverLocked) && context.mounted) {
         final result = await RevenueCatService.instance.presentPaywall(
           displayCloseButton: false,
         );

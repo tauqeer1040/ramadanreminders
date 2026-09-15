@@ -20,6 +20,7 @@ import '../services/journal_service.dart';
 import '../core/constants.dart';
 import '../screens/manage_account_screen.dart';
 import '../services/user_service.dart';
+import '../services/email_continue_service.dart';
 import '../services/streak_service.dart';
 import '../services/invite_service.dart';
 import '../services/revenuecat_service.dart';
@@ -764,6 +765,15 @@ class _ProfilePage1State extends State<ProfilePage1>
                 onPressed: () async {
                   setState(() => _isLoading = true);
                   await AuthService.signInWithGoogle();
+                  // Fire the welcome/delight email post-sign-in (the server
+                  // resolves the recipient from this fresh session), mirroring
+                  // onboarding's Google sign-in. Fire-and-forget — never blocks
+                  // the button; daily auto-dedupe holds (no force flag).
+                  EmailContinueService.sendWelcome().then((res) {
+                    debugPrint(
+                      '[Profile] welcome email: emailed=${res?['emailed']} queued=${res?['queued']}',
+                    );
+                  }).catchError((_) {});
                   // Sign-in now pushes then pulls progress (stars, unlocks,
                   // streak, revealed): reload so the new values paint.
                   try {

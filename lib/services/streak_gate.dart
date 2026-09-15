@@ -9,7 +9,11 @@ import 'streak_service.dart';
 /// Fires the non-dismissable expired sheet when:
 /// * no active Max entitlement, AND
 /// * never held a subscription (local flag + RC purchase history), AND
-/// * friend-boosted display streak (max of local + friend) > [threshold].
+/// * the user's OWN streak > [threshold].
+///
+/// Deliberately the local streak, not `getDisplayStreak()`: display is
+/// `max(local, linked friend)`, so a friend's higher number used to fire this
+/// wall on a user who had not played long enough to earn it.
 ///
 /// Pure [shouldHardLock] is unit-testable; [shouldShowStreakGate] resolves
 /// live state (cached-first, offline-safe).
@@ -40,10 +44,10 @@ class StreakGate {
 
       if (await LocalTrialService.hasEverSubscribed()) return false;
 
-      final displayStreak = await StreakService.getDisplayStreak();
-      final result = displayStreak > threshold;
+      final localStreak = await StreakService.getStreak();
+      final result = localStreak > threshold;
       debugPrint(
-        '[StreakGate] displayStreak=$displayStreak threshold=$threshold lock=$result',
+        '[StreakGate] localStreak=$localStreak threshold=$threshold lock=$result',
       );
       return result;
     } catch (e) {

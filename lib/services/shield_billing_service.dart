@@ -50,10 +50,20 @@ class ShieldBillingService {
         final token = _latestTransactionId(result.customerInfo);
         return await _grantShield(token);
       } on PlatformException catch (e) {
-        if (PurchasesErrorHelper.getErrorCode(e) ==
-            PurchasesErrorCode.purchaseCancelledError) {
+        final code = PurchasesErrorHelper.getErrorCode(e);
+        if (code == PurchasesErrorCode.purchaseCancelledError) {
           debugPrint('[Shield] Purchase cancelled by user');
           throw ShieldPurchaseCancelled();
+        }
+        if (code == PurchasesErrorCode.productAlreadyPurchasedError) {
+          // A shield is a repeatable consumable: an earlier purchase that was
+          // never consumed (RevenueCat only consumes products flagged
+          // consumable in its dashboard) blocks the next buy. Consume what is
+          // outstanding, then re-run the raw Play Billing path, which always
+          // acknowledges AND consumes.
+          debugPrint('[Shield] Already owned — consuming outstanding purchase');
+          await _consumeOutstandingShields();
+          return _purchaseViaRawPlayBilling();
         }
         debugPrint('[Shield] Purchase failed: $e');
         throw ShieldPurchaseException('Purchase failed. Try again.');
@@ -88,6 +98,29 @@ class ShieldBillingService {
     if (txns.isEmpty) return null;
     txns.sort((a, b) => b.purchaseDate.compareTo(a.purchaseDate));
     return txns.first.transactionIdentifier;
+  }
+
+  /// Consumes any unconsumed Play purchase of the shield so the product can
+  /// be bought again. Best-effort: a failure here only means the next attempt
+  /// reports "already owned" again.
+  static Future<void> _consumeOutstandingShields() async {
+    final iapConn = iap.FlutterInappPurchase.instance;
+    try {
+      await iapConn.initConnection();
+      final purchases = await iapConn.getAvailablePurchases();
+      for (final purchase in purchases) {
+        if (purchase.productId == productId ||
+            purchase.productId.startsWith(productId)) {
+          await iapConn.finishTransaction(
+            purchase: purchase,
+            isConsumable: true,
+          );
+          debugPrint('[Shield] Consumed outstanding ${purchase.productId}');
+        }
+      }
+    } catch (e) {
+      debugPrint('[Shield] consume outstanding failed: $e');
+    }
   }
 
   /// Raw Play Billing fallback when RC queries the one-time product as

@@ -195,6 +195,40 @@ class JournalLocalStorage {
     return prefs.getStringList(_favoritesKey) ?? [];
   }
 
+  /// Activity-day metadata for streak backfill: every journal-text id and
+  /// gratitude date shaped like a yyyy-MM-dd day. Journal saves and
+  /// gratitude saves both record streak activity, so both count here.
+  /// Metadata only — values are checked for non-empty but never decrypted,
+  /// safe to call before crypto is ready. Never throws.
+  static Future<List<String>> localActivityDays() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final days = <String>{};
+      final dayRe = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+      for (final key in prefs.getKeys()) {
+        if (!key.startsWith(_keyPrefix)) continue;
+        String? day;
+        if (key.endsWith('_text')) {
+          final stored = prefs.getString(key);
+          if (stored == null || stored.trim().isEmpty) continue;
+          day = key.replaceFirst(_keyPrefix, '').replaceFirst('_text', '');
+        } else if (key.endsWith('_gratitude')) {
+          day = key.replaceFirst(_keyPrefix, '').replaceFirst('_gratitude', '');
+        }
+        // Ids start with the yyyy-MM-dd day (loadTodayJournal matches by
+        // prefix); accept a date prefix so suffixed ids still count.
+        if (day != null &&
+            day.length >= 10 &&
+            dayRe.hasMatch(day.substring(0, 10))) {
+          days.add(day.substring(0, 10));
+        }
+      }
+      return days.toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   static Future<Map<String, dynamic>?> getCachedInsight(String dateStr) async {
     final prefs = await SharedPreferences.getInstance();
     final cachedStr = prefs.getString('$_keyPrefix${dateStr}_insight');

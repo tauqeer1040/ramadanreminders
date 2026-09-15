@@ -334,6 +334,95 @@ class StreakService {
     return max(local, friend);
   }
 
+  static String _fmtDay(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Normalizes a raw day string to `yyyy-MM-dd`. Accepts bare dates and
+  /// full ISO timestamps (date part before `T`); anything else is rejected.
+  /// Unit-testable; never throws.
+  static String? normalizeDay(String raw) {
+    try {
+      final s = raw.trim();
+      if (s.isEmpty) return null;
+      final head = s.contains('T') ? s.split('T')[0] : (s.length >= 10 ? s.substring(0, 10) : s);
+      if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(head)) return null;
+      // Round-trip validates ranges: DateTime.parse overflows (month 13 →
+      // next January) instead of throwing, so a mismatch means invalid.
+      if (_fmtDay(DateTime.parse(head)) != head) return null;
+      return head;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Pure trailing-day run over `yyyy-MM-dd` strings ending today (or
+  /// yesterday when today is absent). Returns 0 when the run is not live.
+  /// Unit-testable; never throws.
+  static int trailingRunOf(Iterable<String> dateStrs, DateTime now) {
+    try {
+      final days = <String>{};
+      for (final raw in dateStrs) {
+        final day = normalizeDay(raw);
+        if (day != null) days.add(day);
+      }
+      if (days.isEmpty) return 0;
+      final today = DateTime(now.year, now.month, now.day);
+      var cursor = days.contains(_fmtDay(today))
+          ? today
+          : today.subtract(const Duration(days: 1));
+      var run = 0;
+      while (days.contains(_fmtDay(cursor))) {
+        run++;
+        cursor = cursor.subtract(const Duration(days: 1));
+      }
+      return run;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Merges externally-known active days (e.g. past local journal dates)
+  /// into `streak_activity_dates` and adopts the trailing run when it beats
+  /// the stored streak. Max-wins and forward-only, mirroring the server
+  /// restore: never shrinks a healthy streak, never moves
+  /// `last_activity_date` backwards, never resurrects a dead run (a
+  /// non-live trailing run yields 0 and leaves the counter untouched).
+  /// Returns the resulting streak. Never throws.
+  static Future<int> adoptActivityDates(Iterable<String> rawDays) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final existing = prefs.getStringList(_activityDatesKey) ?? const <String>[];
+      final merged = <String>{...existing};
+      for (final raw in rawDays) {
+        final day = normalizeDay(raw);
+        if (day != null) merged.add(day);
+      }
+      final current = prefs.getInt(_streakKey) ?? 1;
+      if (merged.isEmpty) return current < 1 ? 1 : current;
+      final sorted = merged.toList()..sort();
+      await prefs.setStringList(_activityDatesKey, sorted);
+      final run = trailingRunOf(sorted, DateTime.now());
+      if (run > 0) {
+        if (run > current) await prefs.setInt(_streakKey, run);
+        final curLast = prefs.getString(_lastActivityDateKey);
+        final newest = sorted.last;
+        if (curLast == null || newest.compareTo(curLast) > 0) {
+          await prefs.setString(_lastActivityDateKey, newest);
+        }
+        return max(run, current);
+      }
+      return current < 1 ? 1 : current;
+    } catch (_) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final fallback = prefs.getInt(_streakKey) ?? 1;
+        return fallback < 1 ? 1 : fallback;
+      } catch (_) {
+        return 1;
+      }
+    }
+  }
+
   static bool isPrime(int n) {
     if (n < 2) return false;
     for (int i = 2; i * i <= n; i++) {
