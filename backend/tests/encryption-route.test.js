@@ -2,17 +2,8 @@ const request = require('supertest');
 const express = require('express');
 const crypto = require('crypto');
 
-jest.mock('firebase-admin', () => {
-  const verifyIdToken = jest.fn();
-  return {
-    initializeApp: jest.fn(),
-    credential: { cert: jest.fn() },
-    auth: () => ({ verifyIdToken }),
-    __verifyIdToken: verifyIdToken,
-  };
-});
+const { setupAuthTestEnv } = require('./helpers/firebase-token');
 
-const admin = require('firebase-admin');
 const { verifyAuth } = require('../middleware/auth');
 const { encrypt, decrypt } = require('../encryption');
 
@@ -27,21 +18,33 @@ function buildApp() {
 }
 
 describe('encryption-key endpoint', () => {
+  let auth;
+
+  beforeAll(() => {
+    // Real signed token: the middleware verifies against Google's JWKS itself.
+    auth = setupAuthTestEnv();
+  });
+
+  afterAll(() => auth.restore());
+
   beforeEach(() => {
     process.env.JOURNAL_ENCRYPTION_SECRET = 'test-secret-32bytes!!!';
-    jest.clearAllMocks();
   });
 
   it('returns a base64 key for authenticated user', async () => {
-    admin.__verifyIdToken.mockResolvedValue({ uid: 'user-123' });
     const app = buildApp();
     const res = await request(app)
       .get('/api/v2/encryption-key')
-      .set('Authorization', 'Bearer valid-token');
+      .set('Authorization', `Bearer ${auth.token({ uid: 'user-123' })}`);
     expect(res.status).toBe(200);
     expect(res.body.key).toBeDefined();
     expect(typeof res.body.key).toBe('string');
     expect(res.body.key.length).toBeGreaterThan(20);
+  });
+
+  it('rejects an unauthenticated request', async () => {
+    const res = await request(buildApp()).get('/api/v2/encryption-key');
+    expect(res.status).toBe(401);
   });
 
   it('key can encrypt and decrypt for same uid', () => {

@@ -340,7 +340,7 @@ describe('deck queue', () => {
 });
 
 describe('schema version gate (subrequest budget regression)', () => {
-  const { initDB } = require('../lib/schema');
+  const { initDB, SCHEMA_VERSION } = require('../lib/schema');
 
   test('steady-state boot is cheap and preserves data', async () => {
     const uid = 'u-gate';
@@ -355,7 +355,8 @@ describe('schema version gate (subrequest budget regression)', () => {
     const v = await db.execute({
       sql: `SELECT value FROM app_config WHERE key = 'schema_version'`,
     });
-    expect(v.rows[0]?.value).toBe('3');
+    // Derived, not hardcoded: the assertion rotted at every migration.
+    expect(String(v.rows[0]?.value)).toBe(String(SCHEMA_VERSION));
 
     const calls = [];
     const orig = db.execute;
@@ -378,7 +379,7 @@ describe('schema version gate (subrequest budget regression)', () => {
     const v2 = await db.execute({
       sql: `SELECT value FROM app_config WHERE key = 'schema_version'`,
     });
-    expect(v2.rows[0]?.value).toBe('3');
+    expect(String(v2.rows[0]?.value)).toBe(String(SCHEMA_VERSION));
     const still = await db.execute({
       sql: `SELECT COUNT(*) AS n FROM insight_decks WHERE journal_id = ? AND status = 'ready'`,
       args: ['jg'],
