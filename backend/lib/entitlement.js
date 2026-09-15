@@ -91,13 +91,15 @@ async function rcEntitlementActive(uid) {
     const ent = body?.subscriber?.entitlements?.[RC_ENTITLEMENT_ID];
     let active = false;
     if (ent) {
-      if (ent.unlimited) {
-        active = true;
-      } else if (ent.expires_date) {
-        const exp = new Date(ent.expires_date).getTime();
-        active = Number.isFinite(exp) && Date.now() < exp;
+      // The subscriber API uses `expires_date`; webhook payloads use
+      // `expires_at`. Accept both so a store-shaped field difference can never
+      // silently read as "expired".
+      const expiresRaw = ent.expires_date || ent.expires_at || null;
+      const exp = expiresRaw ? new Date(expiresRaw).getTime() : null;
+      if (Number.isFinite(exp)) {
+        active = Date.now() < exp;
       } else {
-        active = false;
+        active = ent.unlimited === true;
       }
     }
     rcCache.set(uid, { at: Date.now(), active });

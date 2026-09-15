@@ -192,6 +192,70 @@ test('store outage fails open so a payer is never locked out', async () => {
   }
 });
 
+test('a live store entitlement unlocks a lapsed trial (expires_date shape)', async () => {
+  await seedUser('store-active', {
+    subscription_status: 'none',
+    subscription_trial_started_at: Date.now() - TRIAL_MS - 60 * 1000,
+  });
+  const realFetch = global.fetch;
+  process.env.REVENUECAT_API_SECRET = 'test-secret';
+  // The subscriber API field is `expires_date` — reading `expires_at` (as the
+  // code once did) made every real subscription look expired.
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      subscriber: {
+        entitlements: {
+          'Meowmin Max': {
+            product_identifier: 'meowmin_yearly',
+            expires_date: new Date(Date.now() + 60 * DAY).toISOString(),
+          },
+        },
+      },
+    }),
+  });
+  try {
+    const v = await resolveEntitlement('store-active');
+    expect(v.active).toBe(true);
+    expect(v.reason).toBe('subscription');
+  } finally {
+    global.fetch = realFetch;
+    delete process.env.REVENUECAT_API_SECRET;
+    require('../lib/entitlement').clearRcCache();
+  }
+});
+
+test('a store entitlement that expired does not unlock a lapsed trial', async () => {
+  await seedUser('store-lapsed', {
+    subscription_status: 'none',
+    subscription_trial_started_at: Date.now() - TRIAL_MS - 60 * 1000,
+  });
+  const realFetch = global.fetch;
+  process.env.REVENUECAT_API_SECRET = 'test-secret';
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      subscriber: {
+        entitlements: {
+          'Meowmin Max': {
+            product_identifier: 'meowmin_yearly',
+            expires_date: new Date(Date.now() - 2 * DAY).toISOString(),
+          },
+        },
+      },
+    }),
+  });
+  try {
+    const v = await resolveEntitlement('store-lapsed');
+    expect(v.active).toBe(false);
+    expect(v.reason).toBe('trial_expired');
+  } finally {
+    global.fetch = realFetch;
+    delete process.env.REVENUECAT_API_SECRET;
+    require('../lib/entitlement').clearRcCache();
+  }
+});
+
 test('an unconfigured store does not weaken the DB verdict', async () => {
   await seedUser('unconfigured', {
     subscription_status: 'none',

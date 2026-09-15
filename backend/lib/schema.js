@@ -21,6 +21,10 @@ const USER_ALTER_COLUMNS = [
   ['shield_balance', 'INTEGER DEFAULT 0'],
   ['streak', 'INTEGER DEFAULT 0'],
   ['streak_date', 'TEXT'],
+  // Which plan this account has already been credited shields for. The sync
+  // endpoint runs on every launch, so without this a subscriber collected a
+  // fresh allowance each cold start.
+  ['plan_shields_product', 'TEXT'],
 ];
 
 const JOURNAL_CREATE_COLUMNS = ['id', 'user_id', 'content', 'created_at', 'ai_status', 'ai_attempts', 'ai_last_error', 'ai_next_retry_at', 'updated_at', 'content_hash'];
@@ -439,7 +443,7 @@ async function rebuildTagMapsFromIndexes() {
 // sequential statements on EVERY cold boot, and this file's growth tipped it
 // over the edge (prod-wide 1101s on deploy). initDB is now version-gated:
 // steady-state boots cost a single probe subrequest, and deltas run chunked.
-const SCHEMA_VERSION = '5';
+const SCHEMA_VERSION = '6';
 // v5 = users.streak + users.streak_date (streak moves into the users row,
 // same merge-only restore path as stars/shields; legacy streaks table still
 // mirror-written for the email recap read).

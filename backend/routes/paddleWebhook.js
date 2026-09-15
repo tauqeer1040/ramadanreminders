@@ -40,23 +40,9 @@ function verifySignature(rawBody, signatureHeader, secret) {
   return expected === h1;
 }
 
-const SHIELD_AWARDS = {
-  'monthly-challenge-1': 3,
-  'monthly-challenge-5': 3,
-  'four-month-journey': 18,
-  'four-month-challenge': 18,
-  'yearly': 72,
-  'lifetime-gift': 150,
-  'streak-shield': 1,
-};
-
-function shieldsForPrice(priceId, productId) {
-  const hay = `${priceId || ''} ${productId || ''}`.toLowerCase();
-  for (const [k, v] of Object.entries(SHIELD_AWARDS)) {
-    if (hay.includes(k)) return v;
-  }
-  return 0;
-}
+// Shared with /subscription/sync so a plan is worth the same shields whichever
+// storefront sold it (see lib/shields.js).
+const { shieldsForPrice, shieldsForProduct, isShieldConsumable } = require('../lib/shields');
 
 // Maps one Paddle transaction.* event to a Google External Transactions
 // report. Returns silently on skips; throws only on unexpected DB errors
@@ -291,14 +277,28 @@ module.exports = function (app) {
         } else if (eventType === 'subscription.past_due' || eventType === 'subscription.paused') {
           await db.execute({ sql: `UPDATE users SET subscription_status = 'past_due' WHERE id = ?`, args: [appUserId] });
         } else if (eventType === 'transaction.completed' && !data.subscription_id) {
-          // One-time / lifetime / streak shield
-          const shields = shieldsForPrice(priceId, productId);
-          if (shields > 0 && productId !== 'streak-shield') {
-            // Lifetime etc already handled via subscription, but ensure active
-            await db.execute({ sql: `UPDATE users SET subscription_status = 'active', subscription_product_id = ?, shield_balance = COALESCE(shield_balance,0) + ? WHERE id = ?`, args: [productId || priceId, shields, appUserId] });
-          } else if (shields === 1) {
-            // Streak shield consumable
+          // Consumable shield first: it must NOT touch entitlement state.
+          if (isShieldConsumable(priceId, productId)) {
             await db.execute({ sql: `UPDATE users SET shield_balance = COALESCE(shield_balance,0) + 1 WHERE id = ?`, args: [appUserId] });
+          } else {
+            // Lifetime etc already handled via subscription, but ensure active.
+            // Guarded by the same once-per-plan marker as /subscription/sync so
+            // a Paddle retry cannot stack another allowance on top.
+            const shields = shieldsForPrice(priceId, productId);
+            if (shields > 0) {
+              const granted = await db.execute({
+                sql: 'SELECT plan_shields_product FROM users WHERE id = ?',
+                args: [appUserId],
+              });
+              const already = granted.rows[0]?.plan_shields_product;
+              await db.execute({ sql: `UPDATE users SET subscription_status = 'active', subscription_product_id = ? WHERE id = ?`, args: [productId || priceId, appUserId] });
+              if (already == null || String(already) !== String(productId || priceId || '')) {
+                await db.execute({
+                  sql: `UPDATE users SET shield_balance = COALESCE(shield_balance,0) + ?, plan_shields_product = ? WHERE id = ?`,
+                  args: [shields, String(productId || priceId || ''), appUserId],
+                });
+              }
+            }
           }
           console.log(`[PADDLE WEBHOOK] Transaction ${eventId} for ${appUserId} product ${productId} price ${priceId}`);
         }

@@ -319,7 +319,9 @@ class HomepageState extends ConsumerState<Homepage> with TickerProviderStateMixi
                         JournalHistorySection(key: _journalKey, maxEntries: 3),
                         const SizedBox(height: 24),
                         FutureBuilder<int>(
-                          future: StreakService.getArmedShieldCount(),
+                          // Usable, not just armed: plan allowances live in the
+                          // server ledger and protect this streak too.
+                          future: StreakService.getUsableShieldCount(),
                           builder: (context, shieldSnap) {
                             final shieldActive =
                                 (shieldSnap.data ?? 0) > 0;

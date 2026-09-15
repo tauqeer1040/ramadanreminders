@@ -138,6 +138,22 @@ class StreakService {
     return (await _validArmedShields()).length;
   }
 
+  /// Shields the user can actually spend.
+  ///
+  /// Plan purchases credit the server ledger (yearly/4-month allowances) and
+  /// are consumed straight from it, while a $0.99 buy arms a shield locally
+  /// *and* increments the same ledger. Taking the larger of the two avoids
+  /// double-counting one purchase, and still shows an offline purchase whose
+  /// server grant never landed.
+  static Future<int> getUsableShieldCount() async {
+    final armed = await getArmedShieldCount();
+    var balance = 0;
+    try {
+      balance = await getShieldBalance();
+    } catch (_) {}
+    return max(balance, armed);
+  }
+
   /// Arms a shield preserving the current streak. Called after a verified
   /// $0.99 purchase while the streak is still alive (> 1).
   static Future<void> armShield(int preservedStreak) async {

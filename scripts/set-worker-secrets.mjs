@@ -27,6 +27,10 @@ const FROM_ENV = [
   'AI_INITIAL_DELAY_HOURS',
   'RESEND_API_KEY',
   'EMAIL_FROM',
+  // Store truth: without these the Worker cannot see RevenueCat/Paddle, so
+  // /subscription/sync and /entitlement would have to trust the client.
+  'REVENUECAT_API_SECRET',
+  'PADDLE_API_KEY',
 ];
 
 function setSecret(name, value) {

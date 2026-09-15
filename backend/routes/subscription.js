@@ -1,26 +1,7 @@
 const crypto = require('crypto');
 const db = require('../lib/db');
 const { subscriptionSyncSchema, transferLifetimeSchema, transferClaimSchema } = require('../lib/validation');
-
-// Shield allowance per plan. Matched as substrings because the id differs per
-// storefront and era: Play sells `meowmin_yearly` / `meowmin_4month`, while
-// RC/Paddle rows carry the long-form catalogue ids. Order matters — the
-// 4-month match must beat the monthly fallback.
-const SHIELD_AWARDS = [
-  { match: ['lifetime'], shields: 150 },
-  { match: ['four-month', 'four_month', 'fourmonth', '4month'], shields: 18 },
-  { match: ['yearly', 'year', 'annual', '12-month', '12month'], shields: 72 },
-  { match: ['monthly-challenge-1', 'monthly-challenge-5'], shields: 3 },
-];
-
-function shieldsForProduct(productId) {
-  if (!productId) return 0;
-  const id = String(productId).toLowerCase();
-  for (const award of SHIELD_AWARDS) {
-    if (award.match.some((m) => id.includes(m))) return award.shields;
-  }
-  return 0;
-}
+const { shieldsForProduct } = require('../lib/shields');
 
 module.exports = function (app) {
   app.post('/api/v2/subscription/sync', async (req, res) => {
@@ -29,6 +10,16 @@ module.exports = function (app) {
       return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors });
     }
     const { appUserId, productId, status, expiresAt, periodType } = parsed.data;
+
+    // RevenueCat owns the purchase, so when it can be reached it is the source
+    // of truth for every field — the client's report is only a trigger. A
+    // client-claimed 'active' that the store does not confirm is ignored
+    // (previously it was logged and then written anyway, which let an
+    // authenticated client grant itself Max).
+    let verified = false;
+    let effProductId = productId;
+    let effStatus = status;
+    let effExpiresAt = expiresAt;
 
     if (process.env.REVENUECAT_API_SECRET) {
       try {
@@ -39,30 +30,61 @@ module.exports = function (app) {
         if (!rcRes.ok) throw new Error(`RevenueCat verify failed (${rcRes.status})`);
         const rcResponse = await rcRes.json();
 
-        const entitlement = rcResponse?.subscriber?.entitlements?.['premium'] ||
-          rcResponse?.subscriber?.entitlements?.['Meowmin Max'] ||
-          rcResponse?.subscriber?.entitlements?.['Meowmin Pro'];
+        const entitlements = rcResponse?.subscriber?.entitlements || {};
+        const entitlement = entitlements['Meowmin Max'] ||
+          entitlements['premium'] ||
+          entitlements['Meowmin Pro'] ||
+          Object.values(entitlements)[0];
         if (!entitlement) {
-          console.warn(`[Subscription Sync] No premium entitlement found for ${appUserId}`);
-          return res.status(200).json({ received: true, verified: false });
+          console.warn(`[Subscription Sync] No store entitlement for ${appUserId} — ignoring claim`);
+          return res.status(200).json({ received: true, verified: false, reason: 'no_entitlement' });
         }
 
-        const serverIsActive = entitlement.expires_at
-          ? Date.now() < new Date(entitlement.expires_at).getTime()
-          : entitlement.unlimited;
-        const reportedIsActive = status === 'active' || status === 'trial';
+        // RC's subscriber API reports `expires_date`; webhook payloads use
+        // `expires_at`. Reading only the latter made every entitlement look
+        // expired, so the old check never actually confirmed a purchase.
+        const expiresRaw = entitlement.expires_date || entitlement.expires_at || null;
+        const expiresMs = expiresRaw ? new Date(expiresRaw).getTime() : null;
+        const serverIsActive = expiresMs != null && Number.isFinite(expiresMs)
+          ? Date.now() < expiresMs
+          : entitlement.unlimited === true;
 
+        verified = true;
+        effProductId = entitlement.product_identifier || productId;
+        effStatus = serverIsActive ? 'active' : 'expired';
+        effExpiresAt = Number.isFinite(expiresMs) ? expiresMs : null;
+
+        const reportedIsActive = status === 'active' || status === 'trial';
         if (serverIsActive !== reportedIsActive) {
-          console.warn(`[Subscription Sync] Mismatch for ${appUserId}: server=${serverIsActive}, reported=${reportedIsActive}`);
+          console.warn(
+            `[Subscription Sync] Claim overridden for ${appUserId}: store=${serverIsActive} (${effProductId}) claimed=${reportedIsActive} (${productId})`,
+          );
         }
       } catch (e) {
         console.error('[Subscription Sync] Verification failed:', e.message);
-        return res.status(200).json({ received: true, verified: false });
+        return res.status(200).json({ received: true, verified: false, reason: 'verify_failed' });
       }
     }
 
     const now = Date.now();
     try {
+      // The client syncs on every launch (RevenueCat identify), so granting on
+      // each call inflated the balance without bound — a yearly subscriber
+      // collected another 72 shields per cold start. `plan_shields_product`
+      // records which plan this account has already been credited for, making
+      // the grant once-per-plan (a new plan earns its own allowance).
+      const existing = await db.execute({
+        sql: 'SELECT plan_shields_product FROM users WHERE id = ?',
+        args: [appUserId],
+      });
+      const grantedFor = existing.rows[0]?.plan_shields_product || null;
+
+      // The sync can be the first thing we ever hear about this uid.
+      await db.execute({
+        sql: 'INSERT OR IGNORE INTO users (id) VALUES (?)',
+        args: [appUserId],
+      });
+
       await db.execute({
         sql: `UPDATE users SET
           subscription_status = ?,
@@ -70,18 +92,21 @@ module.exports = function (app) {
           subscription_expires_at = ?,
           subscription_trial_started_at = COALESCE(subscription_trial_started_at, CASE WHEN ? = 'trial' THEN ? ELSE NULL END)
         WHERE id = ?`,
-        args: [status, productId, expiresAt || null, periodType, now, appUserId],
+        args: [effStatus, effProductId, effExpiresAt || null, periodType, now, appUserId],
       });
 
-      // Award shields on first active subscription
-      if (status === 'active' || status === 'trial') {
-        const shields = shieldsForProduct(productId);
-        if (shields > 0) {
+      // Award shields once per plan.
+      if (effStatus === 'active' || effStatus === 'trial') {
+        const shields = shieldsForProduct(effProductId);
+        const alreadyGranted =
+          grantedFor != null && String(grantedFor) === String(effProductId || '');
+        if (shields > 0 && !alreadyGranted) {
           await db.execute({
-            sql: `UPDATE users SET shield_balance = COALESCE(shield_balance, 0) + ? WHERE id = ?`,
-            args: [shields, appUserId],
+            sql: `UPDATE users SET shield_balance = COALESCE(shield_balance, 0) + ?,
+                                  plan_shields_product = ? WHERE id = ?`,
+            args: [shields, String(effProductId || ''), appUserId],
           });
-          console.log(`[Subscription Sync] Awarded ${shields} shields to ${appUserId} for ${productId}`);
+          console.log(`[Subscription Sync] Awarded ${shields} shields to ${appUserId} for ${effProductId}`);
         }
         // Value-recap email, 24h delayed (stats settle). Deduped 30d;
         // skipped when no email is on file (welcome sheet captures later).
@@ -93,7 +118,7 @@ module.exports = function (app) {
         }
       }
 
-      res.json({ received: true, verified: true });
+      res.json({ received: true, verified, productId: effProductId, status: effStatus });
     } catch (error) {
       console.error('[Subscription Sync] DB error:', error.message);
       res.status(500).json({ error: 'Sync failed' });

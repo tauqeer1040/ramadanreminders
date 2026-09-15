@@ -45,7 +45,9 @@ class _ShopScreenState extends State<ShopScreen> {
       ShopService.fetchItems(),
       ShopService.getUnlockedIds(),
       ShopService.getStarBalance(),
-      StreakService.getArmedShieldCount(),
+      // Usable shields, not just locally armed ones: plan allowances
+      // (yearly/4-month) are credited by the store and live in the ledger.
+      StreakService.getUsableShieldCount(),
       // Friend-boosted display streak (max of local + friend), whichever
       // is highest — same value the home/stats sheets show.
       StreakService.getDisplayStreak(),
@@ -76,7 +78,7 @@ class _ShopScreenState extends State<ShopScreen> {
 
   Future<void> _reloadShieldState() async {
     final results = await Future.wait([
-      StreakService.getArmedShieldCount(),
+      StreakService.getUsableShieldCount(),
       StreakService.getDisplayStreak(),
     ]);
     if (mounted) {
