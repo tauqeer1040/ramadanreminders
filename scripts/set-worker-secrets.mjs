@@ -31,6 +31,8 @@ const FROM_ENV = [
   // /subscription/sync and /entitlement would have to trust the client.
   'REVENUECAT_API_SECRET',
   'PADDLE_API_KEY',
+  // Signature check for the Paddle webhook (IP allowlist alone is weaker).
+  'PADDLE_NOTIFICATION_WEBHOOK_SECRET',
 ];
 
 function setSecret(name, value) {
