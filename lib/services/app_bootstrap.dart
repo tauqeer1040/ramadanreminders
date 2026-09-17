@@ -175,7 +175,18 @@ class AppBootstrap {
       // Same returning-user restore as post-sign-in: profile names (fixes
       // notification headings), stars, unlocks, shields, streak.
       UserService.restoreProfile().then((ok) {
-        if (!ok) debugPrint('[AppBootstrap] profile restore returned false');
+        if (!ok) {
+          debugPrint('[AppBootstrap] profile restore returned false');
+          return;
+        }
+        // Restored display/cat names land in prefs after the initial
+        // schedule below may already have run — refresh the native reminder
+        // copy so prod alarms/push render the personalized heading.
+        if (!kIsWeb) {
+          NotificationService.scheduleDailyNotifications().catchError((e) {
+            debugPrint('[AppBootstrap] reminder refresh failed: $e');
+          });
+        }
       }).catchError((e) {
         debugPrint('[AppBootstrap] profile restore failed: $e');
       });

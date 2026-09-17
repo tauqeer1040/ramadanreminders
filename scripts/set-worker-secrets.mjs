@@ -30,6 +30,10 @@ const FROM_ENV = [
   // Store truth: without these the Worker cannot see RevenueCat/Paddle, so
   // /subscription/sync and /entitlement would have to trust the client.
   'REVENUECAT_API_SECRET',
+  // REST API v2 scope (sk_ keys): all V2 calls are project-scoped, and the
+  // entitlement id is an internal id (entl...), not a display name.
+  'REVENUECAT_PROJECT_ID',
+  'REVENUECAT_ENTITLEMENT_ID',
   'PADDLE_API_KEY',
   // Signature check for the Paddle webhook (IP allowlist alone is weaker).
   'PADDLE_NOTIFICATION_WEBHOOK_SECRET',

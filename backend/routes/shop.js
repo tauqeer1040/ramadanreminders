@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../lib/db');
+const rc = require('../lib/revenuecat');
 const { purchaseItemSchema, shieldConsumeSchema } = require('../lib/validation');
 const { assetRoot } = require('../lib/runtime');
 
@@ -101,25 +102,21 @@ module.exports = function (app) {
     }
 
     try {
-      if (process.env.REVENUECAT_API_SECRET) {
-        const verifyUrl = `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}`;
-        const rcRes = await fetch(verifyUrl, {
-          headers: { Authorization: `Bearer ${process.env.REVENUECAT_API_SECRET}` },
-        });
-        if (rcRes.ok) {
-          const rcData = await rcRes.json();
-          const subs = rcData?.subscriber?.subscriptions || {};
-          const hasActive = Object.values(subs).some(s =>
-            s.expires_at && Date.now() < new Date(s.expires_at).getTime()
-          );
-          if (!hasActive) {
-            const nonSubPurchase = rcData?.subscriber?.non_subscription_transactions?.find(
-              t => (t.product_identifier?.includes('streak-shield') || t.product_identifier?.includes('meowmin_shield')) && t.purchase_token === purchaseToken
-            );
-            if (!nonSubPurchase) {
-              console.warn(`[Shield Grant] No matching purchase found for ${uid}`);
-            }
-          }
+      if (rc.rcConfigured()) {
+        // v2: one-time purchases carry product_id + purchase_token. Match the
+        // token (fall back to any shield-shaped product when RC stores the
+        // token under the :default-option suffix).
+        const purchases = await rc.rcPurchases(uid);
+        const shieldish = (pid) =>
+          String(pid || '').includes('streak-shield') || String(pid || '').includes('meowmin_shield');
+        const matched = purchases.some(
+          (p) => shieldish(p.product_id) &&
+            (p.purchase_token === purchaseToken ||
+             String(p.purchase_token || '').startsWith(purchaseToken) ||
+             String(purchaseToken).startsWith(String(p.purchase_token || ''))),
+        );
+        if (!matched) {
+          console.warn(`[Shield Grant] No matching purchase found for ${uid}`);
         }
       }
 

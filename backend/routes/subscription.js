@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const db = require('../lib/db');
+const rc = require('../lib/revenuecat');
 const { subscriptionSyncSchema, transferLifetimeSchema, transferClaimSchema } = require('../lib/validation');
 const { shieldsForProduct } = require('../lib/shields');
 
@@ -21,38 +22,49 @@ module.exports = function (app) {
     let effStatus = status;
     let effExpiresAt = expiresAt;
 
-    if (process.env.REVENUECAT_API_SECRET) {
+    if (rc.rcConfigured()) {
       try {
-        const verifyUrl = `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(appUserId)}`;
-        const rcRes = await fetch(verifyUrl, {
-          headers: { Authorization: `Bearer ${process.env.REVENUECAT_API_SECRET}` },
-        });
-        if (!rcRes.ok) throw new Error(`RevenueCat verify failed (${rcRes.status})`);
-        const rcResponse = await rcRes.json();
-
-        const entitlements = rcResponse?.subscriber?.entitlements || {};
-        const entitlement = entitlements['Meowmin Max'] ||
-          entitlements['premium'] ||
-          entitlements['Meowmin Pro'] ||
-          Object.values(entitlements)[0];
+        // v2: the customer's active_entitlements list only contains entries
+        // that are currently active; our entitlement is matched by internal id.
+        const entitlements = await rc.rcActiveEntitlements(appUserId);
+        const entitlement = entitlements.find(
+          (e) => e.entitlement_id === rc.entitlementId(),
+        );
         if (!entitlement) {
           console.warn(`[Subscription Sync] No store entitlement for ${appUserId} — ignoring claim`);
           return res.status(200).json({ received: true, verified: false, reason: 'no_entitlement' });
         }
 
-        // RC's subscriber API reports `expires_date`; webhook payloads use
-        // `expires_at`. Reading only the latter made every entitlement look
-        // expired, so the old check never actually confirmed a purchase.
-        const expiresRaw = entitlement.expires_date || entitlement.expires_at || null;
-        const expiresMs = expiresRaw ? new Date(expiresRaw).getTime() : null;
+        // active_entitlements items carry no product id — resolve it from the
+        // subscriptions (or one-time purchases, for lifetime) so the DB keeps
+        // recording the store's plan rather than the client's claim.
+        let storeProductId = null;
+        try {
+          const subs = await rc.rcSubscriptions(appUserId);
+          const activeSubs = subs.filter(
+            (s) => s.expires_at == null || s.expires_at > Date.now() || s.auto_renewal_status === 'is_active',
+          );
+          const best = activeSubs.sort(
+            (a, b) => (b.expires_at ?? Infinity) - (a.expires_at ?? Infinity),
+          )[0];
+          storeProductId = best?.product_id ?? null;
+        } catch (_) {}
+        if (!storeProductId) {
+          try {
+            const purchases = await rc.rcPurchases(appUserId);
+            storeProductId = purchases[0]?.product_id ?? null;
+          } catch (_) {}
+        }
+
+        const expiresMs = entitlement.expires_at != null ? Number(entitlement.expires_at) : null;
         const serverIsActive = expiresMs != null && Number.isFinite(expiresMs)
           ? Date.now() < expiresMs
-          : entitlement.unlimited === true;
+          : true; // no expiry on an active entitlement = lifetime/unlimited
 
         verified = true;
-        effProductId = entitlement.product_identifier || productId;
+        effProductId = storeProductId || productId;
         effStatus = serverIsActive ? 'active' : 'expired';
-        effExpiresAt = Number.isFinite(expiresMs) ? expiresMs : null;
+        effExpiresAt = expiresMs != null && Number.isFinite(expiresMs) ? expiresMs : null;
 
         const reportedIsActive = status === 'active' || status === 'trial';
         if (serverIsActive !== reportedIsActive) {
@@ -212,15 +224,7 @@ module.exports = function (app) {
   });
 
   // ---- Entitlement transfer (guest -> signed-in account) ----
-  // When a guest (often anonymous) buys Max and later signs in with an
-  // account that already exists (fresh uid), the purchase would be
-  // orphaned on the guest uid. The app prepares a single-use transfer
-  // token while still authed as guest, then claims it after sign-in.
-  // Claim: mirrors DB subscription fields, grants an RC promotional
-  // entitlement on the new uid, and moves Paddle custom_data so renewals
-  // attribute to the new uid going forward.
   const TRANSFER_TTL_MS = 10 * 60 * 1000;
-  const RC_ENTITLEMENT_ID = 'Meowmin Max';
 
   function promoDurationForProduct(productId) {
     const p = String(productId || '').toLowerCase();
@@ -233,15 +237,36 @@ module.exports = function (app) {
     return 'monthly';
   }
 
+  // v2 grants take an absolute expiry (ms since epoch). Map the legacy
+  // duration enums to ms; lifetime = far future (the grant endpoint requires
+  // a number, so use ~100 years).
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  function promoDurationMs(duration) {
+    switch (duration) {
+      case 'lifetime': return Date.now() + 100 * 365 * DAY_MS;
+      case 'yearly': return Date.now() + 365 * DAY_MS;
+      case '6_month': return Date.now() + 182 * DAY_MS;
+      case '3_month': return Date.now() + 91 * DAY_MS;
+      case '2_month': return Date.now() + 61 * DAY_MS;
+      default: return Date.now() + 30 * DAY_MS;
+    }
+  }
+
   async function rcEntitlementFor(appUserId) {
-    if (!process.env.REVENUECAT_API_SECRET) return null;
-    const url = `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(appUserId)}`;
-    const rcRes = await fetch(url, {
-      headers: { Authorization: `Bearer ${process.env.REVENUECAT_API_SECRET}` },
-    });
-    if (!rcRes.ok) return null;
-    const rc = await rcRes.json();
-    return rc?.subscriber?.entitlements?.[RC_ENTITLEMENT_ID] || null;
+    if (!rc.rcConfigured()) return null;
+    try {
+      const entitlements = await rc.rcActiveEntitlements(appUserId);
+      const ent = entitlements.find((e) => e.entitlement_id === rc.entitlementId());
+      if (!ent) return null;
+      // Mirror the old shape ({ expires_date, product_identifier }) so the
+      // prepare-transfer consumer below stays unchanged.
+      return {
+        expires_date: ent.expires_at != null ? new Date(Number(ent.expires_at)).toISOString() : null,
+        product_identifier: null,
+      };
+    } catch (_) {
+      return null;
+    }
   }
 
   // Authed as the BUYING (guest) uid. Mints a single-use token bound to it.
@@ -327,19 +352,12 @@ module.exports = function (app) {
       // 1) RevenueCat promotional grant on the surviving uid. Fail closed
       // (token stays pending) so the client can retry.
       let rcGranted = false;
-      if (process.env.REVENUECAT_API_SECRET) {
-        const grantUrl = `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}/entitlements/${encodeURIComponent(RC_ENTITLEMENT_ID)}/promotional`;
-        const grantRes = await fetch(grantUrl, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${process.env.REVENUECAT_API_SECRET}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ duration: promoDurationForProduct(guest.subscription_product_id) }),
-        });
-        if (!grantRes.ok) {
-          const txt = await grantRes.text().catch(() => '');
-          console.error('[Transfer] RC grant failed:', grantRes.status, txt.slice(0, 200));
+      if (rc.rcConfigured()) {
+        // v2 grant takes an absolute expiry (ms) instead of a duration enum.
+        const grantMs = promoDurationMs(promoDurationForProduct(guest.subscription_product_id));
+        const granted = await rc.rcGrantEntitlement(uid, rc.entitlementId(), grantMs);
+        if (!granted) {
+          console.error('[Transfer] RC grant failed: (non-ok response)');
           return res.status(502).json({ error: 'RevenueCat grant failed, retry later' });
         }
         rcGranted = true;

@@ -77,7 +77,8 @@ class RevenueCatService {
         );
       }
 
-      await Purchases.setLogLevel(LogLevel.debug);
+      // Debug logs leak user ids/purchase payloads into logcat in release.
+      await Purchases.setLogLevel(kDebugMode ? LogLevel.debug : LogLevel.warn);
       await Purchases.configure(PurchasesConfiguration(effectiveKey));
 
       Purchases.addCustomerInfoUpdateListener(_onCustomerInfoUpdated);

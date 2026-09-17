@@ -1811,7 +1811,12 @@ class _SetupPageState extends State<SetupPage> {
 
     if (granted) {
       if (!kIsWeb) {
-        await NotificationService.scheduleDailyNotifications();
+        // Pass in-memory names: SharedPreferences are only written at
+        // onboarding completion, so prefs alone would store the fallback.
+        await NotificationService.scheduleDailyNotifications(
+          username: widget.data.displayName,
+          catName: widget.data.catName,
+        );
       }
       widget.onStarsEarned?.call(10);
       if (mounted) {

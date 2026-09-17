@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/user_service.dart';
 import '../services/shop_service.dart';
 import '../services/analytics_service.dart';
+import '../services/notification_service.dart';
 import '../services/version_check_service.dart';
 import '../services/local_trial_service.dart';
 import '../services/revenuecat_service.dart';
@@ -235,6 +236,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
     if (_data.commitmentLevel != null) {
       await prefs.setString('onboarding_commitment', _data.commitmentLevel!);
+    }
+
+    // The SetupPage toggle may have scheduled reminders before the cat/user
+    // names were persisted (prefs written above). Re-schedule now so the
+    // native copy carries the personalized debug-style heading + subtext.
+    if (_data.notificationsEnabled) {
+      try {
+        await NotificationService.scheduleDailyNotifications(
+          username: _data.displayName,
+          catName: _data.catName,
+        );
+      } catch (_) {}
     }
 
     final user = FirebaseAuth.instance.currentUser;

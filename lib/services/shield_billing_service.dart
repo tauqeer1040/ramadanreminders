@@ -24,7 +24,7 @@ class ShieldBillingService {
   static Future<int> purchaseShield() async {
     // Fallback identifier: Play one-time products sometimes expose as
     // `productId:default-option` on certain RC SDK / Play Billing paths.
-    const candidates = [productId, '${productId}:default-option'];
+    const candidates = [productId, '$productId:default-option'];
     List<StoreProduct> products = [];
     for (final id in candidates) {
       try {
@@ -160,14 +160,16 @@ class ShieldBillingService {
 
     subErr = iapConn.purchaseErrorListener.listen((err) {
       debugPrint('[Shield] raw purchaseError: ${err.message} code=${err.code}');
-      if (!completer.isCompleted) {
-        if (err.code == 'E_USER_CANCELLED' ||
-            (err.message != null && err.message!.toLowerCase().contains('cancel'))) {
-          completer.completeError(ShieldPurchaseCancelled());
-        } else {
-          completer.completeError(
-              ShieldPurchaseException(err.message ?? 'Purchase failed.'));
-        }
+      if (completer.isCompleted) return;
+      // err.code is the flutter_inapp_purchase ErrorCode enum — compare
+      // against ErrorCode.UserCancelled (a string == enum never matched, so
+      // cancels surfaced as "Purchase failed" unless the message cooperated).
+      final cancelled = err.code == iap.ErrorCode.UserCancelled ||
+          err.message.toLowerCase().contains('cancel');
+      if (cancelled) {
+        completer.completeError(ShieldPurchaseCancelled());
+      } else {
+        completer.completeError(ShieldPurchaseException(err.message));
       }
     });
 

@@ -1,4 +1,5 @@
 const db = require('./db');
+const rc = require('./revenuecat');
 
 /**
  * Server-authoritative entitlement.
@@ -28,7 +29,6 @@ const db = require('./db');
 
 const TRIAL_DAYS = 3;
 const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000;
-const RC_ENTITLEMENT_ID = 'Meowmin Max';
 const RC_CACHE_TTL_MS = 60 * 1000;
 
 const rcCache = new Map();
@@ -74,7 +74,7 @@ async function rcEntitlementActive(uid) {
   // Not configured is NOT the same as unavailable: with no store credential
   // there is nothing to verify against, so the DB verdict stands instead of
   // failing open (which would make the whole gate a no-op).
-  if (!process.env.REVENUECAT_API_SECRET) {
+  if (!rc.rcConfigured()) {
     return { ok: false, configured: false, active: false };
   }
   const hit = rcCache.get(uid);
@@ -82,29 +82,27 @@ async function rcEntitlementActive(uid) {
     return { ok: true, active: hit.active };
   }
   try {
-    const res = await fetch(
-      `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}`,
-      { headers: { Authorization: `Bearer ${process.env.REVENUECAT_API_SECRET}` } },
-    );
-    if (!res.ok) throw new Error(`RevenueCat ${res.status}`);
-    const body = await res.json();
-    const ent = body?.subscriber?.entitlements?.[RC_ENTITLEMENT_ID];
+    // v2: entitlements are identified by internal id, not display name.
+    const RC_ENTITLEMENT_ID = rc.entitlementId();
+    const entitlements = await rc.rcActiveEntitlements(uid);
+    const ent = entitlements.find((e) => e.entitlement_id === RC_ENTITLEMENT_ID);
     let active = false;
     if (ent) {
-      // The subscriber API uses `expires_date`; webhook payloads use
-      // `expires_at`. Accept both so a store-shaped field difference can never
-      // silently read as "expired".
-      const expiresRaw = ent.expires_date || ent.expires_at || null;
-      const exp = expiresRaw ? new Date(expiresRaw).getTime() : null;
-      if (Number.isFinite(exp)) {
-        active = Date.now() < exp;
-      } else {
-        active = ent.unlimited === true;
-      }
+      const exp = ent.expires_at != null ? Number(ent.expires_at) : null;
+      // `expires_at` null (or unusable) on an active entitlement means
+      // lifetime/unlimited.
+      active = exp == null || !Number.isFinite(exp) || Date.now() < exp;
     }
     rcCache.set(uid, { at: Date.now(), active });
     return { ok: true, active };
   } catch (e) {
+    if (e instanceof rc.RcAuthError) {
+      // Key problem (missing permission / wrong key): an outage-style fail-open
+      // would make the paid gate permanently no-op. Surface it as unconfigured
+      // so the DB verdict stands and the misconfiguration is visible.
+      console.error('[Entitlement] RC auth failed — fix key permissions/project id:', e.message);
+      return { ok: false, configured: false, active: false };
+    }
     console.warn('[Entitlement] RC check failed (fail-open):', e.message);
     return { ok: false, configured: true, active: false };
   }

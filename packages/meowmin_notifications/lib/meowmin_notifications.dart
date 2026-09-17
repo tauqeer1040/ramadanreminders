@@ -4,6 +4,15 @@ import 'package:flutter/services.dart';
 ///
 /// Titles/bodies are stored natively, so the self-re-arming receiver can
 /// render notifications with the Flutter engine dead.
+/// Fallback copy when no personalized titles/bodies were supplied.
+/// Matches the debug preview style (cat-name heading + subtext) so a
+/// notification can never render a bare "Reminder" heading.
+class MeowminReminderFallback {
+  static const title = 'Meowmin';
+  static const bodyMorning = 'Read your insights for the day';
+  static const bodyNight = "It's time to write your diary";
+}
+
 class MeowminReminderConfig {
   const MeowminReminderConfig({
     this.titleMorning,
@@ -30,10 +39,10 @@ class MeowminReminderConfig {
   final int nightMinute;
 
   Map<String, Object> toMap() => {
-        'titleMorning': titleMorning ?? 'Reminder',
-        'bodyMorning': bodyMorning ?? '',
-        'titleNight': titleNight ?? 'Reminder',
-        'bodyNight': bodyNight ?? '',
+        'titleMorning': titleMorning ?? MeowminReminderFallback.title,
+        'bodyMorning': bodyMorning ?? MeowminReminderFallback.bodyMorning,
+        'titleNight': titleNight ?? MeowminReminderFallback.title,
+        'bodyNight': bodyNight ?? MeowminReminderFallback.bodyNight,
         'morningHour': morningHour,
         'morningMinute': morningMinute,
         'nightHour': nightHour,

@@ -76,15 +76,15 @@ class MeowminNotificationsPlugin : FlutterPlugin, MethodChannel.MethodCallHandle
                 val shown = if (call.argument<Boolean>("isMorning") == true) {
                     MeowminReminders.show(
                         context, MeowminReminders.MORNING_ID,
-                        prefs.getString("titleMorning", null) ?: "Reminder",
-                        prefs.getString("bodyMorning", null) ?: "",
+                        prefs.getString("titleMorning", null) ?: MeowminReminders.FALLBACK_TITLE,
+                        prefs.getString("bodyMorning", null) ?: MeowminReminders.FALLBACK_BODY_MORNING,
                         dedupe,
                     )
                 } else {
                     MeowminReminders.show(
                         context, MeowminReminders.NIGHT_ID,
-                        prefs.getString("titleNight", null) ?: "Reminder",
-                        prefs.getString("bodyNight", null) ?: "",
+                        prefs.getString("titleNight", null) ?: MeowminReminders.FALLBACK_TITLE,
+                        prefs.getString("bodyNight", null) ?: MeowminReminders.FALLBACK_BODY_NIGHT,
                         dedupe,
                     )
                 }
@@ -122,6 +122,14 @@ object MeowminReminders {
     // double-posts.
     private const val KEY_LAST_MORNING = "lastShownMorning"
     private const val KEY_LAST_NIGHT = "lastShownNight"
+
+    /// Fallback copy (debug preview style: cat-name heading + subtext) so a
+    /// notification never renders a bare "Reminder" heading when native
+    /// prefs are empty (fresh install, data cleared, push before first
+    /// foreground schedule).
+    const val FALLBACK_TITLE = "Meowmin"
+    const val FALLBACK_BODY_MORNING = "Read your insights for the day"
+    const val FALLBACK_BODY_NIGHT = "It's time to write your diary"
 
     /// v2: HIGH importance (heads-up banners). Channel importance is immutable
     /// once created, so bumping the ID is the only way to upgrade. The legacy
@@ -347,10 +355,10 @@ data class ReminderConfig(
             fun int(key: String, fallback: Int): Int =
                 (map?.get(key) as? Number)?.toInt() ?: fallback
             return ReminderConfig(
-                titleMorning = str("titleMorning", "Reminder"),
-                bodyMorning = str("bodyMorning", ""),
-                titleNight = str("titleNight", "Reminder"),
-                bodyNight = str("bodyNight", ""),
+                titleMorning = str("titleMorning", MeowminReminders.FALLBACK_TITLE),
+                bodyMorning = str("bodyMorning", MeowminReminders.FALLBACK_BODY_MORNING),
+                titleNight = str("titleNight", MeowminReminders.FALLBACK_TITLE),
+                bodyNight = str("bodyNight", MeowminReminders.FALLBACK_BODY_NIGHT),
                 morningHour = int("morningHour", 8),
                 morningMinute = int("morningMinute", 0),
                 nightHour = int("nightHour", 22),
@@ -381,8 +389,8 @@ class ReminderReceiver : BroadcastReceiver() {
                 // reminder, the alarm path is a no-op (and vice versa).
                 MeowminReminders.show(
                     context, id,
-                    prefs.getString("titleMorning", null) ?: "Reminder",
-                    prefs.getString("bodyMorning", null) ?: "",
+                    prefs.getString("titleMorning", null) ?: MeowminReminders.FALLBACK_TITLE,
+                    prefs.getString("bodyMorning", null) ?: MeowminReminders.FALLBACK_BODY_MORNING,
                     dedupe = true,
                 )
                 MeowminReminders.rearmNext(
@@ -392,8 +400,8 @@ class ReminderReceiver : BroadcastReceiver() {
             } else {
                 MeowminReminders.show(
                     context, id,
-                    prefs.getString("titleNight", null) ?: "Reminder",
-                    prefs.getString("bodyNight", null) ?: "",
+                    prefs.getString("titleNight", null) ?: MeowminReminders.FALLBACK_TITLE,
+                    prefs.getString("bodyNight", null) ?: MeowminReminders.FALLBACK_BODY_NIGHT,
                     dedupe = true,
                 )
                 MeowminReminders.rearmNext(

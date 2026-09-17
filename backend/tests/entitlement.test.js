@@ -11,6 +11,7 @@ process.env.JOURNAL_ENCRYPTION_SECRET =
   process.env.JOURNAL_ENCRYPTION_SECRET || 'entitlement-test-secret-12345';
 // No store credential: RC verification must fall back to "unavailable".
 delete process.env.REVENUECAT_API_SECRET;
+delete process.env.REVENUECAT_PROJECT_ID;
 
 const DAY = 24 * 60 * 60 * 1000;
 const TRIAL_MS = 3 * DAY;
@@ -180,6 +181,7 @@ test('store outage fails open so a payer is never locked out', async () => {
   // so the verdict must fail open rather than lock a possible payer out.
   const realFetch = global.fetch;
   process.env.REVENUECAT_API_SECRET = 'test-secret';
+  process.env.REVENUECAT_PROJECT_ID = 'proj_test';
   global.fetch = async () => { throw new Error('network down'); };
   try {
     const v = await resolveEntitlement('payer');
@@ -188,28 +190,29 @@ test('store outage fails open so a payer is never locked out', async () => {
   } finally {
     global.fetch = realFetch;
     delete process.env.REVENUECAT_API_SECRET;
+    delete process.env.REVENUECAT_PROJECT_ID;
     require('../lib/entitlement').clearRcCache();
   }
 });
 
-test('a live store entitlement unlocks a lapsed trial (expires_date shape)', async () => {
+test('a live store entitlement unlocks a lapsed trial (v2 expires_at shape)', async () => {
   await seedUser('store-active', {
     subscription_status: 'none',
     subscription_trial_started_at: Date.now() - TRIAL_MS - 60 * 1000,
   });
   const realFetch = global.fetch;
   process.env.REVENUECAT_API_SECRET = 'test-secret';
-  // The subscriber API field is `expires_date` — reading `expires_at` (as the
-  // code once did) made every real subscription look expired.
+  process.env.REVENUECAT_PROJECT_ID = 'proj_test';
+  // v2 customer shape: active_entitlements carry the internal entitlement id
+  // and a ms-since-epoch `expires_at`.
   global.fetch = async () => ({
     ok: true,
     json: async () => ({
-      subscriber: {
-        entitlements: {
-          'Meowmin Max': {
-            product_identifier: 'meowmin_yearly',
-            expires_date: new Date(Date.now() + 60 * DAY).toISOString(),
-          },
+      customer: {
+        active_entitlements: {
+          items: [
+            { entitlement_id: 'entl04c6421978', expires_at: Date.now() + 60 * DAY },
+          ],
         },
       },
     }),
@@ -221,6 +224,7 @@ test('a live store entitlement unlocks a lapsed trial (expires_date shape)', asy
   } finally {
     global.fetch = realFetch;
     delete process.env.REVENUECAT_API_SECRET;
+    delete process.env.REVENUECAT_PROJECT_ID;
     require('../lib/entitlement').clearRcCache();
   }
 });
@@ -232,15 +236,15 @@ test('a store entitlement that expired does not unlock a lapsed trial', async ()
   });
   const realFetch = global.fetch;
   process.env.REVENUECAT_API_SECRET = 'test-secret';
+  process.env.REVENUECAT_PROJECT_ID = 'proj_test';
   global.fetch = async () => ({
     ok: true,
     json: async () => ({
-      subscriber: {
-        entitlements: {
-          'Meowmin Max': {
-            product_identifier: 'meowmin_yearly',
-            expires_date: new Date(Date.now() - 2 * DAY).toISOString(),
-          },
+      customer: {
+        active_entitlements: {
+          items: [
+            { entitlement_id: 'entl04c6421978', expires_at: Date.now() - 2 * DAY },
+          ],
         },
       },
     }),
@@ -252,6 +256,7 @@ test('a store entitlement that expired does not unlock a lapsed trial', async ()
   } finally {
     global.fetch = realFetch;
     delete process.env.REVENUECAT_API_SECRET;
+    delete process.env.REVENUECAT_PROJECT_ID;
     require('../lib/entitlement').clearRcCache();
   }
 });

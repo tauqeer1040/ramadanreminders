@@ -249,20 +249,24 @@ class NotificationService {
   /// (Android): self-re-arming Kotlin receiver with inexact-allow-while-idle
   /// alarms, independent of the Flutter engine. Copy: cat-name heading from
   /// onboarding; personal name resolved from onboarding/email (pass
-  /// [username] to override). Returns false when the native path is
+  /// [username]/[catName] to override with in-memory values that are not
+  /// yet persisted — e.g. the onboarding SetupPage toggle fires before
+  /// SharedPreferences are written). Returns false when the native path is
   /// unavailable (non-Android) so callers can fall back.
-  static Future<bool> scheduleNativeReminders({String? username}) async {
+  static Future<bool> scheduleNativeReminders({String? username, String? catName}) async {
     if (kIsWeb) return false;
     if (defaultTargetPlatform != TargetPlatform.android) return false;
 
-    // Copy inputs: cat name from onboarding data, name resolved from
-    // onboarding/email unless explicitly provided.
-    String? catName;
+    // Copy inputs: cat name from the explicit override, else onboarding
+    // data; name resolved from onboarding/email unless explicitly provided.
+    String? storedCatName;
     try {
       final prefs = await SharedPreferences.getInstance();
-      catName = prefs.getString('onboarding_catName');
+      storedCatName = prefs.getString('onboarding_catName');
     } catch (_) {}
-    final cat = (catName?.trim().isNotEmpty ?? false) ? catName!.trim() : 'Meowmin';
+    final passedCat = catName?.trim() ?? '';
+    final rawCat = passedCat.isNotEmpty ? passedCat : (storedCatName?.trim() ?? '');
+    final cat = rawCat.isNotEmpty ? rawCat : 'Meowmin';
     final passed = username?.trim() ?? '';
     final name = passed.isNotEmpty ? passed : await _resolveUserName();
 
@@ -312,9 +316,9 @@ class NotificationService {
     return ok || _nativeChainActive;
   }
 
-  static Future<void> scheduleDailyNotifications({String? username}) async {
+  static Future<void> scheduleDailyNotifications({String? username, String? catName}) async {
     // Android: delegate entirely to the native chain (name resolved inside).
-    if (await scheduleNativeReminders(username: username)) return;
+    if (await scheduleNativeReminders(username: username, catName: catName)) return;
 
     if (_notificationsPlugin == null) await init();
     await _notificationsPlugin?.cancelAll();

@@ -12,6 +12,7 @@ process.env.JOURNAL_ENCRYPTION_SECRET =
   process.env.JOURNAL_ENCRYPTION_SECRET || 'subscription-sync-test-secret-1';
 // No store credential: the RevenueCat verification block is skipped.
 delete process.env.REVENUECAT_API_SECRET;
+delete process.env.REVENUECAT_PROJECT_ID;
 
 let db;
 const handlers = {};
@@ -121,31 +122,51 @@ test('expired status grants nothing', async () => {
   expect(Number(row.shield_balance ?? 0)).toBe(0);
 });
 
-// ── RevenueCat as the source of truth ──────────────────────────────────────
+// ── RevenueCat as the source of truth (REST API v2) ───────────────────────
+
+const RC_ENTITLEMENT_ID = 'entl04c6421978';
 
 describe('with the store reachable', () => {
   const realFetch = global.fetch;
 
-  function stubStore(entitlement) {
+  // v2 stub: route by URL — customer (embedded active_entitlements),
+  // subscriptions, purchases.
+  function stubStore({ entitlements = [], subscriptions = [], purchases = [] } = {}) {
     process.env.REVENUECAT_API_SECRET = 'test-secret';
-    global.fetch = async () => ({
-      ok: true,
-      json: async () => ({ subscriber: { entitlements: entitlement } }),
-    });
+    process.env.REVENUECAT_PROJECT_ID = 'proj_test';
+    global.fetch = async (url) => {
+      const u = String(url);
+      if (u.endsWith('/subscriptions')) {
+        return { ok: true, json: async () => ({ items: subscriptions }) };
+      }
+      if (u.endsWith('/purchases')) {
+        return { ok: true, json: async () => ({ items: purchases }) };
+      }
+      if (u.includes('/customers/')) {
+        return {
+          ok: true,
+          json: async () => ({ customer: { active_entitlements: { items: entitlements } } }),
+        };
+      }
+      throw new Error('unexpected RC url: ' + u);
+    };
   }
 
   afterEach(() => {
     global.fetch = realFetch;
     delete process.env.REVENUECAT_API_SECRET;
+    delete process.env.REVENUECAT_PROJECT_ID;
   });
 
   test('the store\'s plan is what gets recorded, not the claim', async () => {
     // Client claims the yearly plan; the store says 4-month.
     stubStore({
-      'Meowmin Max': {
-        product_identifier: 'meowmin_4month',
-        expires_date: new Date(Date.now() + 100 * DAY).toISOString(),
-      },
+      entitlements: [{ entitlement_id: RC_ENTITLEMENT_ID, expires_at: Date.now() + 100 * DAY }],
+      subscriptions: [{
+        product_id: 'meowmin_4month',
+        expires_at: Date.now() + 100 * DAY,
+        auto_renewal_status: 'is_active',
+      }],
     });
     const r = await sync(syncBody('meowmin_yearly'));
     expect(r.out.body.verified).toBe(true);
@@ -161,11 +182,12 @@ describe('with the store reachable', () => {
 
   test('a claim the store does not confirm is ignored', async () => {
     stubStore({
-      'Meowmin Max': {
-        product_identifier: 'meowmin_yearly',
-        // Lapsed: the app says active, the store says no.
-        expires_date: new Date(Date.now() - 5 * DAY).toISOString(),
-      },
+      entitlements: [{ entitlement_id: RC_ENTITLEMENT_ID, expires_at: Date.now() - 5 * DAY }],
+      subscriptions: [{
+        product_id: 'meowmin_yearly',
+        expires_at: Date.now() - 5 * DAY,
+        auto_renewal_status: 'is_canceled',
+      }],
     });
     const r = await sync(syncBody('meowmin_yearly'));
     expect(r.out.body.status).toBe('expired');
@@ -190,6 +212,7 @@ describe('with the store reachable', () => {
 
   test('an unreachable store writes nothing', async () => {
     process.env.REVENUECAT_API_SECRET = 'test-secret';
+    process.env.REVENUECAT_PROJECT_ID = 'proj_test';
     global.fetch = async () => { throw new Error('network down'); };
     const r = await sync(syncBody('meowmin_yearly'));
     expect(r.out.body.verified).toBe(false);
